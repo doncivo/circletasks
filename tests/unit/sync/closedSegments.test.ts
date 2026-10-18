@@ -27,11 +27,14 @@ interface SegmentCase {
   readonly partial?: boolean;
   readonly corrupt?: number;
   readonly cloud?: boolean;
+  /** Y-FIX-05 (§33) : ajout coupé net (`partialLastLine`), refusé en `io`, jamais enregistré. */
+  readonly cut?: boolean;
 }
 interface ReadCase {
   readonly name: string;
   readonly announce: boolean;
   readonly segments: readonly SegmentCase[];
+  readonly readFaults?: readonly unknown[];
   readonly from: { readonly segment: number; readonly record: number };
   readonly expect: { readonly status: string; readonly next: { readonly segment: number; readonly record: number }; readonly records: number };
 }
@@ -63,12 +66,23 @@ const state = (epoch: EpochId, stateSeq: number, head: Omit<DeviceAck, 'epoch' |
 });
 
 /** Écrit chaque segment dans l'ordre (rotation), puis l'état ; renvoie la dernière tête. */
-async function writeSegments(p: MemorySyncPlatform, segments: readonly SegmentCase[], announce: boolean): Promise<void> {
+async function writeSegments(p: MemorySyncPlatform, segments: readonly SegmentCase[], announce: boolean, folder?: MemorySyncFolder): Promise<void> {
   let ms = 10;
   let last = { segment: 0, record: 0, hlc: null as Hlc | null };
   for (const s of segments) {
     const records = Array.from({ length: s.written }, (_, i) => `{"k":"ops","s":${String(s.segment)},"i":${String(i)}}`);
     ms += 10;
+    if (s.cut === true) {
+      if (!folder) throw new Error('cut sans dossier');
+      folder.armFaults({ name: 'cut', faults: [{ id: 'cut', op: 'write', file: `devices/${A}/${E1}/j-${String(s.segment).padStart(8, '0')}.ctj`, nth: 1, effect: 'error', code: 'io', partialLastLine: true }] });
+      const refused = await p.appendJournal({ epoch: E1, segment: s.segment, expectRecords: 0, sv: 14, maxHlc: hlc(ms), records }).then(
+        () => 'ok',
+        (e: unknown) => (e instanceof SyncPlatformError ? e.code : 'autre'),
+      );
+      expect(refused).toBe('io');
+      folder.disarmFaults();
+      continue;
+    }
     await p.appendJournal({ epoch: E1, segment: s.segment, expectRecords: 0, sv: 14, maxHlc: hlc(ms), records });
     last = { segment: s.segment, record: s.written, hlc: hlc(ms) };
   }
@@ -90,8 +104,9 @@ describe('table commune closed-segments.json (memory.ts, même table que store.r
     it(c.name, async () => {
       const folder = new MemorySyncFolder();
       const p = await writer(folder);
-      await writeSegments(p, c.segments, c.announce);
-      for (const s of c.segments) alter(folder, s);
+      await writeSegments(p, c.segments, c.announce, folder);
+      for (const s of c.segments) if (s.cut !== true) alter(folder, s);
+      if (c.readFaults) folder.armFaults({ name: c.name, faults: c.readFaults });
       const page = await p.readJournal({ deviceId: A, epoch: E1, from: c.from });
       expect({ status: page.status, next: page.next, records: page.records.length }).toEqual(c.expect);
     });

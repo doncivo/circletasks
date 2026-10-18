@@ -858,6 +858,8 @@ export interface MemorySyncTesting {
   forgetKeyOrigin(): void;
   /** Y-TECH-02 : `own.json` écrit avant la story (aucune entrée `closed`) : l'état suivant est publié sans `closed`. */
   clearClosedSegments(): void;
+  /** Y-FIX-05 (§33) : journal natif de « Rust » (`log::event`, détail : numéros seulement), dans l'ordre, depuis la création. */
+  nativeEvents(): readonly { readonly event: string; readonly detail: Readonly<Record<string, number>> }[];
   /** Y-10 : réinitialisation en cours (entrée `.next` au coffre, Y-11). */
   setResetInProgress(value: boolean): void;
   /** Y-10 : déclarations de `sync/forgotten.json`. */
@@ -1008,6 +1010,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let settingsOpened = 0;
   /** Téléchargement simulé (§22 point 4) : durée, et reste du budget du cycle ouvert par le dernier scan. */
   let hydrationDelay: number | null = null;
+  /** Y-FIX-05 : événements du journal natif (`log::event` de Rust), jamais de contenu. */
+  const nativeLog: { readonly event: string; readonly detail: Readonly<Record<string, number>> }[] = [];
   let hydrationLeft = HYDRATE_CYCLE_TIMEOUT_MS;
   /** Fichier lisible localement, après un téléchargement simulé s'il est dans le nuage et que le budget le permet. */
   const hydrated = (file: MemFile, deviceId: string, name: string): boolean => {
@@ -2971,6 +2975,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       clearClosedSegments: () => {
         if (own) own.closed = [];
       },
+      nativeEvents: () => [...nativeLog],
       setResetInProgress: (value) => {
         resetPending = value;
       },

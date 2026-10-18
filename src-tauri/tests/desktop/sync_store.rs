@@ -688,3 +688,82 @@ fn y01_12_device_without_state_reports_its_kid_and_a_third_device_folder() {
     assert_eq!((me.state_status, me.kid.as_deref()), ("missing", a.core.key_status().unwrap().kid.as_deref()));
     assert_eq!(scan.devices.iter().find(|d| d.device_id == DEV_C).unwrap().state_status, "missing");
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Y-FIX-05 (ADR 0011 §33, B18) : segment tronqué jamais enregistré
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// Ajout coupé net (`partialLastLine` du plan de pannes) : refusé en `io`, lignes complètes sauf la dernière, `own.json` inchangé.
+fn cut_append(d: &Device, fs: &std::sync::Arc<MemFs>, ep: &str, segment: u64, expect: u64, ms: u64, records: &[&str]) {
+    let file = format!("devices/{DEV_A}/{ep}/j-{segment:08}.ctj");
+    let faults = json!([{ "id": "cut", "op": "write", "file": file, "nth": 1, "effect": "error", "code": "io", "partialLastLine": true }]);
+    fs.arm(crate::support::fault_plan::parse_plan(&json!({ "name": "Y-FIX-05", "faults": faults })).unwrap()).unwrap();
+    assert_eq!(code(append(d, ep, segment, expect, ms, records)), SyncCode::Io);
+    fs.disarm();
+}
+
+/// `own.json` (absent tant qu'aucun ajout n'a été enregistré : tête `(0, 0)`, aucune entrée).
+fn own_state(d: &Device) -> circletasks_lib::sync::state::OwnState {
+    match std::fs::read(d.base.path().join("sync").join("own.json")) {
+        Ok(bytes) => serde_json::from_slice(&bytes).unwrap(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => circletasks_lib::sync::state::OwnState::empty("", ""),
+        Err(error) => panic!("own.json : {error}"),
+    }
+}
+
+/// Lecteur (le PC) qui partage la clé de `a` et lit son journal.
+fn reader_of(a: &Device, fs: &std::sync::Arc<MemFs>) -> Device {
+    let b = other(fs);
+    b.core.choose_folder(Path::new(FOLDER)).unwrap();
+    let account = circletasks_lib::sync::service::SYNC_KEY_ACCOUNT;
+    b.vault.set(account, &a.vault.get(account).unwrap().unwrap()).unwrap();
+    b.core.bind_device(DEV_B).unwrap();
+    b
+}
+
+#[test]
+fn y_fix_05_c9_first_append_cut_leaves_no_closed_entry_and_the_reader_goes_past_it() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    // Premier ajout coupé : segment 1 = en-tête et une demi-ligne, jamais enregistré (own.segment = 0).
+    cut_append(&a, &fs, &ep, 1, 0, 10, &["{\"k\":\"ops\",\"i\":0}"]);
+    let parts = ["devices", DEV_A, ep.as_str(), "j-00000001.ctj"];
+    assert!(!fs.get(&parts).unwrap().ends_with(b"\n"), "ligne incomplète en fin");
+    assert_eq!((own_state(&a).segment, own_state(&a).record), (0, 0));
+    // Ajout suivant au segment 2 (`max + 1`) : accepté, aucune entrée `closed` (jamais d'entrée à 0), état valide.
+    append(&a, &ep, 2, 0, 20, &["{\"k\":\"ops\",\"i\":1}", "{\"k\":\"ops\",\"i\":2}"]).unwrap();
+    let own = own_state(&a);
+    assert_eq!((own.segment, own.record), (2, 2));
+    assert!(own.closed.is_empty(), "aucune entrée pour le segment tronqué : {:?}", own.closed);
+    assert!(circletasks_lib::sync::state::closed_is_valid(&own.closed, own.segment));
+    a.core.write_state(14, state(DEV_A, &ep, 1, 2, 2, Some(hlc(20, DEV_A)))).unwrap();
+    // Aller-retour : le PC accepte l'état tel quel et lit tout, sans attente sans fin sur le segment 1.
+    let b = reader_of(&a, &fs);
+    let log = circletasks_lib::sync::log::capture();
+    let page = b.core.read_journal(DEV_A, &ep, C0, None).unwrap();
+    assert_eq!((page.status, page.next, page.records.len()), ("complete", RecordCursor { segment: 2, record: 2 }, 2));
+    assert!(log.lines().iter().any(|l| l == "sync:segment-tail-skipped 1"), "saut journalisé, numéro seulement : {:?}", log.lines());
+    // Curseur passé : la lecture suivante ne relit pas le segment 1.
+    let again = b.core.read_journal(DEV_A, &ep, page.next, None).unwrap();
+    assert_eq!((again.status, again.next, again.records.len()), ("complete", RecordCursor { segment: 2, record: 2 }, 0));
+}
+
+#[test]
+fn y_fix_05_c10_cut_append_after_a_registered_segment_closes_only_the_registered_one() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 10, &["{\"i\":0}", "{\"i\":1}", "{\"i\":2}"]).unwrap();
+    // Segment 2 ouvert puis coupé (une ligne complète, une incomplète), jamais enregistré ; le moteur ouvre le segment 3.
+    cut_append(&a, &fs, &ep, 2, 0, 20, &["{\"i\":3}", "{\"i\":4}"]);
+    assert_eq!((own_state(&a).segment, own_state(&a).record), (1, 3));
+    append(&a, &ep, 3, 0, 30, &["{\"i\":5}", "{\"i\":6}"]).unwrap();
+    let own = own_state(&a);
+    assert_eq!(own.segment, 3);
+    assert_eq!(own.closed.iter().map(|c| (c.segment, c.records)).collect::<Vec<_>>(), vec![(1, 3)], "le segment 2 n'a pas d'entrée");
+    a.core.write_state(14, state(DEV_A, &ep, 1, 3, 2, Some(hlc(30, DEV_A)))).unwrap();
+    let b = reader_of(&a, &fs);
+    let page = b.core.read_journal(DEV_A, &ep, C0, None).unwrap();
+    assert_eq!((page.status, page.next, page.records.len()), ("complete", RecordCursor { segment: 3, record: 2 }, 6));
+}

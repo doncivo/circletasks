@@ -250,6 +250,91 @@ describe('Y-FIX-02 critère 5 : premier ajout à moitié écrit (partialLastLine
   });
 });
 
+/**
+ * Y-FIX-05 (B18, ADR 0011 §33) : critère 5 étendu côté PC. Le segment tronqué que Rust n'a jamais enregistré n'a pas d'entrée `closed` ;
+ * le lecteur du PC lit ses lignes complètes puis passe au segment suivant (journal natif `segment-tail-skipped`, numéro seulement), au
+ * lieu d'attendre iCloud pour toujours. Aucun délai : horloge manuelle, cycles comptés.
+ */
+describe('Y-FIX-05 C11 et C12 : critère 5 côté PC, segment tronqué jamais clos', () => {
+  const LOT = [T_ID, '7b000002-0000-4000-8000-bbbbbbbbbbbb', '7b000003-0000-4000-8000-bbbbbbbbbbbb'];
+  const U_ID = '7b000009-0000-4000-8000-bbbbbbbbbbbb' as TaskId;
+  const cut = (id: string, n: number) => ({ id, op: 'write', file: `devices/${B_ID}/*/j-0000000${String(n)}.ctj`, nth: 1, effect: 'error', code: 'io', partialLastLine: true });
+  const skipped = (d: SimDevice) => d.platform.testing.nativeEvents().filter((e) => e.event === 'segment-tail-skipped');
+  const ids = async (d: SimDevice): Promise<string[]> => ((await taskSnapshot(d)) as { id: string }[]).map((t) => t.id);
+
+  /** iPhone : cycles (relance après chaque arrêt) jusqu'au calme : état publié, file vide. */
+  async function phoneUntilCalm(b: SimDevice): Promise<void> {
+    for (let i = 0; i < 6 && (!b.folder.fileNames(b.id).includes('state.ctx') || (await b.data.repos.sync.outboxCount()) > 0 || b.folder.unfiredFaults().length > 0); i += 1) {
+      await b.cycle();
+      await b.restart();
+    }
+    b.folder.disarmFaults();
+    expect(await b.data.repos.sync.outboxCount()).toBe(0);
+    expect(statusLine(await b.cycle(), b.clock.nowMs())).toContain('À jour');
+  }
+
+  /** PC : `n` cycles, dossiers recopiés et horloge avancée d'une minute avant chacun. */
+  async function pcCycles(a: SimDevice, b: SimDevice, n: number): Promise<SyncStatus[]> {
+    const out: SyncStatus[] = [];
+    for (let i = 0; i < n; i += 1) {
+      syncFolders([a, b]);
+      a.clock.advance(60_000);
+      out.push(await a.cycle());
+    }
+    return out;
+  }
+
+  async function expectPcUnblocked(a: SimDevice, b: SimDevice, segment: number): Promise<void> {
+    const statuses = await pcCycles(a, b, 3);
+    const last = statuses.at(-1) as SyncStatus;
+    // (a) mêmes enregistrements que l'iPhone : aucun perdu, aucun doublon.
+    const pc = await ids(a);
+    expect(new Set(pc)).toEqual(new Set(await ids(b)));
+    expect(pc).toHaveLength(new Set(pc).size);
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+    // (b) ni attente d'iCloud, ni fichier en attente.
+    expect(last.phase).not.toBe('waiting-icloud');
+    expect(last.pendingFiles).toEqual([]);
+    expect(statusLine(last, a.clock.nowMs())).toContain('À jour');
+    // (c) dernière synchro complète au dernier cycle.
+    expect(Date.parse(last.lastSyncAt ?? '')).toBe(a.clock.nowMs());
+    // (d) saut journalisé une fois, numéro de segment seulement.
+    expect(skipped(a).map((e) => e.detail)).toEqual([{ segment }]);
+    // C12 : vingt cycles de plus, aucun nouveau saut, rien ne change.
+    const tasks = await taskSnapshot(a);
+    const head = (await a.data.repos.sync.getStates()).find((r) => r.deviceId === b.id);
+    const more = await pcCycles(a, b, 20);
+    expect(skipped(a)).toHaveLength(1);
+    expect(await taskSnapshot(a)).toEqual(tasks);
+    expect((await a.data.repos.sync.getStates()).find((r) => r.deviceId === b.id)).toEqual(head);
+    for (const s of more) expect([s.phase, s.pendingFiles]).toEqual([last.phase, []]);
+  }
+
+  it('C11 : premier ajout coupé (own.segment = 0) : le PC reçoit tout le lot, une fois, et n’attend pas iCloud', async () => {
+    const { a, b } = await joined(['Deuxième du lot', 'Troisième du lot']);
+    b.folder.armFaults({ name: 'Y-FIX-05 C11', faults: [cut('partial', 1)] });
+    await phoneUntilCalm(b);
+    expect(segments(b).map((f) => f.slice(-14))).toEqual(['j-00000001.ctj', 'j-00000002.ctj']);
+    await expectPcUnblocked(a, b, 1);
+    for (const id of LOT) expect(await ids(a)).toContain(id);
+  });
+
+  it('C11, variante own.segment ≥ 1 : segment intermédiaire coupé sans entrée, le PC le passe et reçoit la suite', async () => {
+    const { a, b } = await joined();
+    await b.cycle();
+    syncFolders([a, b]);
+    await a.cycle();
+    expect(await ids(a)).toContain(T_ID);
+    await b.createTask('Après la première publication', { id: U_ID });
+    // Ajout au segment 1 coupé, puis segment 2 ouvert (segment-mismatch) et coupé à son tour : jamais enregistré, sans entrée.
+    b.folder.armFaults({ name: 'Y-FIX-05 C11 variante', faults: [cut('cut-j1', 1), cut('cut-j2', 2)] });
+    await phoneUntilCalm(b);
+    expect(segments(b).map((f) => f.slice(-14))).toEqual(['j-00000001.ctj', 'j-00000002.ctj', 'j-00000003.ctj']);
+    await expectPcUnblocked(a, b, 2);
+    expect((await ids(a)).filter((id) => id === U_ID)).toHaveLength(1);
+  });
+});
+
 /** Rang de l'écriture de l'état dans le cycle qui reprend après l'arrêt `rank` (comptage sans arrêt, simulateur déterministe). */
 async function recoveryStateRank(rank: number): Promise<number> {
   const { b } = await crashAt(rank);

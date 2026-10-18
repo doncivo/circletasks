@@ -10,6 +10,7 @@ use circletasks_lib::sync::state::PublishedState;
 use circletasks_lib::sync::store::{OwnFileRef, RecordCursor};
 use circletasks_lib::sync::SyncCode;
 
+use crate::support::fault_plan;
 use crate::sync_support::{device, epoch, hlc, Device, MemFs, DEV_A, DEV_B};
 
 const TABLE: &str = include_str!("../../../tests/fixtures/sync/closed-segments.json");
@@ -104,6 +105,15 @@ fn y_tech_02_closed_segments_common_table() {
             ms += 10;
             let n = s["segment"].as_u64().unwrap();
             let written = s["written"].as_u64().unwrap();
+            // Y-FIX-05 (§33) : ajout coupé net (`partialLastLine`) : refusé en `io`, jamais enregistré, hors de la tête.
+            if s["cut"].as_bool() == Some(true) {
+                let file = format!("devices/{DEV_A}/{ep}/j-{n:08}.ctj");
+                let faults = json!([{ "id": "cut", "op": "write", "file": file, "nth": 1, "effect": "error", "code": "io", "partialLastLine": true }]);
+                fs.arm(fault_plan::parse_plan(&json!({ "name": name, "faults": faults })).unwrap()).unwrap();
+                assert_eq!(code(append(&d, &ep, n, ms, written)), SyncCode::Io, "{name} : ajout coupé");
+                fs.disarm();
+                continue;
+            }
             append(&d, &ep, n, ms, written).unwrap_or_else(|e| panic!("{name} : ajout {e:?}"));
             last = (n, written, Some(hlc(ms, DEV_A)));
         }
@@ -111,8 +121,11 @@ fn y_tech_02_closed_segments_common_table() {
             clear_own_closed(&mut d);
         }
         d.core.write_state(14, state(&ep, 1, last.0, last.1, last.2.clone())).unwrap_or_else(|e| panic!("{name} : état {e:?}"));
-        for s in case["segments"].as_array().unwrap() {
+        for s in case["segments"].as_array().unwrap().iter().filter(|s| s["cut"].as_bool() != Some(true)) {
             alter(&fs, &ep, s);
+        }
+        if let Some(faults) = case.get("readFaults") {
+            fs.arm(fault_plan::parse_plan(&json!({ "name": name, "faults": faults })).unwrap()).unwrap();
         }
         let from = RecordCursor { segment: case["from"]["segment"].as_u64().unwrap(), record: case["from"]["record"].as_u64().unwrap() };
         let page = d.core.read_journal(DEV_A, &ep, from, None).unwrap_or_else(|e| panic!("{name} : lecture {e:?}"));

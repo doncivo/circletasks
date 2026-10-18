@@ -1,5 +1,5 @@
 {
-  "description": "ADR 0011 §21 point 2 (Y-TECH-02) : lecture d'un segment clos avec ou sans entrée `closed` de l'état publié. Table commune à Rust (sync_closed_segments.rs, store.rs) et Vitest (closedSegments.test.ts, memory.ts). L'écrivain ajoute `written` enregistrements à chaque segment dans l'ordre (rotation : entrée { segment, records } dans own.json), écrit son état (tête : dernier segment), puis le fichier lu est modifié : `keep` lignes complètes gardées (troncature sur une fin de ligne), `extra` lignes complètes ajoutées après, `partial` : ligne incomplète en fin, `corrupt` : rang d'une ligne qui ne se déchiffre plus, `cloud` : fichier resté dans le nuage. `announce` faux : état écrit sans `closed` (version antérieure à la story). Lecture depuis `from`, une page (aucune borne d'octets) ; `expect` : statut, curseur suivant, nombre d'enregistrements rendus.",
+  "description": "ADR 0011 §21 point 2 (Y-TECH-02) : lecture d'un segment clos avec ou sans entrée `closed` de l'état publié. Table commune à Rust (sync_closed_segments.rs, store.rs) et Vitest (closedSegments.test.ts, memory.ts). L'écrivain ajoute `written` enregistrements à chaque segment dans l'ordre (rotation : entrée { segment, records } dans own.json), écrit son état (tête : dernier segment), puis le fichier lu est modifié : `keep` lignes complètes gardées (troncature sur une fin de ligne), `extra` lignes complètes ajoutées après, `partial` : ligne incomplète en fin, `corrupt` : rang d'une ligne qui ne se déchiffre plus, `cloud` : fichier resté dans le nuage, `cut` : ajout coupé net (panne `partialLastLine` du plan, `io`) : lignes complètes sauf la dernière, ligne incomplète en fin, ajout jamais enregistré par Rust (own.json inchangé, segment hors de la tête). `readFaults` : entrées du plan de pannes (fault-plan.json) armées juste avant la lecture. `announce` faux : état écrit sans `closed` (version antérieure à la story). Lecture depuis `from`, une page (aucune borne d'octets) ; `expect` : statut, curseur suivant, nombre d'enregistrements rendus. Y-FIX-05 (ADR 0011 §33, B18) : un segment sans entrée, sous une tête plus grande, lu en entier et terminé par une ligne incomplète est abandonné après ses lignes complètes (journal segment-tail-skipped).",
   "maxEntries": 1024,
   "cases": [
     {
@@ -59,11 +59,54 @@
       "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 4 }
     },
     {
-      "name": "aucune entrée, ligne incomplète : règle d'aujourd'hui (attente)",
+      "name": "aucune entrée, ligne incomplète sous une tête plus grande : lignes complètes lues, segment suivant (Y-FIX-05 C1, attente sans fin avant)",
       "announce": false,
       "segments": [{ "segment": 1, "written": 3, "partial": true }, { "segment": 2, "written": 2 }],
       "from": { "segment": 0, "record": 0 },
-      "expect": { "status": "cloud-pending", "next": { "segment": 1, "record": 3 }, "records": 3 }
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 5 }
+    },
+    {
+      "name": "segment réduit à son en-tête et une demi-ligne, jamais enregistré (cas exact de B18, Y-FIX-05 C2)",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 1, "cut": true }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 2 }
+    },
+    {
+      "name": "entrée pour le segment 1, segment 2 coupé sans entrée, segment 3 (cas général, Y-FIX-05 C3)",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3 }, { "segment": 2, "written": 2, "cut": true }, { "segment": 3, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 3, "record": 2 }, "records": 6 }
+    },
+    {
+      "name": "curseur déjà posé par l’ancien code sur le segment bloqué : reprise au premier appel (Y-FIX-05 C4)",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3, "partial": true }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 1, "record": 3 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 2 }
+    },
+    {
+      "name": "aucune entrée, ligne incomplète, fichier resté dans le nuage : attente, aucun saut sans lecture hydratée (Y-FIX-05 C5)",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3, "partial": true, "cloud": true }, { "segment": 2, "written": 2 }],
+      "readFaults": [{ "id": "download-j1", "op": "hydrate", "file": "devices/*/*/j-00000001.ctj", "nth": 1, "effect": "download-error" }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "cloud-pending", "next": { "segment": 1, "record": 0 }, "records": 0 }
+    },
+    {
+      "name": "segment de tête, ligne incomplète et moins de lignes que head.record : attente, jamais au-delà de la tête (Y-FIX-05 C7)",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3 }, { "segment": 2, "written": 2, "keep": 1, "partial": true }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "cloud-pending", "next": { "segment": 2, "record": 1 }, "records": 4 }
+    },
+    {
+      "name": "aucune entrée, ligne incomplète, ligne complète indéchiffrable : truncated, la tolérance ne masque pas une corruption (Y-FIX-05 C8)",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3, "partial": true, "corrupt": 1 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "truncated", "next": { "segment": 1, "record": 1 }, "records": 1 }
     },
     {
       "name": "segment de tête : head.record fait foi, ligne en trop ignorée",
