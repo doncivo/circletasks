@@ -324,9 +324,10 @@ describe('Y-FIX-02 critère 7 : échéance du cycle hide entre la transaction d�
 });
 
 describe('Y-FIX-02 critère 9 : fichier que la trace n’explique pas', () => {
-  it('inflight résolu quand même, aucune nouvelle publication, publish-blocked avec la cause unexplained-files', async () => {
+  // Revue B1 (option a) : l'intention est gardée tant que la publication est refusée ; aucun état n'est écrit, rien ne change d'un cycle à l'autre.
+  it('intention gardée et stable, aucun état ni aucune publication, publish-blocked avec la cause unexplained-files à chaque cycle', async () => {
     const ranks = await writeRanks();
-    const { b } = await crashAt(ranks.append + 1);
+    const { b, stateSeqs } = await crashAt(ranks.append + 1);
     // Segment 2 déposé dans le dossier de l'iPhone (reste d'un tiers) : la trace dit 1.
     const dir = b.folder.devices.get(b.id);
     const epochDir = dir ? [...dir.epochs.values()][0] : undefined;
@@ -334,14 +335,22 @@ describe('Y-FIX-02 critère 9 : fichier que la trace n’explique pas', () => {
     if (!epochDir || !first) throw new Error('segment 1 absent');
     epochDir.segments.set(2, first);
     const before = segments(b);
-    const result = await b.cycle();
-    expect(events(b, 'inflight-resolved')).toHaveLength(1);
-    expect(await meta(b, 'inflight')).toBeNull();
-    expect(segments(b)).toEqual(before);
-    expect(result.warnings).toContain('publish-blocked');
-    expect(result.warnings).toContain('unexplained-files');
-    expect(statusLine(result, b.clock.nowMs())).not.toContain('À jour');
-    expect(events(b, 'publish-deferred').map((e) => e.detail)).toEqual([expect.objectContaining({ reason: 'unexplained-files', unexplained: 1 })]);
+    const inflight = await meta(b, 'inflight');
+    const queued = await b.data.repos.sync.outboxCount();
+    expect(inflight).not.toBeNull();
+    for (let cycle = 1; cycle <= 2; cycle += 1) {
+      const result = await b.cycle();
+      expect(b.folder.fileNames(b.id), `cycle ${String(cycle)}`).not.toContain('state.ctx');
+      expect(stateSeqs).toEqual([]);
+      expect(await meta(b, 'inflight')).toEqual(inflight);
+      expect(await b.data.repos.sync.outboxCount()).toBe(queued);
+      expect(segments(b)).toEqual(before);
+      expect(result.warnings).toContain('publish-blocked');
+      expect(result.warnings).toContain('unexplained-files');
+      expect(statusLine(result, b.clock.nowMs())).not.toContain('À jour');
+    }
+    expect(events(b, 'inflight-resolved')).toHaveLength(0);
+    expect(events(b, 'publish-deferred').map((e) => e.detail)).toEqual([expect.objectContaining({ reason: 'unexplained-files', unexplained: 1 }), expect.objectContaining({ reason: 'unexplained-files', unexplained: 1 })]);
     expect(events(b, 'own-state-recovered')).toHaveLength(0);
   });
 });
