@@ -1,7 +1,7 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
 import { omitKey } from '../domain/omitKey';
 import { isSlowedSyncError, SLOW_RETRY_MS } from '../domain/sync/errorFamily';
-import type { SyncWarningCode } from '../domain/syncBanners';
+import type { SyncStatusWarning } from '../domain/syncBanners';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 
@@ -22,7 +22,7 @@ export interface CycleFacts {
   /** Aucun appareil connu ne partage la clé locale (tous `foreign`). */
   readonly keyMismatch: boolean;
   /** Y-TECH-02 : avertissements du scan de ce cycle ; absent : scan pas atteint (avertissements connus gardés). */
-  readonly warnings?: readonly SyncWarningCode[];
+  readonly warnings?: readonly SyncStatusWarning[];
   /** Y-TECH-02 (§19 point 7) : une valeur stockée de l'état local était illisible pendant ce cycle. */
   readonly stateUnreadable?: boolean;
 }

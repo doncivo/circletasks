@@ -12,7 +12,7 @@ import type { ReintegrationFailure } from '../../domain/sync/compat';
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import type { RestoreOption } from '../../domain/sync/epoch';
 import type { DeviceStateStatus } from '../../domain/sync/ownState';
-import type { SyncPhase as DomainSyncPhase, SyncWarningCode } from '../../domain/syncBanners';
+import type { SyncPhase as DomainSyncPhase, SyncStatusWarning } from '../../domain/syncBanners';
 import {
   isSyncErrorCode,
   type EpochId,
@@ -552,7 +552,7 @@ export interface SyncStatus {
    * Y-TECH-02 : avertissements du dernier scan (budget de nonces, dossier de plus de 1 Gio, plus de 16 dossiers, scan incomplet), jamais
    * un blocage ; gardés quand un cycle échoue avant le scan. Absent : aucun. Facultatif.
    */
-  readonly warnings?: readonly SyncWarningCode[];
+  readonly warnings?: readonly SyncStatusWarning[];
   /** Y-TECH-02 (§19 point 7) : une lecture de l'état local de la synchro a échoué (`state-unreadable`) ; absent : non. Facultatif. */
   readonly stateUnreadable?: boolean;
   /**
