@@ -30,7 +30,8 @@ const triggers = (db: SqlDriver) => db.select<{ name: string; sql: string }>("SE
 describe('migration 0018 : Rappels Apple (K-05 critère 1, ADR 0008 §10.2)', () => {
   it('numéro suivant, sans trou ; rejouable sans effet ; version publiée = dernière migration', async () => {
     expect(migration0018AppleReminders.version).toBe(18);
-    expect(migrations.at(-1)?.version).toBe(18);
+    // Y-TECH-05 : la 0019 suit (compte rendu du report d'époque) ; la 0018 reste à sa place, sans trou.
+    expect(migrations[17]?.version).toBe(18);
     const db = await dbAt(18);
     expect((await migrate(db, migrations)).applied).toEqual([]);
     await db.close();

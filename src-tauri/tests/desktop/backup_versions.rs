@@ -97,8 +97,9 @@ fn k05_4_a_body_of_another_version_is_refused() {
 #[test]
 fn k05_4_a_backup_newer_than_the_app_is_still_refused_as_newer_schema() {
     let dir = scratch();
-    let newer = dir.path().join("v19.db");
-    make_db(&newer, 19, 18);
+    // Y-TECH-05 : l'app est en version 19 (migration 0019) ; la plus récente est donc la 20.
+    let newer = dir.path().join("v20.db");
+    make_db(&newer, 20, 18);
     assert_eq!(check_backup_file(&newer, APP_SCHEMA_VERSION).unwrap_err().code, "newer-schema");
 }
 
