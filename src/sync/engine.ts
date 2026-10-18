@@ -932,7 +932,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
     // Y-TECH-05 : compte rendu du changement d'époque non acquitté qui lève le bandeau (lignes rétablies, recréées, rattachées à « Sans projet »),
     // ou échec d'enregistrement du compte rendu : visible jusqu'à « J'ai vu » (remplace la dérivation de Y-FIX-04 depuis la notice).
-    if (await (await import('./epochCarryReportBanner')).carryReportRaised(repos)) seen.warnings = [...(seen.warnings ?? []), 'carry-report'];
+    if (await (await import('./epochCarryReportBanner')).carryReportRaisedOrLogged(repos, logger)) seen.warnings = [...(seen.warnings ?? []), 'carry-report'];
 
     // 5. Publication.
     let publishError: string | null = null;

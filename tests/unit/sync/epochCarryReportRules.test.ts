@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { DbError } from '../../../src/db/driver';
 import { EPOCH_CARRY_REPORT_FAILED_EVENT, EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT, type EpochCarryReport } from '../../../src/domain/sync/epochCarryReport';
+import { EPOCH_CARRY_REPORT_READ_FAILED_EVENT } from '../../../src/domain/sync/epochCarryReportView';
 import { syncTable } from '../../../src/domain/sync/syncTables';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
 import { clearEpochCarryNoticeFailure } from '../../../src/sync/carryNoticeState';
@@ -223,6 +224,24 @@ describe('Y-TECH-05 : reprise après arrêt brutal (critère 6)', () => {
     await b.restart();
     await rounds(devices);
     expect((await reportsOf(b)).map(stable)).toEqual([reference]);
+  });
+});
+
+describe('Y-TECH-05 revue S2 : lecture du compte rendu en échec dans le cycle', () => {
+  it('une lecture impossible ne fait pas échouer le cycle avant la publication : journalisée, carry-report levé (visible, sans bloquer)', async () => {
+    const [a, b] = await twoDevices();
+    devices = [a, b];
+    await rounds(devices);
+    await b.driver.execute('DROP TABLE epoch_carry_report');
+    await a.data.repos.projects.create(projectP);
+    await a.cycle();
+    const status = await b.cycle();
+    expect(status.phase, 'cycle de B').not.toBe('error');
+    expect(status.warnings ?? []).toContain('carry-report');
+    expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_READ_FAILED_EVENT)).toHaveLength(1);
+    // Publication et réception ne sont pas retardées : P de A est arrivé chez B.
+    await rounds(devices);
+    expect((await rowsOf(b, 'project')).length).toBe((await rowsOf(a, 'project')).length);
   });
 });
 

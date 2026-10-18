@@ -1,7 +1,8 @@
 import { clearEpochCarryNoticeFailure, epochCarryNoticeFailure } from './carryNoticeState';
 import type { DataAccess, Repositories } from '../db/repositories';
 import type { EpochCarryReport } from '../domain/sync/epochCarryReport';
-import { EPOCH_CARRY_REPORT_FAILED_META, parentReplacedCount, recreatedCount, restoredCount } from '../domain/sync/epochCarryReportView';
+import type { SyncLogger } from './log';
+import { EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT_READ_FAILED_EVENT, parentReplacedCount, recreatedCount, restoredCount } from '../domain/sync/epochCarryReportView';
 
 /**
  * Y-TECH-05 : ce qui lève le bandeau du compte rendu du changement d’époque (`carry-report`), lu par le moteur à chaque cycle et par le
@@ -48,6 +49,20 @@ export async function carryReportBannerFacts(repos: Repositories): Promise<Carry
 export async function carryReportRaised(repos: Repositories): Promise<boolean> {
   const { failure, reports } = await carryReportBannerFacts(repos);
   return failure !== null || reports.length > 0;
+}
+
+/**
+ * Revue S2 : `carryReportRaised` pour le cycle du moteur. Une lecture impossible ne fait jamais échouer le cycle avant la publication :
+ * journalisée (code d'erreur seulement) et l'avertissement est levé (visible, sans bloquer) ; le bandeau relit et montre son propre échec.
+ */
+export async function carryReportRaisedOrLogged(repos: Repositories, logger: SyncLogger): Promise<boolean> {
+  try {
+    return await carryReportRaised(repos);
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    logger.log(EPOCH_CARRY_REPORT_READ_FAILED_EVENT, { code: typeof code === 'string' ? code : error instanceof Error ? error.name : 'unknown' });
+    return true;
+  }
 }
 
 /** Nombre exact de lignes rétablies (débordement compris) des comptes rendus du bandeau : « Éléments rétablis : {n} » (ADR 0011 §29 point 5). */

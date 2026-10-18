@@ -13,6 +13,8 @@ import type { SyncTableName } from './syncTables';
 export const EPOCH_CARRY_REPORT_KEEP = 20;
 /** Clé de `sync_meta` (locale) : le compte rendu d'un report n'a pas pu être enregistré (persistant, levé jusqu'au compte rendu suivant). */
 export const EPOCH_CARRY_REPORT_FAILED_META = 'epochCarryReportFailed';
+/** Journal technique (code d'erreur seulement) : lecture du compte rendu (avertissement `carry-report`) impossible dans un cycle ; le cycle continue, l'avertissement est levé. */
+export const EPOCH_CARRY_REPORT_READ_FAILED_EVENT = 'epoch-carry-report-read-failed';
 /**
  * Correspondance unique table publiée → colonne de libellé (null : aucune, repli) et clé du type d'élément en français (`kind`, clé de
  * texte du catalogue i18n de l'écran : « Tâche », « Projet »… ; aucun texte ici, CLAUDE.md « textes dans src/i18n »). Un test échoue si
