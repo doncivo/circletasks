@@ -489,3 +489,39 @@ fn sec01_8_the_single_white_list_matches_the_decisions() {
     }
     assert!(pragma("user_version", None).is_some() && pragma("user_version", Some("1")).is_some());
 }
+
+
+/// Audit M1 : un objet de schéma persistant qui porte une construction refusée (déclencheur appelant `load_extension`, vue sur
+/// `pragma_*`) est refusé à sa CRÉATION (le corps d'un déclencheur n'est pas soumis à l'autorisateur avant qu'il se déclenche) ; sinon il
+/// bloquerait ensuite toutes les écritures de la table. La base reste écrivable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_9_schema_objects_carrying_a_refused_construct_are_refused_at_creation() {
+    let fx = Fixture::new("db-schema-").await;
+    fx.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT)").await.unwrap();
+    assert_refused(fx.exec("CREATE TRIGGER tr AFTER INSERT ON t BEGIN SELECT load_extension('x'); END").await, "function", "CREATE TRIGGER load_extension");
+    assert_refused(fx.exec("CREATE TRIGGER tr2 AFTER INSERT ON t BEGIN SELECT fts3_tokenizer('x'); END").await, "function", "CREATE TRIGGER fts3_tokenizer");
+    assert_refused(fx.exec("CREATE TRIGGER tr3 AFTER INSERT ON t BEGIN SELECT edit('x'); END").await, "function", "CREATE TRIGGER edit(");
+    assert_refused(fx.exec("CREATE VIEW v AS SELECT * FROM pragma_database_list").await, "pragma", "CREATE VIEW pragma_database_list");
+    assert_refused(fx.exec("CREATE VIEW v AS SELECT * FROM PRAGMA_user_version").await, "pragma", "CREATE VIEW PRAGMA_user_version");
+    // Pas de faux refus : mots dans un littéral, un commentaire, un identifiant ; pragma_ de la liste blanche ; colonne nommée edit.
+    fx.exec("CREATE TABLE u (edit TEXT, \"load_extension\" TEXT)").await.unwrap();
+    fx.exec("CREATE VIEW ok1 AS SELECT 'load_extension' AS s, edit FROM u -- readfile").await.unwrap();
+    fx.exec("CREATE VIEW ok2 AS SELECT * FROM pragma_quick_check('t')").await.unwrap();
+    fx.exec("INSERT INTO t (a) VALUES ('writefile')").await.unwrap();
+}
+
+/// Audit M1 : le schéma n'est pas de confiance et la base est en mode défensif (posés par `harden`, indépendamment de l'autorisateur).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_9_the_connection_is_defensive_and_the_schema_is_not_trusted() {
+    let fx = Fixture::new("db-dbconfig-").await;
+    let mut conn = fx.pool.acquire().await.unwrap();
+    let mut handle = conn.lock_handle().await.unwrap();
+    let db = handle.as_raw_handle().as_ptr();
+    for (name, op) in [("DEFENSIVE", libsqlite3_sys::SQLITE_DBCONFIG_DEFENSIVE), ("TRUSTED_SCHEMA", libsqlite3_sys::SQLITE_DBCONFIG_TRUSTED_SCHEMA)] {
+        let mut now: std::ffi::c_int = -1;
+        // SAFETY : descripteur valide tant que `handle` est tenu ; le deuxième entier vaut -1 (lecture seule de l'état).
+        let rc = unsafe { libsqlite3_sys::sqlite3_db_config(db, op, -1 as std::ffi::c_int, &mut now as *mut std::ffi::c_int) };
+        assert_eq!(rc, libsqlite3_sys::SQLITE_OK, "{name}");
+        assert_eq!(now, i32::from(name == "DEFENSIVE"), "{name} : DEFENSIVE doit valoir 1, TRUSTED_SCHEMA 0");
+    }
+}
