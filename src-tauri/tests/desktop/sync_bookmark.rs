@@ -26,6 +26,7 @@ const BOOKMARK_RS: &str = include_str!("../../src/sync/bookmark.rs");
 const CONSENT_IOS_RS: &str = include_str!("../../src/sync/consent_ios.rs");
 const PLUGIN_LIB: &str = include_str!("../../plugins/folder-bookmark/src/lib.rs");
 const PLUGIN_BUILD: &str = include_str!("../../plugins/folder-bookmark/build.rs");
+const COMMANDS_IOS_RS: &str = include_str!("../../src/sync/commands_ios.rs");
 
 fn code<T>(result: Result<T, SyncError>) -> SyncCode {
     match result {
@@ -654,4 +655,57 @@ fn y_ios_01_swift_hardening_from_the_security_audit() {
     let rename = swift_method("rename");
     assert!(rename.contains("coordinatedMove("), "source et destination coordonnées");
     assert!(code.contains("options: .forMoving") && code.contains("options: .forReplacing"));
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Y-IOS-05 (B6) : échéance du transport du plugin (`DeadlineTransport`)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// Fichiers `.rs` de `src-tauri/src` (chemin relatif en `/`, contenu).
+fn app_sources() -> Vec<(String, String)> {
+    fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path, root, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let rel = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                out.push((rel, std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut out = Vec::new();
+    walk(&root, &root, &mut out);
+    out
+}
+
+/// Critère 14 : le transport de production est construit par `DeadlineTransport::new(...)` autour de `PluginTransport`, et aucun autre
+/// appel du plugin folder-bookmark dans `src-tauri/src` ne contourne le décorateur.
+#[test]
+fn y_ios_05_14_production_transport_is_wrapped_by_the_deadline() {
+    assert!(
+        COMMANDS_IOS_RS.contains("DeadlineTransport::new(Arc::new(PluginTransport(plugin.inner().clone())))"),
+        "commands_ios.rs : le transport du plugin passe par DeadlineTransport::new"
+    );
+    assert_eq!(
+        COMMANDS_IOS_RS.matches("PluginTransport(").count(),
+        COMMANDS_IOS_RS.matches("DeadlineTransport::new(Arc::new(PluginTransport(").count(),
+        "commands_ios.rs : aucun PluginTransport hors du décorateur"
+    );
+    let mut users = BTreeSet::new();
+    for (file, text) in app_sources() {
+        if text.contains("tauri_plugin_folder_bookmark") {
+            users.insert(file.clone());
+        }
+        if file == "sync/bookmark.rs" {
+            // Le seul appel direct du plugin : `PluginTransport::call`.
+            assert_eq!(text.matches("self.0.call(").count(), 1, "bookmark.rs : un seul appel direct du plugin");
+        }
+        if file == "sync/commands_ios.rs" {
+            assert!(!text.contains("plugin.call(") && !text.contains(".0.call("), "commands_ios.rs : aucun appel direct du plugin");
+        }
+    }
+    let expected: BTreeSet<String> = ["lib.rs", "sync/bookmark.rs", "sync/commands_ios.rs"].iter().map(|s| (*s).to_owned()).collect();
+    assert_eq!(users, expected, "seuls lib.rs (init), bookmark.rs (PluginTransport) et commands_ios.rs (câblage) nomment le plugin");
 }
