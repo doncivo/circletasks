@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { measureStart, type BuildFiles } from './bundleMeasure';
+import { HASHED_NAME, hashedNameTable, measureStart, pseudoHash, type BuildFiles } from './bundleMeasure';
 
 /**
  * BUNDLE-01, phase 1 (critères 1 et 2) : la mesure du départ ne doit pas bouger quand seuls les noms hachés des blocs changent (retouche
@@ -52,8 +52,61 @@ describe('mesure du bundle de départ : insensible aux noms hachés', () => {
   it('même JavaScript, hachages différents (retouche CSS) : même mesure à l’octet', () => {
     const a = syntheticBuild(1);
     const b = syntheticBuild(2);
-    const measureA = measureStart(a.files, a.start);
-    const measureB = measureStart(b.files, b.start);
+    // La mesure brute, elle, bouge (c'est le bruit constaté sur UI-FIX-01) : le cas de test n'est pas vide.
+    expect(measureStart(a.files, a.start).total).not.toBe(measureStart(b.files, b.start).total);
+    const measureA = measureStart(a.files, a.start, { normalizeHashes: true });
+    const measureB = measureStart(b.files, b.start, { normalizeHashes: true });
     expect(measureA.total, `mesure A ${String(measureA.total)} octets, mesure B ${String(measureB.total)} octets`).toBe(measureB.total);
+    // Le détail garde les vrais noms de fichiers.
+    expect(measureA.chunks.map((chunk) => chunk.file)).toEqual(a.start);
+  });
+
+  it('un vrai changement de code est toujours vu', () => {
+    const a = syntheticBuild(1);
+    const changed = new Map(a.files);
+    const [main] = a.start;
+    changed.set(main as string, Buffer.from(`${(a.files.get(main as string) as Buffer).toString('utf8')}export const added=1;\n`, 'utf8'));
+    expect(measureStart(changed, a.start, { normalizeHashes: true }).total).toBeGreaterThan(measureStart(a.files, a.start, { normalizeHashes: true }).total);
+  });
+
+  it('pseudo-hachage : déterministe, même longueur, même alphabet que le hachage remplacé', () => {
+    expect(pseudoHash('main.js', 0, 8, 'base64url')).toBe(pseudoHash('main.js', 0, 8, 'base64url'));
+    expect(pseudoHash('main.js', 0, 8, 'base64url')).toMatch(/^[A-Za-z0-9_-]{8}$/);
+    expect(pseudoHash('main.js', 0, 8, 'hex')).toMatch(/^[0-9a-f]{8}$/);
+    expect(pseudoHash('main.js', 0, 8, 'base64url')).not.toBe(pseudoHash('core.js', 0, 8, 'base64url'));
+    const { files } = syntheticBuild(1);
+    const table = hashedNameTable(files);
+    for (const [real, pseudo] of table) {
+      expect(pseudo.length).toBe(real.length);
+      expect(pseudo).toMatch(HASHED_NAME);
+      expect(pseudo.replace(HASHED_NAME, '$1$3')).toBe(real.replace(HASHED_NAME, '$1$3'));
+    }
+    expect(table.size).toBe(files.size - 1);
+  });
+
+  it('deux fichiers de même nom logique reçoivent deux pseudo-hachages différents, attribués par le contenu et non par le hachage', () => {
+    const files = new Map<string, Buffer>([
+      ['assets/index-AAAAAAAA.js', Buffer.from('export const a=1;', 'utf8')],
+      ['assets/index-BBBBBBBB.js', Buffer.from('export const b=2;', 'utf8')],
+    ]);
+    const swapped = new Map<string, Buffer>([
+      ['assets/index-BBBBBBBB.js', Buffer.from('export const a=1;', 'utf8')],
+      ['assets/index-AAAAAAAA.js', Buffer.from('export const b=2;', 'utf8')],
+    ]);
+    const table = hashedNameTable(files);
+    const tableSwapped = hashedNameTable(swapped);
+    expect(table.get('index-AAAAAAAA.js')).not.toBe(table.get('index-BBBBBBBB.js'));
+    expect(tableSwapped.get('index-BBBBBBBB.js')).toBe(table.get('index-AAAAAAAA.js'));
+    expect(tableSwapped.get('index-AAAAAAAA.js')).toBe(table.get('index-BBBBBBBB.js'));
+  });
+
+  it('les fichiers sans hachage (index.html, theme-init.js, /ocr/) ne sont pas touchés', () => {
+    const files = new Map<string, Buffer>([
+      ['index.html', Buffer.from('<html></html>', 'utf8')],
+      ['theme-init.js', Buffer.from('document.body;', 'utf8')],
+      ['ocr/worker.min.js', Buffer.from('x', 'utf8')],
+      ['assets/focus-end--pmzso8T.wav', Buffer.from([0, 1, 2])],
+    ]);
+    expect([...hashedNameTable(files).keys()]).toEqual(['focus-end--pmzso8T.wav']);
   });
 });

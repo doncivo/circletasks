@@ -2,8 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { measureStart, readBuildFiles, startChunks as startChunksOf, type BuildFiles, type Manifest, type ManifestChunk } from './bundleMeasure';
 
 /**
  * Taille du bundle de départ (PRD 8, démarrage rapide) : `npm run build` vers un dossier temporaire avec le manifeste de Vite, puis somme
@@ -12,20 +12,21 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * par exemple « tokens », et ces noms peuvent changer). Les imports dynamiques (Recharts du rapport, tesseract.js, etc.) et les
  * ressources copiées telles quelles (/ocr/) n'en font pas partie. Seuil : 350 Ko gzip.
  *
+ * BUNDLE-01 : la mesure jugée est la mesure NORMALISÉE (`bundleMeasure.ts`) : les noms hachés des blocs, qui changent à chaque retouche CSS
+ * et faisaient bouger le gzip de quelques dizaines d'octets sans aucune ligne de code changée, sont remplacés dans le contenu mesuré par un
+ * pseudo-hachage déterministe de même longueur et de même alphabet. L'écart avec la mesure brute est borné (critère 4), le plafond ne bouge
+ * pas, le build livré n'est pas touché. Relevé entre deux commits : `node tests/bundle/measureStart.ts <dossier de sortie>`.
+ *
  * Hors de `npm run test` : lancé par `npm run test:bundle` (configuration vitest.bundle.config.ts).
  */
 const LIMIT_BYTES = 350 * 1024;
-
-interface ManifestChunk {
-  readonly file: string;
-  readonly isEntry?: boolean;
-  readonly imports?: readonly string[];
-  readonly dynamicImports?: readonly string[];
-}
+/** BUNDLE-01 critère 4 : écart absolu admis entre mesure normalisée et mesure brute du même build (au-delà : relèvement de fait, ou modèle des hachages périmé). */
+const NORMALIZATION_GAP_BYTES = 100;
 
 describe('bundle de départ (index.html)', () => {
   let outDir = '';
-  let manifest: Record<string, ManifestChunk> = {};
+  let manifest: Manifest = {};
+  let files: BuildFiles = new Map();
 
   beforeAll(() => {
     outDir = mkdtempSync(join(tmpdir(), 'ct-bundle-'));
@@ -35,7 +36,8 @@ describe('bundle de départ (index.html)', () => {
     const env = { ...process.env, NODE_ENV: 'production', TAURI_ENV_DEBUG: '', VITE_CT_E2E_HOOKS: '' };
     const build = spawnSync('npm', ['run', 'build', '--', '--outDir', outDir, '--emptyOutDir', '--manifest'], { encoding: 'utf8', shell: true, env });
     if (build.status !== 0) throw new Error(`npm run build a échoué (code ${String(build.status)}) :\n${build.stdout}\n${build.stderr}`);
-    manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Record<string, ManifestChunk>;
+    manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Manifest;
+    files = readBuildFiles(outDir);
   });
 
   afterAll(() => {
@@ -44,34 +46,27 @@ describe('bundle de départ (index.html)', () => {
 
   /** Blocs statiques atteints depuis l'entrée de `index.html`, entrée comprise. */
   function startChunks(): ManifestChunk[] {
-    if (manifest['index.html']?.isEntry !== true) throw new Error('entrée index.html absente du manifeste');
-    const seen = new Set<string>();
-    const queue: string[] = ['index.html'];
-    const result: ManifestChunk[] = [];
-    while (queue.length > 0) {
-      const key = queue.shift() as string;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const chunk = manifest[key];
-      if (!chunk) throw new Error(`bloc ${key} absent du manifeste`);
-      result.push(chunk);
-      queue.push(...(chunk.imports ?? []));
-    }
-    return result;
+    return startChunksOf(manifest);
   }
 
-  it('le JavaScript de départ pèse moins de 350 Ko en gzip, bloc par bloc affiché', () => {
-    const chunks = startChunks().filter((chunk) => chunk.file.endsWith('.js'));
-    const sizes = chunks.map((chunk) => ({ file: chunk.file, gzip: gzipSync(readFileSync(join(outDir, chunk.file))).length }));
-    const total = sizes.reduce((sum, item) => sum + item.gzip, 0);
-    const detail = sizes
+  it('le JavaScript de départ pèse moins de 350 Ko en gzip (mesure normalisée), bloc par bloc affiché', () => {
+    const chunks = startChunks()
+      .map((chunk) => chunk.file)
+      .filter((file) => file.endsWith('.js'));
+    const normalized = measureStart(files, chunks, { normalizeHashes: true });
+    const raw = measureStart(files, chunks);
+    const detail = [...normalized.chunks]
       .sort((a, b) => b.gzip - a.gzip)
       .map((item) => `  ${(item.gzip / 1024).toFixed(1).padStart(7)} Ko  ${item.file}`)
       .join('\n');
-    // eslint-disable-next-line no-console -- détail relevé à la main : taille gzip de chaque bloc du bundle de départ
-    console.info(`[bundle] ${String(sizes.length)} blocs de départ, total ${(total / 1024).toFixed(1)} Ko gzip (seuil ${String(LIMIT_BYTES / 1024)} Ko)\n${detail}`);
-    expect(sizes.length).toBeGreaterThan(0);
-    expect(total).toBeLessThan(LIMIT_BYTES);
+    // eslint-disable-next-line no-console -- détail relevé à la main : taille gzip de chaque bloc du bundle de départ, octets exacts des deux mesures
+    console.info(
+      `[bundle] ${String(normalized.chunks.length)} blocs de départ, total ${(normalized.total / 1024).toFixed(1)} Ko gzip (seuil ${String(LIMIT_BYTES / 1024)} Ko) ; normalisé ${String(normalized.total)} octets, brut ${String(raw.total)} octets, marge ${String(LIMIT_BYTES - normalized.total)}\n${detail}`,
+    );
+    expect(normalized.chunks.length).toBeGreaterThan(0);
+    expect(normalized.total).toBeLessThan(LIMIT_BYTES);
+    // Critère 4 : la normalisation ne relève pas le plafond de fait (et le modèle des hachages de Vite n'est pas périmé).
+    expect(Math.abs(normalized.total - raw.total), `normalisé ${String(normalized.total)}, brut ${String(raw.total)}`).toBeLessThanOrEqual(NORMALIZATION_GAP_BYTES);
   });
 
   // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un
