@@ -27,4 +27,5 @@ export type ScreenName =
   | 'spacesscreen'
   | 'calendarsscreen'
   | 'syncdetailsscreen'
-  | 'quiethoursroute';
+  | 'quiethoursroute'
+  | 'restorechoicedialog';

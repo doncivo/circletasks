@@ -12,6 +12,7 @@ import { backupStore } from './backupStore';
 import { backupOriginLabels, backupRowName, type BackupLabelContext } from './backupLabels';
 import { useBackupLabelContext } from './useBackupLabelContext';
 import './BackupSheet.css';
+import { tRestore } from '../../i18n/syncRestoreText';
 
 const ERROR_KEYS: Record<Exclude<BackupFailureReason, 'sync-busy' | 'busy' | 'db-open'>, PlainMessageKey> = {
   corrupt: 'backup.errorCorrupt',
@@ -142,7 +143,7 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
     <div className="ct-backup__content">
       <h2 className="ct-backup__title">{t('backup.sheetTitle')}</h2>
       <p className="ct-backup__note">{t('backup.sheetIntro')}</p>
-      {syncPaired && <p className="ct-backup__note">{t('sync.restore.backupWarning')}</p>}
+      {syncPaired && <p className="ct-backup__note">{tRestore('backupWarning')}</p>}
       <div className="ct-backup__tools">
         <Button variant="secondary" onClick={() => void backupNow()} disabled={backingUp || locked}>
           {backingUp ? t('backup.backupNowBusy') : t('backup.backupNow')}

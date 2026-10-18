@@ -385,6 +385,7 @@ Un appareil supprime **ses propres** segments `j-n` quand les trois conditions s
   - à la **réception d'une trace de parent** (instantané, report d'époque : `purgeRows` avec `reattach`), les enfants vivants d'un **projet** purgé passent à « Sans projet » **du même espace** par une écriture locale tamponnée (`SyncRepository.detachLiveChildren`, sous garde, base = horloge précédente du champ) et sont **republiés entiers** (`'+'`) ;
   - dans **`applyOps`**, une ligne reçue dont le parent d'une **colonne facultative** est purgé est créée avec cette colonne à nul (`SyncRepository.detachField`) puis republiée entière ;
   - événement `children-reattached` (table, nombre, sans contenu). L'appareil qui avait purgé le parent reçoit la ligne comme une création (son parent n'est plus visé) : convergence, rien de perdu, l'élément change de projet ;
+  - **report d'époque (§28, Y-FIX-04)** : même rattachement quand le parent d'une ligne reportée a été **remplacé** par la restauration (absent, sans trace) ; lien obligatoire : mise de côté `missing-parent` ;
   - les **autres liens obligatoires** (colonne non facultative) ne sont pas rattachés : la ligne parente n'est pas purgée tant qu'elle a des enfants (`purge-skipped`), et une opération reçue sous un parent obligatoire purgé reste abandonnée (`parent-purged`).
 - **Exclus des purges** : les **espaces fixes** Pro et Perso (identifiants fixes communs, jamais purgés physiquement ni tracés) et la table **`settings`** (une clé de réglage n'est jamais purgée ; sa valeur suit la règle de hlc).
 - **Volume estimé** : une trace occupe environ 120 octets en base (index compris) et 80 octets de texte clair dans un instantané. Hypothèse haute de 20 suppressions purgées par jour (tâches, validations de routine décochées, rappels) : ≈ 7 300 traces par an, **≈ 0,9 Mo par an en base**, ≈ 0,6 Mo par instantané et par an, soit moins de 10 Mo sur 10 ans. Acceptable sans limite de durée ; réévaluer si le volume mesuré dépasse 50 000 traces.
@@ -538,7 +539,7 @@ Catalogue `src/domain/sync/syncTables.ts` (seule source, utilisé par les décle
 | Une seule session Focus active | Après chaque lot appliqué, si plusieurs `focus_session` non supprimées ont `ended_at IS NULL`, toutes sauf la plus récente (`started_at`, puis hlc) reçoivent `ended_at` = `started_at` de la plus récente, par une **écriture locale** (publiée). La valeur étant déterministe, deux appareils qui réparent en même temps écrivent la même valeur : pas de conflit. |
 | Corbeille (`trashStore.ts`, copies hors `taskEntities`) | Le moteur émet `onRemoteChanges({ tables, ids })` après chaque lot (section 11) ; `trashStore` recharge si `task` est touchée, `taskEntities` reçoit les tâches relues (règle « un hlc inférieur n'écrase jamais », avenant T-04 de l'ADR 0004), les autres stores rechargent leurs listes. Les commandes d'annulation restent protégées par leur contrôle de hlc (`'stale'`). |
 | Purge physique et traces | Section 5.4 : purge seulement quand tous les appareils actifs ont lu la suppression, puis 30 jours ; aucune purge (cycle ou démarrage) tant qu'un appareil actif a des écritures publiées non lues (horizon `blocked`) ; identifiant inscrit dans `sync_tombstone` dans la même transaction ; espaces fixes et réglages exclus. Une **restauration fondée sur la trace** recrée la ligne (UUID compris) et ses rappels vivants (entrée `'+'`, sections 3.2 et 5.4). |
-| Enfant vivant sous un parent purgé ailleurs (question ouverte 10) | **Décision (c)** (`docs/decisions.md`, 2026-10-05) : rattachement à « Sans projet » du même espace et republication entière (`'+'`), à la réception de la trace du parent (`detachLiveChildren`) et dans `applyOps` pour une colonne facultative (`detachField`) ; événement `children-reattached`. Les autres liens obligatoires gardent `purge-skipped` (section 5.4). |
+| Enfant vivant sous un parent purgé ailleurs (question ouverte 10) | **Décision (c)** (`docs/decisions.md`, 2026-10-05) : rattachement à « Sans projet » du même espace et republication entière (`'+'`), à la réception de la trace du parent (`detachLiveChildren`) et dans `applyOps` pour une colonne facultative (`detachField`) ; événement `children-reattached`. Les autres liens obligatoires gardent `purge-skipped` (section 5.4). **Étendue au report d'époque (§28)** : parent remplacé par « Appliquer partout » (absent, sans trace) : lien facultatif rattaché de la même façon, lien obligatoire mis de côté (`missing-parent`, `carry-held`). |
 | `reminder.fire_at` | Type de catalogue **`localdatetime`** (heure locale flottante, sans fuseau), distinct de `datetime` (instant UTC) (section 3.3). |
 | Limite de dérive du hlc | Section 4.4 : 1 h, mesurée sur l'horloge physique. |
 | Bandeaux A-09 | Décision dans `src/domain/syncBanners.ts` (module pur), pose par `src/features/sync/startSync.ts` (section 19). `syncing` publié par le service pendant un cycle qui lit ou écrit, ou plus vieux que `SYNCING_BANNER_DELAY_MS` (1 s, `limits.ts`, seuil unique compté depuis `SyncStatus.cycleStartedAt`) ; `waitingIcloud` posé tant qu'un fichier attendu est dans le nuage ou qu'une tête publiée n'est pas atteinte, avec sa cause (`errorCode`) ; **`syncTrouble`** : tout échec ou état bloqué de la synchro (ordre `SYNC_TROUBLE_ORDER`, un seul bandeau avec « (+N) » et « Voir ») ; **`updateRequired`** (lot Y3, section 7.2 : appareil plus récent, ou `detail: 'reintegration'`) ; priorité `APP_STATUS_PRIORITY` = `['calendarDisconnected', 'syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']` (« Hors ligne » ne masque jamais un échec de synchro). |
@@ -1520,6 +1521,54 @@ Story technique Y-IOS-02 (même branche, après Y-IOS-01), décisions du 2026-10
 6. **Règle d'identité à la restauration (parties B et C de Y-TECH-04, décision d'Ali du 2026-10-17 : « une restauration ne change jamais l'identité de l'appareil »).** L'identité vient de la base en place, jamais du fichier restauré. `carry_device_identity` (`src-tauri/src/backup.rs`) la réécrit **dans la base préparée, avant l'échange** (donc avant tout instant où la base en place porterait l'identité d'un autre appareil ; un arrêt brutal à chaque point du banc `RestoreStep` laisse l'identité courante ; idempotente) : réglage local `device.id` (source du démarrage, comparé à `self` par le moteur) et ligne `sync_state.is_self` (l'ancienne ligne passe à `is_self = 0`, jamais supprimée ; la ligne de l'identité courante est créée sans position, ou remise sans position si la sauvegarde la connaissait comme pair, jamais `{époque cible, 0, 0}`). **Quand la sauvegarde vient d'un autre appareil**, l'état qui porte l'identité suit : les clés de publication de `sync_meta` (tête, `stateSeq`, instantané, segments, repères d'états, époque suivie, traces orphelines : liste de `IDENTITY_META` de `forget.ts` plus `ownStateHlcs`) sont remplacées par celles de la base en place, qui décrivent le journal que le dossier contient déjà (les remettre à zéro réutiliserait des numéros publiés, contraire à la règle 1 de l'ADR 0010), et la file d'envoi de l'autre appareil est **ré-signée** au nom de l'appareil courant (même instant et même compteur, comme « Associer de nouveau ») puis transformée en entrées « ligne entière » (republiées avec un rang neuf, hlc d'origine gardés : une entrée au hlc inférieur à la tête serait sinon écartée comme déjà publiée), sans quoi le publieur, qui n'envoie que les champs signés de l'appareil, les abandonnerait. Un appareil dont la copie porte une identité oubliée ne se déclare jamais oublié. **Trois sources d'identité, une seule vérité** : `settings.device.id` et `sync_state.is_self` (réécrits ici) et `sync/folder.json` `device_id` (figé par `bind_device`, hors de la base, donc intact et cohérent). Base en place corrompue : la restauration reste possible (journalisé) ; toute autre erreur de lecture la refuse (`io`).
 7. **Écran de restauration (partie C).** Chaque sauvegarde porte `deviceId`, `platform` et `epoch` (lus en lecture seule dans la sauvegarde, `null` si absents ou illisibles, jamais une erreur de liste) ; l'écran montre l'appareil par son nom lisible (« Cet appareil », « PC 56d4 (oublié) », « Appareil inconnu »), la date et l'heure réelles, l'époque et la mention « autre époque ». Informatif : ces champs ne servent jamais à décider de l'identité.
 8. **Hors de cet avenant** : le compte rendu du report (Y-TECH-05).
+
+### 28. Avenant Y-FIX-04 : report d'époque d'une ligne dont le parent a été remplacé (bloquant B4, 2026-10-18)
+
+Numéro : §26 est l'avenant de Y-TECH-04 ; §27 est réservé à Y-IOS-07. **Constat (audit B4)** : une ligne reportée (section 24 point 6) dont
+le parent avait été lu par l'ouvreur puis **remplacé** par « Appliquer partout » (absent de l'instantané d'ouverture, sans trace) était
+rejouée par `reapply` avec `noPark` : ni appliquée, ni gardée, ni journalisée, puis son report effacé ; elle disparaissait des deux
+appareils. Cela contredisait « le report rétablit, il n'efface jamais » (section 24 point 6, §26) et la règle « aucun échec silencieux ».
+
+1. **Règle.** Au rejeu d'un report (`ApplyContext.carry`, `reapply` seulement), un parent absent **sans trace** est un parent remplacé,
+   jamais « à venir ». Le verdict est une fonction pure tirée du catalogue (`carryParentVerdict`, `src/domain/sync/epochCarryNotice.ts`,
+   `parents` et `nullable` de `SYNC_TABLES`, testée sur tous les liens) : `keep` (parent présent), `detach` (lien **facultatif** :
+   `task.project_id`, `goal_id`, `recurrence_id`, `goal.carried_from_id`) ou `hold` (lien **obligatoire** : `checklist_item.checklist_id`,
+   `routine_log.routine_id`, `routine_pause.routine_id`, `space_id`).
+2. **`detach` : extension de la décision (c)** (question ouverte 10, `docs/decisions.md` 2026-10-05). La ligne est traitée comme sous un
+   parent purgé : colonne mise à nul (« Sans projet » **du même espace**), écriture locale `detachField`, républication entière (`'+'`),
+   `children-reattached`. Ligne existante : seul le lien vers le parent remplacé est écarté, les autres champs reportés sont appliqués.
+3. **`hold` : repli `sync_parked`.** Motif `missing-parent` (existant : **aucune migration**, le `CHECK` de 0015 est inchangé), opération
+   complète marquée `carry: 1` dans `op`. `retryParked` la rejoue à chaque cycle comme toute opération mise de côté ; quand le parent
+   revient, la ligne est appliquée, **republiée entière** et retirée (`releaseCarried`, une transaction). Avertissement `carry-held` tant
+   qu'au moins une ligne marquée attend : interdit « À jour ». Ligne **existante** dont le lien obligatoire vise un parent remplacé :
+   l'opération **entière** est mise de côté (titre et autres champs reportés compris), comme à la réception ordinaire ; ils s'appliquent
+   avec elle au retour du parent. Si la liste ou la routine ne revient jamais, `carry-held` dure sans action pour en sortir (dette, Y-TECH-05).
+4. **Le report ne perd jamais.** Une ligne reportée ne sort de `epoch-carry` qu'appliquée, rattachée, mise de côté, ou écartée par une
+   règle déjà journalisée (trace plus récente, `parent-purged` d'un lien obligatoire). Parent reporté dans la même passe : appliqué avant
+   l'enfant (ordre du catalogue dans `materialize` **et** désormais dans `carryNewer`). Parent à la corbeille dans la sauvegarde : il
+   existe, la ligne est insérée sous lui ; elle reste visible (les tâches ne sont pas filtrées par l'état de leur projet), comportement
+   inchangé. La réception ordinaire (lecture des journaux, `retryParked`) garde « parent absent = à venir » : jamais de rattachement.
+5. **Journal et notice.** Événements `epoch-carry-reattached` et `epoch-carry-held` `{ table, column, count }` par passe, sans contenu.
+   Notice locale `sync_meta.epochCarryNotice` (jamais publiée) `{ v: 1, epoch, at, reattached, held, overflow }`, items
+   `{ table, rowId, column, parentId, space, label, hlc }` (`label` local seulement), 200 par liste au plus, le reste dans `overflow`,
+   cumulée jusqu'à l'acquittement ; écrite dans la transaction de la page de `reapply` (un arrêt brutal à une borne de page donne le même
+   résultat qu'une exécution sans arrêt). Écriture refusée pour une autre cause : les données passent quand même,
+   `epoch-carry-notice-failed` est journalisé et `carry-reattached` est levé (jamais muet) ; cet indicateur est une **variable du module**
+   (`carryNoticeState.ts`) : il disparaît au redémarrage et, dans le banc, est partagé entre les appareils d'un même processus (le
+   persister est impossible quand le disque est plein ; dette, Y-TECH-05). **Disque plein ou erreur d'entrée-sortie** (`SQLITE_FULL`,
+   `SQLITE_IOERR`) : l'erreur est relancée, la page est annulée entière (reports compris, SQLite pouvant avoir annulé la transaction) et
+   l'étape (c) reprend au cycle suivant : jamais un retrait des reports hors transaction. Avertissement `carry-reattached` : levé tant que la notice nomme des lignes rattachées ;
+   n'interdit pas « À jour ».
+6. **Interface vers Y-TECH-05**, figée par `tests/unit/sync/epochCarryInterface.test.ts` : noms d'événements, motif, clé et forme de la
+   notice, marque `carry`. **« J'ai vu » et la liste nommée** (Détails, bandeau) sont **à Y-TECH-05**, comme prévu par la fiche Y-FIX-04 et
+   confirmé par Ali le 2026-10-18 : d'ici là, `carry-reattached` ne peut pas être acquitté.
+7. **Bundle de départ** (décision d'Ali du 2026-10-18, option 2) : tout le chemin rare est dans `epochSwitch.ts` (à la demande) ; la fenêtre
+   de choix après restauration et ses textes (`fr.syncRestore.ts`) sont chargés à la demande pour faire la place (`RestoreChoiceHost`),
+   règle « tout nouvel écran qui ne s'affiche pas au démarrage est chargé à la demande par défaut ».
+
+Tests : `tests/unit/sync/epochCarryReplacedParent.test.ts` (critères 1 à 3, rouge en 4a324b91 puis vert en ead5d217),
+`epochCarryReplacedParentRules.test.ts`, `epochCarryReplacedParentResume.test.ts`, `epochCarryInterface.test.ts`,
+`src/domain/sync/epochCarryNotice.test.ts`.
 
 ## Conséquences
 

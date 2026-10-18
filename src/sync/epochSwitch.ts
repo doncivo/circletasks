@@ -1,10 +1,12 @@
 import type { ExportedRow, Repositories } from '../db/repositories';
 import { PAGE_ROWS, parseEpochId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
 import { hlcDevice } from '../domain/sync/parse';
-import { SYNC_TABLES, settingKeyScope, syncTable, type SyncTable } from '../domain/sync/syncTables';
+import { SYNC_TABLES, settingKeyScope, syncTable, tableRank, type SyncTable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { coversForgotten } from '../domain/sync/retention';
-import { applyOps, type ApplyContext } from './apply';
+import { EPOCH_CARRY_HELD_EVENT, EPOCH_CARRY_NOTICE_META, EPOCH_CARRY_REATTACHED_EVENT, addToEpochCarryNotice, carryLabel, carryParentVerdict, countByLink, parseEpochCarryNotice, type EpochCarryNoticeItem } from '../domain/sync/epochCarryNotice';
+import { applyOps, type ApplyContext, type CarryPolicy } from './apply';
+import { markEpochCarryNoticeFailure } from './carryNoticeState';
 import type { SyncDeps } from './deps';
 import { setSnapshotWait } from './forget';
 import { guarded } from './guarded';
@@ -217,7 +219,9 @@ async function carryNewer(deps: SyncDeps, repos: Repositories): Promise<void> {
     byTable.set(t, rows);
   }
   let carried = 0;
-  for (const [t, rowsFields] of byTable) {
+  // Y-FIX-04 (critère 4) : parents avant enfants (ordre du catalogue), comme `materialize` : `reapply` lit `sync_parked` par identifiant
+  // croissant, un parent reporté ici doit donc être parqué avant son enfant, sinon l'enfant le croirait remplacé (rattaché à tort).
+  for (const [t, rowsFields] of [...byTable].sort(([a], [b]) => tableRank(a.name) - tableRank(b.name))) {
     const rows = await repos.sync.readRowsWithClocks(t, [...rowsFields.keys()]);
     for (const [id, fields] of rowsFields) {
       const row = rows.get(id);
@@ -234,9 +238,63 @@ async function carryNewer(deps: SyncDeps, repos: Repositories): Promise<void> {
 
 const maxOwn = (op: CarriedOp): Hlc => op.own.map((name) => (op.f[name] as SyncField)[1]).reduce((a, b) => (b > a ? b : a));
 
-/** (c) Réapplication par la règle de hlc, remise dans la file (hlc d'origine), retrait des reports de la page. */
-async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
+/**
+ * Y-FIX-04 (§28) : notice locale complétée dans la transaction de la page (`sync_meta.epochCarryNotice`, jamais publiée). Une écriture
+ * refusée pour une autre cause ne bloque pas le report (les données passent avant leur compte rendu) : journalisée, et l'avertissement
+ * `carry-reattached` est levé sans liste (`carryNoticeState.ts`), jamais muet. **Disque plein ou erreur d'entrée-sortie** (`SQLITE_FULL`,
+ * `SQLITE_IOERR`) : SQLite peut avoir annulé toute la transaction ; l'erreur est relancée, la page est annulée entière (reports compris)
+ * et l'étape (c) reprend au cycle suivant : jamais un `removeParked` hors transaction.
+ */
+async function recordCarryNotice(deps: SyncDeps, repos: Repositories, epoch: EpochId, at: IsoDateTime, reattached: readonly EpochCarryNoticeItem[], held: readonly EpochCarryNoticeItem[]): Promise<void> {
+  try {
+    const raw = await repos.sync.getMeta(EPOCH_CARRY_NOTICE_META);
+    const previous = parseEpochCarryNotice(raw);
+    if (raw !== null && previous === null) deps.logger.log('epoch-carry-notice-unreadable', {});
+    await repos.sync.setMeta(EPOCH_CARRY_NOTICE_META, JSON.stringify(addToEpochCarryNotice(previous, { epoch, at, reattached, held })));
+  } catch (error) {
+    if (isStorageFailure(error)) throw error;
+    deps.logger.log('epoch-carry-notice-failed', { code: error instanceof Error ? error.name : 'unknown' });
+    markEpochCarryNoticeFailure();
+  }
+}
+
+/** Disque plein ou erreur d'entrée-sortie de SQLite (message brut, ou cause d'une `DbError` du driver). */
+export function isStorageFailure(error: unknown): boolean {
+  for (let e: unknown = error, depth = 0; e instanceof Error && depth < 4; e = e.cause, depth += 1) {
+    if (/SQLITE_FULL|SQLITE_IOERR|database or disk is full|disk I\/O error/i.test(e.message)) return true;
+  }
+  return false;
+}
+
+/**
+ * Règle du report pour un parent remplacé (`carryParentVerdict`, tirée du catalogue) et relevé des items de la notice : espace et libellé
+ * local pris dans la ligne reportée (`op.f` porte toutes ses colonnes) ; un même lien n'est relevé qu'une fois par ligne.
+ */
+function carryPolicy(op: CarriedOp, reattached: EpochCarryNoticeItem[], held: EpochCarryNoticeItem[]): CarryPolicy {
+  const values = new Map(Object.entries(op.f).map(([name, field]) => [name, field[0]]));
+  return {
+    replaced(t, id, column, parentId, hlc) {
+      const detach = carryParentVerdict(t, column, false) === 'detach';
+      const list = detach ? reattached : held;
+      if (!list.some((item) => item.table === t.name && item.rowId === id && item.column === column)) {
+        const space = values.get('space_id');
+        list.push({ table: t.name, rowId: id, column, parentId, space: typeof space === 'string' ? space : null, label: carryLabel(values), hlc: hlc ?? (op.f[column] as SyncField | undefined)?.[1] ?? maxOwn(op) });
+      }
+      return detach;
+    },
+  };
+}
+
+/**
+ * (c) Réapplication par la règle de hlc, remise dans la file (hlc d'origine), retrait des reports de la page.
+ * Y-FIX-04 (B4, §28) : mode `carry` d'`applyOps` : une ligne dont le parent a été remplacé est rattachée (lien facultatif) ou mise de côté
+ * (`missing-parent`, lien obligatoire) ; une ligne reportée n'est retirée de `epoch-carry` qu'appliquée, mise de côté, ou écartée par une
+ * règle journalisée (trace plus récente, `parent-purged`) ; plus aucun chemin « ni appliquée, ni gardée, ni journalisée ».
+ */
+async function reapply(deps: SyncDeps, epoch: EpochId): Promise<Map<string, Set<string>>> {
   const touched = new Map<string, Set<string>>();
+  const reattachedAll: EpochCarryNoticeItem[] = [];
+  const heldAll: EpochCarryNoticeItem[] = [];
   for (;;) {
     const page = await deps.data.repos.sync.parked(['epoch-carry'], 0, PAGE_ROWS);
     if (page.length === 0) break;
@@ -247,6 +305,8 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
     for (const parked of page) for (const field of Object.values((JSON.parse(parked.op) as CarriedOp).f)) if (pageMax === null || field[1] > pageMax) pageMax = field[1];
     if (pageMax !== null) deps.hlc.receive(pageMax);
     await guarded(deps.data, async (repos) => {
+      const reattached: EpochCarryNoticeItem[] = [];
+      const held: EpochCarryNoticeItem[] = [];
       for (const parked of page) {
         const op = JSON.parse(parked.op) as CarriedOp;
         const t = syncTable(op.t);
@@ -266,7 +326,9 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
         // Ligne présente : seuls ses propres champs ; ligne absente : la ligne entière, pour pouvoir la recréer.
         const fields = Object.entries(op.f).filter(([name]) => !existed || op.own.includes(name));
         const syncOp: SyncOp = { t: op.t, id: op.id, at: op.at, f: new Map(fields) };
-        await applyOps(repos, [syncOp], { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, noPark: true });
+        await applyOps(repos, [syncOp], { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, carry: carryPolicy(op, reattached, held) });
+        // Ligne absente après l'application : mise de côté par `applyOps` (`missing-parent` ou `missing-row`, marquée), ou écartée par une
+        // règle documentée et journalisée (trace plus récente, `parent-purged` d'un lien obligatoire) ; jamais perdue en silence.
         if (!(await repos.sync.existingIds(t, [op.id])).has(op.id)) continue;
         if (!existed) {
           // Ligne recréée : la nouvelle époque ne la connaît pas ; elle est republiée **entière** (champs des autres appareils compris,
@@ -291,9 +353,16 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
         }
         addTouched(touched, t.name, op.id);
       }
+      // Notice et retrait des reports de la page dans la même transaction (reprise après arrêt : ni perte ni doublon).
+      if (reattached.length > 0 || held.length > 0) await recordCarryNotice(deps, repos, epoch, now, reattached, held);
       await repos.sync.removeParked(page.map((p) => p.id));
+      reattachedAll.push(...reattached);
+      heldAll.push(...held);
     });
   }
+  // Une ligne par lien et par passe : table, colonne, nombre ; aucun titre, aucun identifiant (critère 11).
+  for (const entry of countByLink(reattachedAll)) deps.logger.log(EPOCH_CARRY_REATTACHED_EVENT, entry);
+  for (const entry of countByLink(heldAll)) deps.logger.log(EPOCH_CARRY_HELD_EVENT, entry);
   return touched;
 }
 
@@ -387,7 +456,7 @@ export async function switchEpoch(
     await testHooks.afterStep?.('b');
   }
   if (progress.step === 'c') {
-    const touched = await reapply(deps);
+    const touched = await reapply(deps, target);
     if (touched.size > 0) onRemoteChanges(touched);
     await advance('d');
     await testHooks.afterStep?.('c');
@@ -428,4 +497,37 @@ export async function switchEpoch(
   });
   deps.logger.log('epoch-switched', { target });
   return 'done';
+}
+
+/** La notice locale nomme-t-elle des lignes rattachées non acquittées (avertissement `carry-reattached`) ? */
+export function hasReattached(raw: string): boolean {
+  return (parseEpochCarryNotice(raw)?.reattached.length ?? 0) > 0;
+}
+
+/**
+ * Lignes reportées mises de côté (lien obligatoire) que `retryParked` n'a plus gardées : présentes, elles sont republiées **entières**
+ * (`'+'`, la nouvelle époque ne les connaît pas) ; elles sortent de `sync_parked` et de la liste `held` de la notice, dans une seule
+ * transaction. Chargé à la demande avec ce module (chemin rare). `retryParked` les laisse en place jusque-là : un arrêt entre les deux
+ * rejoue l'opération (inchangée) puis revient ici.
+ */
+export async function releaseCarried(deps: SyncDeps, released: readonly { readonly id: number; readonly table: string; readonly rowId: string }[]): Promise<void> {
+  await guarded(deps.data, async (repos) => {
+    for (const item of released) {
+      const t = syncTable(item.table);
+      if (t && (await repos.sync.existingIds(t, [item.rowId])).has(item.rowId)) await repos.sync.addOutbox([{ table: t.name, rowId: item.rowId, field: ROW_REPUBLISH_FIELD }]);
+    }
+    await repos.sync.removeParked(released.map((r) => r.id));
+    const notice = parseEpochCarryNotice(await repos.sync.getMeta(EPOCH_CARRY_NOTICE_META));
+    if (!notice) return;
+    const gone = new Set(released.map((r) => `${r.table}\u0000${r.rowId}`));
+    const held = notice.held.filter((item) => !gone.has(`${item.table}\u0000${item.rowId}`));
+    if (held.length === notice.held.length) return;
+    const empty = held.length === 0 && notice.reattached.length === 0 && notice.overflow === 0;
+    try {
+      await repos.sync.setMeta(EPOCH_CARRY_NOTICE_META, empty ? null : JSON.stringify({ ...notice, held }));
+    } catch (error) {
+      // La donnée passe avant son compte rendu : journalisé, jamais un échec de la reprise des opérations mises de côté.
+      deps.logger.log('epoch-carry-notice-failed', { code: error instanceof Error ? error.name : 'unknown' });
+    }
+  });
 }

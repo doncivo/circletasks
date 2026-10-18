@@ -56,7 +56,12 @@ const SCAN_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan
  * `publish-blocked` (l'état de cet appareil n'est pas publié : les autres ne voient rien de lui) et `received-unapplied` (des
  * modifications reçues restent en attente d'une ligne qui manque, même après lecture complète et reprise depuis l'instantané).
  */
-export const SYNC_WARNINGS = [...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
+/**
+ * Y-FIX-04 (ADR 0011 §28) : report d'époque d'une ligne dont le parent a été remplacé par une restauration : `carry-held` (lien obligatoire,
+ * ligne mise de côté : interdit « À jour » tant qu'elle attend) puis `carry-reattached` (tâche rattachée à « Sans projet » : n'interdit pas
+ * « À jour », reste jusqu'à « J'ai vu »). Placés avant ceux du scan (les données d'abord).
+ */
+export const SYNC_WARNINGS = ['carry-held', 'carry-reattached', ...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
 export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
 type ScanWarningCode = (typeof SCAN_WARNINGS)[number];
 

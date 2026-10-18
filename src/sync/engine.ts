@@ -23,6 +23,7 @@ import { allowedSwitchTarget, clearResetFailure, evaluateReset, noticeToPublish,
 import type { CycleFacts } from './status';
 import { createCycleDeadline, isCycleInterrupted, type DeadlineUnit } from './deadline';
 import { scanWarnings, type SyncWarningCode } from '../domain/syncBanners';
+import { epochCarryNoticeFailure } from './carryNoticeState';
 
 /**
  * Cycle de synchronisation (ADR 0011, section 10.2 ; Y-02 critère 3) : 0 préconditions, 1 `scan({ keep })`, 2 règle 1, 3 époque,
@@ -902,8 +903,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
 
     // Opérations mises de côté (parent ou ligne arrivés depuis) : retentées après la lecture.
     if ((await repos.sync.parkedCount(['missing-parent', 'missing-row'])) > 0) {
-      const retried = await retryParked(deps);
+      const parkedStats = { carryHeld: 0, released: [] as { id: number; table: string; rowId: string }[] };
+      const retried = await retryParked(deps, parkedStats);
       if (retried.size > 0) hooks.onRemoteChanges(retried);
+      if (parkedStats.released.length > 0) await (await import('./epochSwitch')).releaseCarried(deps, parkedStats.released);
+      // Y-FIX-04 (§28) : lignes reportées mises de côté (parent remplacé, lien obligatoire) : visible, interdit « À jour », tant qu'elles attendent.
+      if (parkedStats.carryHeld > 0) seen.warnings = [...(seen.warnings ?? []), 'carry-held'];
       // Y-IOS-02 (point de contrôle 0.2.3, étape 4) : tout est lu jusqu'aux têtes et des opérations attendent encore une ligne qui manque :
       // un enregistrement a été sauté (curseur posé trop loin). Une reprise depuis l'instantané (fusion, rien n'est effacé) replace les
       // curseurs aux positions couvertes et relit les journaux ; une seule demande par époque, ensuite l'avertissement reste visible.
@@ -925,6 +930,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // La garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon : ensuite les traces mémorisées sont vidées.
     if (resumed && allRead && (await repos.sync.getMeta(META.orphanTraces)) !== null) await writeJson(repos, META.orphanTraces, null);
     if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+    // Y-FIX-04 (§28) : lignes reportées rattachées à « Sans projet » (notice non acquittée), ou notice impossible à écrire : visible jusqu'à « J'ai vu ».
+    const carryNotice = await repos.sync.getMeta(META.epochCarryNotice);
+    if (epochCarryNoticeFailure() || (carryNotice !== null && (await import('./epochSwitch')).hasReattached(carryNotice))) seen.warnings = [...(seen.warnings ?? []), 'carry-reattached'];
 
     // 5. Publication.
     let publishError: string | null = null;

@@ -18,6 +18,7 @@ import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { startSyncIntegration, syncTroubleText } from './startSync';
 import { syncStore } from './syncStore';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
+import { tRestore } from '../../i18n/syncRestoreText';
 
 const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000f1');
 const NOW = '2026-10-06T08:02:00.000Z';
@@ -128,8 +129,8 @@ describe('fenêtre de restauration (point 3)', () => {
     };
     await syncStore.get(container).getState().openRestore();
     renderIn(<RestoreChoiceDialog />);
-    expect(screen.getByText(t('sync.restore.scanFailed'))).toBeTruthy();
-    expect(screen.queryByText(t('sync.restore.applyEverywhere'))).toBeNull();
+    expect(screen.getByText(tRestore('scanFailed'))).toBeTruthy();
+    expect(screen.queryByText(tRestore('applyEverywhere'))).toBeNull();
   });
 
   it('marqueur provisoire non réglé : le texte le dit et demande de rouvrir, sans « Appliquer partout »', async () => {
@@ -140,7 +141,7 @@ describe('fenêtre de restauration (point 3)', () => {
     };
     await syncStore.get(container).getState().openRestore();
     renderIn(<RestoreChoiceDialog />);
-    expect(screen.getByText(t('sync.restore.provisional'))).toBeTruthy();
-    expect(screen.queryByText(t('sync.restore.applyEverywhere'))).toBeNull();
+    expect(screen.getByText(tRestore('provisional'))).toBeTruthy();
+    expect(screen.queryByText(tRestore('applyEverywhere'))).toBeNull();
   });
 });

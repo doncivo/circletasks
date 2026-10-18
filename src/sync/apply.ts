@@ -45,7 +45,23 @@ export interface ApplyContext {
   readonly logger: SyncLogger;
   /** Mise de côté désactivée (rejeu de `sync_parked` : l'opération reste où elle est si elle échoue encore). */
   readonly noPark?: boolean;
+  /**
+   * Y-FIX-04 (ADR 0011 §28) : rejeu d'un report d'époque (`reapply` seulement). Un parent absent **sans trace** y est un parent remplacé par
+   * la base de la nouvelle époque, jamais « à venir » : un lien facultatif est traité comme un parent purgé (rattachement de la décision
+   * (c), `children-reattached`), un lien obligatoire est mis de côté (`missing-parent`, opération marquée `CARRY_HELD_MARK`). Ailleurs
+   * (lecture des journaux, `retryParked`), un parent absent reste « à venir » : mise de côté ordinaire, jamais de rattachement.
+   */
+  readonly carry?: CarryPolicy;
 }
+
+/** Y-FIX-04 : règle du report pour un parent remplacé, fournie par `epochSwitch.ts` (chargé à la demande, `carryParentVerdict`). */
+export interface CarryPolicy {
+  /** Parent absent de `column` pour la ligne `id` : relevé pour la notice ; vrai si le lien se rattache (facultatif), faux s'il se met de côté. */
+  replaced(t: SyncTable, id: string, column: string, parentId: string, hlc: Hlc | undefined): boolean;
+}
+
+/** Y-FIX-04 : marque d'une opération mise de côté par le report (`EPOCH_CARRY_HELD_MARK` de `epochCarryNotice.ts`, égalité testée). */
+export const CARRY_HELD_MARK = 'carry';
 
 export type OpOutcome = 'applied' | 'unchanged' | 'parked' | 'rejected' | 'unknown';
 
@@ -64,10 +80,11 @@ interface CachedRow {
   pending: Set<string>;
 }
 
-const opText = (op: SyncOp): string => {
+/** `carry` : opération mise de côté par le report d'époque (republiée entière quand elle s'applique, Y-FIX-04). */
+const opText = (op: SyncOp, carry: boolean): string => {
   const f: Record<string, SyncField> = {};
   for (const [name, field] of op.f) f[name] = field;
-  return JSON.stringify({ t: op.t, id: op.id, at: op.at, f });
+  return JSON.stringify({ t: op.t, id: op.id, at: op.at, f, ...(carry ? { [CARRY_HELD_MARK]: 1 } : {}) });
 };
 
 const maxOf = (hlcs: readonly Hlc[]): Hlc => hlcs.reduce((a, b) => (b > a ? b : a));
@@ -168,6 +185,8 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
 
   /** Premier parent purgé (trace) d'une ligne : sa colonne, pour le rattachement de la décision (c). */
   let purgedColumn: string | null = null;
+  /** Opération en cours (relevé du report d'époque, Y-FIX-04). */
+  let current: SyncOp | null = null;
   const parentsPresent = async (t: SyncTable, values: ReadonlyMap<string, SyncValue>): Promise<'ok' | 'missing' | 'purged'> => {
     purgedColumn = null;
     for (const parent of t.parents) {
@@ -187,12 +206,18 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
         purgedColumn = parent.column;
         return 'purged';
       }
+      // Y-FIX-04 (§28) : report d'époque, parent remplacé d'un lien facultatif : rattaché comme un parent purgé (jamais perdu).
+      if (current && ctx.carry?.replaced(t, current.id, parent.column, value, current.f.get(parent.column)?.[1])) {
+        purgedColumn = parent.column;
+        return 'purged';
+      }
       return 'missing';
     }
     return 'ok';
   };
 
   for (const op of ops) {
+    current = op;
     const t = syncTable(op.t);
     if (!t) {
       let kept = false;
@@ -278,7 +303,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
         // trace au moins aussi récente que celle du rappel (purgé avec elle) ; mis de côté tant que la cible est encore une trace.
         const verdict = await reminderTargetRestored(fields, tomb);
         if (verdict === 'pending') {
-          if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }), ctx.now);
+          if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }, ctx.carry !== undefined), ctx.now);
           outcomes.push('parked');
           continue;
         }
@@ -343,7 +368,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
         } else if (ctx.noPark) {
           outcomes.push('parked');
         } else {
-          await sync.park(full ? 'missing-parent' : 'missing-row', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }), ctx.now);
+          await sync.park(full ? 'missing-parent' : 'missing-row', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }, ctx.carry !== undefined), ctx.now);
           outcomes.push('parked');
         }
         continue;
@@ -431,7 +456,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       updateParents = await parentsPresent(t, new Map([...applied].map(([n, f]) => [n, f[0]])));
     }
     if (updateParents !== 'ok') {
-      if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...applied.values()].map((f) => f[1])), opText({ ...op, f: applied }), ctx.now);
+      if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...applied.values()].map((f) => f[1])), opText({ ...op, f: applied }, ctx.carry !== undefined), ctx.now);
       outcomes.push('parked');
       continue;
     }

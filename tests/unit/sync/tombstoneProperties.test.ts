@@ -150,7 +150,7 @@ describe('traces : propriétés (Y-09 critère 9)', () => {
   });
 
   /** Reprise du moteur après une lecture : les opérations mises de côté sont retentées (engine.ts, retryParked). */
-  const retry = (): Promise<unknown> => retryParked({ data: db.data, clock: { nowMs: () => Date.parse(AT) }, sv: 17, logger } as unknown as SyncDeps);
+  const retry = (): Promise<unknown> => retryParked({ data: db.data, clock: { nowMs: () => Date.parse(AT) }, sv: 17, logger } as unknown as SyncDeps, { carryHeld: 0, released: [] });
 
   /**
    * DÉFAUT D2 (signalé par la QA, corrigé : l'opération partielle plus récente est mise de côté, missing-row) : sur un identifiant naturel tracé, une opération partielle plus récente que la

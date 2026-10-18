@@ -10,10 +10,10 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { RestoreChoiceDialog } from './RestoreChoiceDialog';
 import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { SyncStatusLine } from './SyncStatusLine';
-import { t } from '../../i18n';
 import { applyRemoteChanges } from './remoteChanges';
 import { startSyncIntegration } from './startSync';
 import { createFakeSyncService, nextCall, type FakeSyncService } from './testKit';
+import { tRestore } from '../../i18n/syncRestoreText';
 
 /**
  * Écrans de synchro sans maquette (ADR 0011 « Maquettes manquantes » ; Y-02 critères 13, 16 à 19, Y-09 critère 10).
@@ -184,7 +184,7 @@ describe('choix après restauration (Y-02 critère 13, Y-09 critère 8)', () => 
     renderIn(<RestoreChoiceDialog />);
     await screen.findByRole('alertdialog');
     expect(screen.queryByRole('button', { name: 'Garder les données synchronisées' })).toBeNull();
-    expect(screen.getByText(t('sync.restore.bodyOnlyApply'))).toBeTruthy();
+    expect(screen.getByText(tRestore('bodyOnlyApply'))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Plus tard' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(sync.choices).toEqual([]);
@@ -238,13 +238,13 @@ describe('choix après restauration pendant une réinitialisation (Y-11, ADR 001
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
     await screen.findByRole('alertdialog');
-    expect(screen.getByText(t('sync.restore.resetInProgress'))).toBeTruthy();
+    expect(screen.getByText(tRestore('resetInProgress'))).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Appliquer cette version sur tous mes appareils' })).toBeNull();
     cleanup();
     sync.restore = { marker, options: [], notice: 'reset-finish' };
     renderIn(<RestoreChoiceDialog />);
     await screen.findByRole('alertdialog');
-    expect(screen.getByText(t('sync.restore.resetFinish'))).toBeTruthy();
+    expect(screen.getByText(tRestore('resetFinish'))).toBeTruthy();
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Plus tard']);
   });
 
@@ -258,6 +258,6 @@ describe('choix après restauration pendant une réinitialisation (Y-11, ADR 001
     sync.restore = { marker, options: ['keep-synced'], notice: 'reset-in-progress', failure: { code: 'state-mismatch', at: NOW as IsoDateTime, option: 'apply-everywhere' } };
     renderIn(<RestoreChoiceDialog />);
     await screen.findByRole('alertdialog');
-    expect(screen.getByText(t('sync.restore.failedReset'))).toBeTruthy();
+    expect(screen.getByText(tRestore('failedReset'))).toBeTruthy();
   });
 });

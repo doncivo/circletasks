@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { RestoreOption } from '../../domain/sync/epoch';
 import type { RestoreContext } from '../../platform/sync/types';
-import { t } from '../../i18n';
 import { ChoiceDialog } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
-import { resetReason } from './resetText';
+import { resetReason } from './resetReason';
 import { syncStore } from './syncStore';
+import { tRestore } from '../../i18n/syncRestoreText';
 
 /**
  * Fenêtre de choix après une restauration P-04 (ADR 0010 règles 3 et 4, ADR 0011 section 9 ; Y-02 critère 13, Y-09 critère 8, Y-03 D2).
@@ -29,13 +29,13 @@ export function RestoreChoiceDialog() {
   }, [phase, openRestore]);
 
   if (!restore) return null;
-  const options = restore.options.map((id) => ({ id, label: t(id === 'apply-everywhere' ? 'sync.restore.applyEverywhere' : 'sync.restore.keepSynced') }));
+  const options = restore.options.map((id) => ({ id, label: tRestore(id === 'apply-everywhere' ? 'applyEverywhere' : 'keepSynced') }));
   return (
     <ChoiceDialog<RestoreOption>
-      title={t('sync.restore.title')}
+      title={tRestore('title')}
       description={restoreDescription(restore)}
       options={options}
-      cancelLabel={t('sync.restore.later')}
+      cancelLabel={tRestore('later')}
       onChoose={(option) => void chooseRestore(option)}
       onCancel={closeRestore}
     />
@@ -49,10 +49,10 @@ export function RestoreChoiceDialog() {
  */
 function restoreDescription(restore: RestoreContext): string {
   const inReset = restore.notice === 'reset-in-progress' || restore.notice === 'reset-finish';
-  if (restore.failure) return inReset ? t('sync.restore.failedReset') : t('sync.restore.failed', { reason: resetReason(restore.failure.code) });
-  if (restore.notice === 'scan-failed') return t(restore.options.length > 0 ? 'sync.restore.scanFailed' : 'sync.restore.scanFailedNoOption');
-  if (restore.notice === 'provisional') return t(restore.options.length > 0 ? 'sync.restore.provisional' : 'sync.restore.provisionalNoOption');
-  if (restore.notice === 'reset-finish') return t('sync.restore.resetFinish');
-  if (restore.notice === 'reset-in-progress') return t('sync.restore.resetInProgress');
-  return t(restore.options.includes('keep-synced') ? 'sync.restore.body' : 'sync.restore.bodyOnlyApply');
+  if (restore.failure) return inReset ? tRestore('failedReset') : tRestore('failed', { reason: resetReason(restore.failure.code) });
+  if (restore.notice === 'scan-failed') return tRestore(restore.options.length > 0 ? 'scanFailed' : 'scanFailedNoOption');
+  if (restore.notice === 'provisional') return tRestore(restore.options.length > 0 ? 'provisional' : 'provisionalNoOption');
+  if (restore.notice === 'reset-finish') return tRestore('resetFinish');
+  if (restore.notice === 'reset-in-progress') return tRestore('resetInProgress');
+  return tRestore(restore.options.includes('keep-synced') ? 'body' : 'bodyOnlyApply');
 }
