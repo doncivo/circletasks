@@ -57,12 +57,25 @@ export interface BootedDevice {
 
 const noop = (): void => undefined;
 
-/** Démarre l'app sur `device` comme `App.tsx` : conteneur, `startAppStartup`, `ready`, puis intégration de la synchro. */
-export async function bootDevice(device: SimDevice): Promise<BootedDevice> {
+export interface BootOptions {
+  /**
+   * Épreuve de détection du scénario B (T-TECH-01 critère 12) : porte de synchro forcée ouverte, c'est-à-dire démarrage sans plateforme de
+   * synchro côté `startAppStartup` (premier contrôle immédiat, comme avant la story) ; l'intégration de la synchro, elle, démarre normalement.
+   */
+  readonly forceOpenGate?: boolean;
+}
+
+/**
+ * Démarre l'app sur `device` comme `App.tsx` : nouveau service de synchro sur la même base (lancement de l'app), conteneur,
+ * `startAppStartup`, `ready`, puis intégration de la synchro. La minuterie de 12 s de la porte ne tire jamais ici : seule la conclusion du
+ * premier cycle ouvre la porte (un test qui en dépendrait resterait suspendu, donc échouerait).
+ */
+export async function bootDevice(device: SimDevice, options: BootOptions = {}): Promise<BootedDevice> {
+  await device.restart();
   const container = createAppContainer({ clock: device.clock, hlc: device.hlc, data: device.data, sync: device.service, syncPlatform: device.platform });
   const document = { addEventListener: noop, removeEventListener: noop, visibilityState: 'visible' as DocumentVisibilityState };
-  const env = { document, window: { addEventListener: noop, removeEventListener: noop }, timers: { setInterval: () => 0, clearInterval: noop } } as unknown as StartupEnv;
-  const startup = startAppStartup(container, env);
+  const env = { document, window: { addEventListener: noop, removeEventListener: noop }, timers: { setInterval: () => 0, clearInterval: noop }, gateTimers: { setTimeout: () => 0, clearTimeout: noop } } as unknown as StartupEnv;
+  const startup = startAppStartup(options.forceOpenGate ? { ...container, syncPlatform: null } : container, env);
   await startup.ready;
   const integration = startSyncIntegration(container, { document, clock: device.clock, setInterval: () => 0, clearInterval: noop, setTimeout: () => 0, clearTimeout: noop });
   return {
@@ -70,7 +83,7 @@ export async function bootDevice(device: SimDevice): Promise<BootedDevice> {
     startup,
     integration,
     async settled() {
-      await startup.ready;
+      await startup.firstCheck;
       for (let cycle = device.service.running(); cycle !== null; cycle = device.service.running()) await cycle;
       await integration.refreshed();
     },

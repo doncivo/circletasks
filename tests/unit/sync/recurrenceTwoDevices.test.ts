@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { TaskId } from '../../../src/domain/types';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
-import { bootDevice, createRecurringTask, type BootedDevice } from '../../sim/syncStartup';
+import { bootDevice, createRecurringTask, type BootedDevice, type BootOptions } from '../../sim/syncStartup';
 
 /**
  * T-TECH-01 (bloquant B8 de l'audit 1.0), scénarios à deux appareils : A est le PC, B l'iPhone. Les appareils partagent une horloge
@@ -52,8 +52,8 @@ async function settle(pc: SimDevice, iphone: SimDevice): Promise<void> {
   await pc.cycle();
 }
 
-async function start(device: SimDevice): Promise<void> {
-  const b = await bootDevice(device);
+async function start(device: SimDevice, options: BootOptions = {}): Promise<void> {
+  const b = await bootDevice(device, options);
   booted.push(b);
   await b.settled();
 }
@@ -107,6 +107,29 @@ describe('T-TECH-01 scénario B : terminée sur A, report sur B', () => {
       expect(t?.status).toBe('done');
       expect(t?.date).toBe('2026-10-23');
       expect(t?.carriedOver).toBe(false);
+    }
+  });
+});
+
+describe('T-TECH-01 scénario B : épreuve de détection (porte forcée ouverte)', () => {
+  it('sans la porte, le banc voit le défaut : tâche terminée mais datée du 24 et reportée', async () => {
+    const [pc, iphone] = await twoDevices();
+    const task = await pc.createTask('Envoyer la facture', { date: '2026-10-23' as never });
+    await settle(pc, iphone);
+    pc.clock.advance(3 * 3_600_000);
+    await pc.updateTask(task.id, { status: 'done', doneAt: new Date(pc.clock.nowMs()).toISOString() as never });
+    await pc.cycle();
+    syncFolders(devices);
+
+    pc.clock.set(DAY_24);
+    await start(iphone, { forceOpenGate: true });
+    await settle(pc, iphone);
+
+    for (const d of [pc, iphone]) {
+      const t = await d.task(task.id as TaskId);
+      expect(t?.status).toBe('done');
+      expect(t?.date).toBe('2026-10-24');
+      expect(t?.carriedOver).toBe(true);
     }
   });
 });
