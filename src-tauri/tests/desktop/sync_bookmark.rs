@@ -991,6 +991,22 @@ fn y_ios_05_12_app_state_is_not_refused_behind_an_abandoned_file_call() {
     assert!(rig.deadline.wait_abandoned(0, GUARD));
 }
 
+/// Revue I1 : la liste des commandes hors file (`OFF_QUEUE_COMMANDS`) est exactement celle des commandes bornées que Swift n'exécute pas
+/// sur `fileQueue` (lecture de la source : `onFiles(invoke)` absent, travail sur `DispatchQueue.main`).
+#[test]
+fn y_ios_05_12_off_queue_commands_match_the_swift_source() {
+    use circletasks_lib::sync::bookmark::OFF_QUEUE_COMMANDS;
+    assert_eq!(OFF_QUEUE_COMMANDS, ["appState"]);
+    for command in PLUGIN_COMMANDS.iter().filter(|c| !UNBOUNDED_COMMANDS.contains(c)) {
+        let body = swift_method(command);
+        let on_file_queue = body.contains("onFiles(invoke)");
+        assert_eq!(on_file_queue, !OFF_QUEUE_COMMANDS.contains(command), "{command} : file de Swift");
+        if !on_file_queue {
+            assert!(body.contains("DispatchQueue.main.async {"), "{command} : fil principal");
+        }
+    }
+}
+
 /// Revue S1 : la place d'un appel est réservée sous le même verrou que le contrôle, avant l'envoi. Tant qu'un appel de la même file est en
 /// vol (pas encore abandonné), une seconde commande attend sa place au plus jusqu'à sa propre échéance, puis rend `cloud-pending` sans
 /// être envoyée : jamais deux appels abandonnés à la fois, même par deux appelants simultanés.
