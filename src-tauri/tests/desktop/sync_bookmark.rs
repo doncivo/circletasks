@@ -957,6 +957,66 @@ fn y_ios_05_12_one_abandoned_call_then_immediate_cloud_pending_until_it_answers(
     assert!(rig.deadline.wait_abandoned(0, GUARD));
 }
 
+/// Revue I1 (critère 12) : `appState` ne passe pas par la file série de Swift (il s'exécute sur le fil principal) : un appel de fichier
+/// abandonné ne le refuse pas, et un `appState` abandonné ne refuse pas les commandes de fichier (une place par file de Swift).
+#[test]
+fn y_ios_05_12_app_state_is_not_refused_behind_an_abandoned_file_call() {
+    let mut rig = deadline_rig(Some("list"), zero());
+    rig.muted.script.lock().unwrap().insert("appState".to_owned(), Ok(json!({ "state": "active" })));
+    assert_eq!(rig.fs.list(&["devices"], 10).map(|_| ()), Err(FsError::CloudPending));
+    assert!(rig.muted.wait_received(1));
+    assert_eq!(rig.deadline.abandoned(), 1);
+    // Échéance nulle : la réponse peut arriver après l'échéance ; seul compte que la commande atteigne le transport.
+    let _ = rig.deadline.call("appState", json!({}));
+    assert!(rig.muted.wait_received(2), "appState refusé sans envoi derrière un appel de fichier abandonné");
+    assert_eq!(rig.muted.commands(), vec!["list".to_owned(), "appState".to_owned()]);
+    // La file des fichiers reste occupée par l'appel abandonné : la commande de fichier suivante n'est pas envoyée.
+    assert_eq!(rig.deadline.call("status", json!({ "path": ["devices"] })), Err("cloud-pending".to_owned()));
+    assert_eq!(rig.muted.commands().len(), 2);
+    drop(rig.release.take());
+    assert!(rig.deadline.wait_abandoned(0, GUARD));
+
+    // Inverse : un `appState` abandonné (fil principal bloqué) ne ferme pas la file des fichiers.
+    let mut rig = deadline_rig(Some("appState"), zero());
+    rig.muted.script.lock().unwrap().insert("status".to_owned(), Ok(json!({ "exists": false })));
+    assert_eq!(rig.deadline.call("appState", json!({})), Err("cloud-pending".to_owned()));
+    assert!(rig.muted.wait_received(1));
+    assert_eq!(rig.deadline.abandoned(), 1);
+    let _ = rig.deadline.call("status", json!({ "path": ["devices"] }));
+    assert!(rig.muted.wait_received(2), "commande de fichier refusée derrière un appState abandonné");
+    // Le second `appState` attend derrière le premier : refusé sans envoi.
+    assert_eq!(rig.deadline.call("appState", json!({})), Err("cloud-pending".to_owned()));
+    assert_eq!(rig.muted.commands(), vec!["appState".to_owned(), "status".to_owned()]);
+    drop(rig.release.take());
+    assert!(rig.deadline.wait_abandoned(0, GUARD));
+}
+
+/// Revue S1 : la place d'un appel est réservée sous le même verrou que le contrôle, avant l'envoi. Tant qu'un appel de la même file est en
+/// vol (pas encore abandonné), une seconde commande attend sa place au plus jusqu'à sa propre échéance, puis rend `cloud-pending` sans
+/// être envoyée : jamais deux appels abandonnés à la fois, même par deux appelants simultanés.
+#[test]
+fn y_ios_05_12_the_place_is_reserved_before_sending() {
+    let clock = Arc::new(AtomicU64::new(NOW));
+    let plugin = FakePlugin::new(clock);
+    plugin.with(|s| s.session = true);
+    let (transport, release) = MutedTransport::new(plugin, Some("*"));
+    // Échéance de fichier large (le listage en vol n'est pas abandonné), échéance nulle pour `download` à `timeoutMs: 0`.
+    let limits = DeadlineLimits { file_call: Duration::from_secs(3_600), download_margin: Duration::ZERO, max_abandoned: 1 };
+    let deadline = Arc::new(DeadlineTransport::with_limits(transport.clone(), limits));
+    let first = {
+        let deadline = deadline.clone();
+        std::thread::spawn(move || deadline.call("list", json!({ "path": [], "max": 10 })))
+    };
+    assert!(transport.wait_received(1));
+    assert_eq!(deadline.call("download", json!({ "path": ["devices"], "timeoutMs": 0, "limit": 1 })), Err("cloud-pending".to_owned()));
+    assert_eq!(deadline.abandoned(), 0, "second appel envoyé puis abandonné pendant que le premier tenait la place");
+    drop(release);
+    let listed = first.join().unwrap();
+    assert_ne!(listed, Err("cloud-pending".to_owned()), "le premier appel, en vol, n'est pas abandonné");
+    assert_eq!(transport.commands(), vec!["list".to_owned()], "la seconde commande n'a jamais été envoyée");
+    assert!(deadline.wait_abandoned(0, GUARD));
+}
+
 /// Critère 13 : l'échéance inscrit `bookmark-call-timeout` avec le seul nom de la commande ; aucune ligne ne porte un chemin, un nom de
 /// fichier, un signet ou un argument.
 #[test]
