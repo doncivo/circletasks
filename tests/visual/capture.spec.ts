@@ -543,6 +543,58 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('heading', { name: 'Onglets' })).toBeVisible();
     },
   },
+  // UI-FIX-01 (audit B11) : références du thème sombre sans maquette sombre correspondante (seul Main-Sombre.html existe), relues par qa-test.
+  {
+    // Bandeau « Annuler » après avoir terminé une tâche : texte blanc sur violet très foncé.
+    name: 'Annuler-Sombre',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    dark: true,
+    prepare: async (page, testInfo) => {
+      await createTask(page, testInfo, { title: 'Envoyer la facture' });
+      await page.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' }).click();
+      await expect(page.getByRole('status').getByRole('button', { name: 'Annuler' })).toBeVisible();
+    },
+  },
+  {
+    // Espaces et projets avec le bouton principal « Ajouter » du formulaire de projet visible.
+    name: 'Espaces-Sombre',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    dark: true,
+    prepare: async (page) => {
+      await openSpacesScreen(page);
+      await addProject(page, 'Pro', 'Mission client');
+      await page.getByRole('region', { name: 'Projets de l’espace Perso' }).getByRole('button', { name: 'Ajouter un projet' }).click();
+      await expect(page.locator('.ct-projects__button--primary')).toBeVisible();
+    },
+  },
+  {
+    // Réglages : interrupteurs activés et éteints en sombre.
+    name: 'Reglages-Sombre',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    dark: true,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await expect(page.getByRole('button', { name: /^Récapitulatifs :/ })).toBeVisible();
+    },
+  },
+  {
+    // Onglets : seul écran où un interrupteur est durablement désactivé (« Afficher Tâches », activé) ; « Routines » est éteint, « Semaine » activé.
+    // Aucune ligne n'est à la fois désactivée et éteinte dans l'app : ce cas est lu en styles calculés par tests/e2e/UI-FIX-01.spec.ts.
+    name: 'Onglets-Sombre',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    dark: true,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await page.getByRole('button', { name: /^Onglets : / }).click();
+      await expect(page.getByRole('heading', { name: 'Onglets' })).toBeVisible();
+      await page.getByRole('switch', { name: 'Afficher Routines', exact: true }).click();
+      await expect(page.getByRole('switch', { name: 'Afficher Routines', exact: true })).toHaveAttribute('aria-checked', 'false');
+    },
+  },
   {
     // Réglages avec un compte Google connecté : la ligne « Agendas · Rappels Apple » dit « N agendas » en vert (Reglages.html : « Connectés · 2 listes »).
     name: 'Reglages-Agendas',
