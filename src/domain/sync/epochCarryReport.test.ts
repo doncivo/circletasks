@@ -92,6 +92,9 @@ describe('compteurs par auteur (critère 1)', () => {
     expect(SEED_AUTHOR).toBe(SEED_DEVICE_ID);
     expect(addCarriedCount([], { fields: [h(1, SEED_AUTHOR), h(2, SEED_AUTHOR)] })).toEqual([]);
     expect(addCarriedCount([], { fields: [h(1, SEED_AUTHOR), h(2, B)] })).toEqual([{ device: B, fields: 1, rows: 1, tombs: 0, late: 0 }]);
+    // Revue S8 : une trace de l'amorce est exclue comme ses champs.
+    expect(addCarriedCount([], { fields: [], tomb: h(3, SEED_AUTHOR) })).toEqual([]);
+    expect(addCarriedCount([], { fields: [h(4, SEED_AUTHOR)], late: true })).toEqual([]);
   });
 
   it('champs et lignes distinctes par auteur, traces à part, écritures tardives à part', () => {

@@ -165,7 +165,7 @@ export function addCarriedCount(authors: readonly EpochCarryAuthorCount[], op: C
     return found;
   };
   if (op.tomb !== undefined) {
-    entry(hlcDevice(op.tomb)).tombs += 1;
+    if (hlcDevice(op.tomb) !== SEED_AUTHOR) entry(hlcDevice(op.tomb)).tombs += 1;
     return out;
   }
   const byAuthor = new Map<DeviceId, number>();
