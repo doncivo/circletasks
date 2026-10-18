@@ -64,6 +64,13 @@ pub fn status_of(gate: Option<&StartupGate>) -> StartupStatus {
     }
 }
 
+/// SEC-01 (bloquant B7) : relie les refus du plugin SQL fermé au journal technique. Une ligne `sql-refused` / code stable (`url`, `attach`,
+/// `vacuum`, `pragma`, `function`, `vtable`, `auth`) ; jamais le texte SQL ni l'URL (le plugin ne les transmet pas). Le débit du journal borne
+/// les rafales : 10 lignes par minute et par code, le reste est résumé (`log` / `suppressed`). Idempotent (crochet posé une seule fois).
+pub fn install_sql_refusal_hook() {
+    tauri_plugin_sql::set_refusal_hook(|code| crate::applog::write("sql-refused", code));
+}
+
 /// Récupère une restauration interrompue (table de décision de `backup::recover_interrupted_restore`, inchangée), puis, seulement si elle
 /// réussit, enregistre le plugin SQL. L'issue est posée dans `StartupGate` (géré ici) et inscrite au journal en cas d'échec
 /// (`backup-recovery` / code). `config_dir` : `None` si le dossier de données est introuvable (`no-data-dir`).
@@ -75,6 +82,8 @@ pub fn register_sql_after_recovery<R: Runtime>(app: &AppHandle<R>, config_dir: O
         None => Err("no-data-dir"),
         Some(dir) => recover_and_settle(dir).map(|_| ()).map_err(|error| error.code),
     };
+    // Le plugin ne doit jamais exister sans son crochet de journal (SEC-01), même quand `run` n'a pas été appelé (tests).
+    install_sql_refusal_hook();
     // Plugin déjà enregistré (nouvel essai après « Mettre les fichiers en conflit de côté ») : rien à refaire.
     let outcome = outcome.and_then(|()| {
         if app.try_state::<tauri_plugin_sql::DbInstances>().is_some() {

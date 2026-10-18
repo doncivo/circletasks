@@ -400,7 +400,7 @@ fn sec01_7_lexical_filter_cases() {
 fn sec01_8_pragma_white_list_cases() {
     use crate::guard::{REASON_PRAGMA, decide};
     let pragma = |name: &str, arg: Option<&str>| decide(libsqlite3_sys::SQLITE_PRAGMA, Some(name), arg);
-    for (name, arg) in [("foreign_keys", None), ("foreign_keys", Some("ON")), ("FOREIGN_KEYS", Some("on")), ("foreign_keys", Some("1")), ("journal_mode", None), ("journal_mode", Some("WAL")), ("journal_mode", Some("wal")), ("wal_checkpoint", None), ("wal_checkpoint", Some("TRUNCATE")), ("data_version", None)] {
+    for (name, arg) in [("foreign_keys", None), ("foreign_keys", Some("ON")), ("FOREIGN_KEYS", Some("on")), ("foreign_keys", Some("1")), ("journal_mode", None), ("journal_mode", Some("WAL")), ("journal_mode", Some("wal")), ("wal_checkpoint", None), ("wal_checkpoint", Some("TRUNCATE")), ("data_version", None), ("quick_check", Some("t")), ("quick_check", None)] {
         assert_eq!(pragma(name, arg), None, "{name} {arg:?} doit passer");
     }
     for (name, arg) in [("foreign_keys", Some("OFF")), ("foreign_keys", Some("0")), ("foreign_keys", Some("")), ("journal_mode", Some("DELETE")), ("journal_mode", Some("OFF")), ("data_version", Some("1")), ("writable_schema", None), ("user_version", None), ("table_info", Some("t")), ("", None)] {
@@ -428,5 +428,52 @@ fn sec01_9_authorizer_decisions_for_functions_and_virtual_tables() {
     assert_eq!(decide(ffi::SQLITE_DETACH, Some("x"), None), Some(REASON_ATTACH));
     for action in [ffi::SQLITE_SELECT, ffi::SQLITE_READ, ffi::SQLITE_INSERT, ffi::SQLITE_UPDATE, ffi::SQLITE_DELETE, ffi::SQLITE_CREATE_TABLE, ffi::SQLITE_CREATE_INDEX, ffi::SQLITE_CREATE_TRIGGER, ffi::SQLITE_TRANSACTION, ffi::SQLITE_SAVEPOINT, ffi::SQLITE_RECURSIVE, ffi::SQLITE_ALTER_TABLE, ffi::SQLITE_DROP_TABLE, ffi::SQLITE_ANALYZE, ffi::SQLITE_REINDEX] {
         assert_eq!(decide(action, Some("t"), Some("c")), None, "action {action}");
+    }
+}
+
+// --- Critère 11 : les instructions que le front envoie réellement (migrations comprises) passent le plugin fermé ---
+
+/// Instructions enregistrées par `tests/unit/sqlFrontReference.test.ts` (Vitest, fichier GÉNÉRÉ, vérifié à jour par ce test Vitest) :
+/// table de suivi, les 19 migrations (tables, index, déclencheurs, `ALTER TABLE`, table virtuelle `fts5`, jeux de données).
+const FRONT_SQL: &str = include_str!("../../../tests/fixtures/front-sql.json");
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_11_every_statement_the_front_sends_passes_the_closed_plugin() {
+    let reference: JsonValue = serde_json::from_str(FRONT_SQL).unwrap();
+    let statements = reference["statements"].as_array().unwrap();
+    assert!(statements.len() > 100, "référence trop courte : {}", statements.len());
+    let fx = Fixture::new("db-front-sql-").await;
+    fx.exec("PRAGMA foreign_keys = ON").await.unwrap();
+    fx.exec("PRAGMA journal_mode = WAL").await.unwrap();
+    for (index, entry) in statements.iter().enumerate() {
+        let sql = entry["sql"].as_str().unwrap().to_owned();
+        let params = entry["params"].as_array().unwrap().clone();
+        let outcome = match entry["kind"].as_str().unwrap() {
+            "execute" => fx.db.execute(sql.clone(), params).await.map(|_| ()),
+            _ => fx.db.select(sql.clone(), params).await.map(|_| ()),
+        };
+        if let Err(error) = outcome {
+            let head: String = sql.chars().take(120).collect();
+            panic!("instruction {index} du front refusée ou en échec : {error} ; début : {head}");
+        }
+    }
+    let rows = fx.sel("SELECT name FROM sqlite_master WHERE name = 'search_index'").await.unwrap();
+    assert_eq!(rows.len(), 1, "table fts5 search_index créée");
+}
+
+/// Les `ALTER TABLE` de SQLite émettent eux-mêmes des pragmas internes (`ADD COLUMN ... CHECK` : `pragma_quick_check`) : ils doivent passer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_11_alter_table_forms_that_run_internal_pragmas_pass() {
+    let fx = Fixture::new("db-alter-").await;
+    fx.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT)").await.unwrap();
+    for sql in [
+        "ALTER TABLE t ADD COLUMN b INTEGER NOT NULL DEFAULT 0 CHECK (b IN (0, 1))",
+        "ALTER TABLE t ADD COLUMN c TEXT",
+        "ALTER TABLE t ADD COLUMN d TEXT NOT NULL DEFAULT 'x'",
+        "ALTER TABLE t RENAME COLUMN c TO c2",
+        "ALTER TABLE t DROP COLUMN d",
+        "ALTER TABLE t RENAME TO t2",
+    ] {
+        fx.exec(sql).await.unwrap_or_else(|e| panic!("{sql} : {e}"));
     }
 }

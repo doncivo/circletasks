@@ -122,7 +122,7 @@ pub(crate) const REASON_FUNCTION: u8 = 3;
 #[cfg(feature = "sqlite")]
 pub(crate) const REASON_VTABLE: u8 = 4;
 
-/// Pragmas autorisés, avec leur argument : `data_version` (lecture seule, émis par fts5), `foreign_keys` (lecture, `ON` ou `1`), `journal_mode` (lecture ou `WAL`), `wal_checkpoint`
+/// Pragmas autorisés, avec leur argument : `data_version` (lecture seule, émis par fts5), `quick_check` (lecture seule, émis par `ALTER TABLE ADD COLUMN ... CHECK`), `foreign_keys` (lecture, `ON` ou `1`), `journal_mode` (lecture ou `WAL`), `wal_checkpoint`
 /// (tout argument). Tout autre pragma est refusé, y compris en lecture : un pragma futur reste refusé tant qu'il n'est pas listé ici.
 #[cfg(feature = "sqlite")]
 fn pragma_allowed(name: &str, arg: Option<&str>) -> bool {
@@ -134,6 +134,8 @@ fn pragma_allowed(name: &str, arg: Option<&str>) -> bool {
         "wal_checkpoint" => true,
         // Lecture seule, émise par le module fts5 lui-même (SEC-01 : repérée à l'exécution de la migration 0011), jamais par le front.
         "data_version" => arg.is_none(),
+        // Lecture seule, émis par SQLite lui-même pour `ALTER TABLE ... ADD COLUMN ... CHECK` (`pragma_quick_check(table, main)`, migration 0018).
+        "quick_check" => true,
         _ => false,
     }
 }

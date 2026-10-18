@@ -157,7 +157,8 @@ impl DbPool {
         Ok(())
     }
 
-    pub(crate) async fn close(&self) {
+    /// Ferme le pool (CircleTasks : public pour les tests du programme).
+    pub async fn close(&self) {
         match self {
             #[cfg(feature = "sqlite")]
             DbPool::Sqlite(pool) => {

@@ -51,6 +51,8 @@ pub mod vault_ios;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // SEC-01 : tout refus du plugin SQL (URL, ATTACH, VACUUM, pragma, fonction) est inscrit au journal (`sql-refused` / code), avant que le plugin existe.
+    startup_gate::install_sql_refusal_hook();
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
     let builder = desktop::configure(builder).manage(export::ExportState::default()).manage(sync::commands::SyncState::default()).invoke_handler(tauri::generate_handler![
