@@ -91,4 +91,20 @@ describe('bloc orphanEpoch impossible à charger (revue M3)', () => {
     expect(await b.data.repos.sync.getMeta('inflight')).toBe(inflight);
     expect(await b.data.repos.sync.outboxCount()).toBe(queued);
   });
+
+  it('refus ordinaire sans trace (état supprimé après publication, cas joinAfterRecords) : cycle en échec io, visible ; les autres appareils ne sont pas lus ce cycle-là', async () => {
+    const b = await createSimDevice(B_ID, { name: 'iPhone' });
+    devices.push(b);
+    await setupFirst(b);
+    expect((await b.cycle()).phase).toBe('idle');
+    const own = b.folder.devices.get(b.id);
+    if (own) own.state = null;
+    const before = b.logger.entries.length;
+    const s = await b.cycle();
+    expect(s.phase).toBe('error');
+    expect(s.errorCode).toBe('io');
+    expect(statusLine(s, b.clock.nowMs())).not.toContain('À jour');
+    expect(b.folder.fileNames(b.id)).not.toContain('state.ctx');
+    expect(b.logger.entries.slice(before).filter((e) => e.event === 'publish-deferred')).toHaveLength(0);
+  });
 });
