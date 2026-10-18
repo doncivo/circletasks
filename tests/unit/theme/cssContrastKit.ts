@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url';
  * règle à SON PROPRE fond, rien d'autre. Ne sont donc jamais vus : le texte hérité d'un parent et le texte posé sur un fond que porte un
  * parent ou une règle voisine (270 règles avec texte sans fond propre, 104 avec fond `transparent` ou `none`) ; les règles qui posent un fond
  * sans texte (case cochée, FAB, rail d'onglets...) ; les couleurs posées dans le TSX (`style={{ ... }}`) ; l'opacité des ancêtres ; les états
- * (`:hover`, `:focus`) qui changent le fond sans changer le texte. Les relations par sélecteur et par jetons de `contrastCss.test.ts` n'en
+ * (`:hover`, `:focus`) qui changent le fond sans changer le texte. Portée des jetons : un jeton local à un composant (`.ct-ios-pair { --x }`) est
+ * versé dans le thème entier et écrase celui de `:root` du même nom ; un jeton de `:root` placé dans un `@media` (autre que le bloc
+ * `prefers-color-scheme` traité à part) est ignoré. Aucun des deux cas n'existe aujourd'hui : `tokenScopeIssues` le vérifie et fait échouer
+ * le test dès qu'une collision (même nom, portées et valeurs différentes) ou un jeton ignoré apparaît. Les relations par sélecteur et par jetons de `contrastCss.test.ts` n'en
  * couvrent que quelques-uns, désignés à la main.
  */
 
@@ -223,6 +226,41 @@ export function themeTokens(rules: readonly CssRule[], theme: Theme): Record<str
   return tokens;
 }
 
+/**
+ * Collisions de portée que `themeTokens` ne sait pas arbitrer : même nom de jeton défini dans deux portées différentes (`:root` et un composant,
+ * ou deux composants) avec des valeurs différentes ; jeton de `:root` dans un `@media` (ignoré). La redéfinition par thème d'une même portée
+ * (`.x` puis `:root[data-theme='dark'] .x`) est le mécanisme normal et n'est pas une collision.
+ */
+export function tokenScopeIssues(rules: readonly CssRule[]): string[] {
+  const issues: string[] = [];
+  for (const rule of rules) {
+    const hasToken = Object.keys(rule.decls).some((k) => k.startsWith('--'));
+    if (hasToken && rule.selector === ':root' && rule.media.length > 0) issues.push(`${rule.file} : jeton de :root dans ${rule.media.join(' ')} (ignoré)`);
+  }
+  for (const theme of THEMES) {
+    const wanted = theme === 'light' ? ROOT_LIGHT : ROOT_DARK;
+    const byName = new Map<string, Map<string, string>>();
+    for (const rule of rules) {
+      const global = (rule.selector === ':root' && rule.media.length === 0) || rule.selector === wanted;
+      const local = !isGlobalTokenScope(rule.selector) && appliesTo(rule, theme);
+      if (!global && !local) continue;
+      const scope = global ? ':root' : rule.selector.replace(/^:root(\[data-theme='(light|dark)'\]|:not\(\[data-theme='light'\]\))\s*/, '');
+      for (const [prop, value] of Object.entries(rule.decls)) {
+        if (!prop.startsWith('--')) continue;
+        const scopes = byName.get(prop) ?? new Map<string, string>();
+        scopes.set(scope, value);
+        byName.set(prop, scopes);
+      }
+    }
+    for (const [name, scopes] of byName) {
+      if (new Set(scopes.values()).size > 1 && scopes.size > 1) {
+        issues.push(`${name} (${theme}) : ${[...scopes].map(([s, v]) => `${s} = ${v}`).join(' ; ')}`);
+      }
+    }
+  }
+  return [...new Set(issues)];
+}
+
 /** Jetons du bloc `prefers-color-scheme: dark` face à `:root[data-theme='dark']`, par fichier : toute différence est un écart. */
 export function systemDarkMismatches(rules: readonly CssRule[]): string[] {
   const issues: string[] = [];
@@ -270,6 +308,7 @@ export function resolveColor(raw: string, tokens: Record<string, string>, seen: 
   const value = raw.replace(/\s*!important$/, '').trim().toLowerCase();
   const visited: string[] = [];
   const fail = (why: string): Resolved => ({ ok: false, why, tokens: visited });
+  if (splitTop(value, ' ').filter(Boolean).length > 1) return fail('fond composé : image ou plusieurs couches, non résolu');
   if (value.startsWith('var(') && value.endsWith(')')) {
     const inner = value.slice(4, -1);
     const [name, ...rest] = splitTop(inner, ',');
@@ -339,7 +378,7 @@ export interface Analysis {
 
 export const ruleId = (rule: CssRule): string => `${rule.file} :: ${rule.selector}`;
 
-const NO_OWN_BACKGROUND = new Set(['transparent', 'none', 'inherit', 'initial', 'unset', 'currentcolor']);
+const NO_OWN_BACKGROUND = new Set(['transparent', 'none', 'inherit', 'initial', 'unset']);
 
 /** Valeur de fond propre d'une règle : `background-color`, ou `background` si c'est une couleur seule (sinon la valeur brute). */
 function backgroundOf(rule: CssRule): string | null {
@@ -358,8 +397,7 @@ export function analyzeRules(rules: readonly CssRule[], theme: Theme): Analysis 
     const text = rule.decls['color'];
     const back = backgroundOf(rule);
     if (text === undefined || back === null) continue;
-    const bare = back.replace(/\s*!important$/, '').toLowerCase();
-    if (NO_OWN_BACKGROUND.has(bare) && bare !== 'currentcolor') continue; // pas de fond propre : le texte se pose sur celui du parent
+    if (NO_OWN_BACKGROUND.has(back.toLowerCase())) continue; // pas de fond propre : le texte se pose sur celui du parent ; `currentcolor` reste « non résolu »
     const id = ruleId(rule);
     if (isDisabledRule(rule)) {
       result.excluded.push(id);

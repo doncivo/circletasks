@@ -17,6 +17,7 @@ import {
   loadRules,
   resolveColor,
   systemDarkMismatches,
+  tokenScopeIssues,
   themeTokens,
   toHex,
   type Color,
@@ -384,6 +385,10 @@ describe('interrupteur désactivé et interrupteur éteint distinguables entre e
 describe('cohérence des thèmes sur toutes les feuilles', () => {
   it('le bloc prefers-color-scheme et data-theme="dark" portent les mêmes jetons dans chaque fichier', () => {
     expect(systemDarkMismatches(rules)).toEqual([]);
+  });
+
+  it('aucun jeton défini dans deux portées avec des valeurs différentes, aucun jeton de :root dans un @media', () => {
+    expect(tokenScopeIssues(rules)).toEqual([]);
   });
 });
 
