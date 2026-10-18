@@ -50,7 +50,9 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
   const status = useFeatureStore(syncStore, (s) => s.status);
   const nowMs = container.clock.nowMs();
   const key = useKeyInfo();
-  // `carry-report` est montré par sa propre ligne (compte rendu du changement d'époque), pas dans cette liste.
+  // `carry-report` est montré par sa propre ligne (compte rendu du changement d'époque), pas dans cette liste ; il lève pourtant le titre
+  // AVERTISSEMENTS, vers lequel renvoie la ligne d'état « Synchro incomplète : voir les avertissements » (contre-revue, point 3).
+  const carryRaised = (status.warnings ?? []).includes('carry-report');
   const shownWarnings = (status.warnings ?? []).filter((code) => code !== 'carry-report');
   return (
     <div className="ct-settings ct-sync">
@@ -112,24 +114,29 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         )
       )}
       {slots.forget ?? <SyncDetailsForget />}
-      {(status.stateUnreadable === true || shownWarnings.length > 0) && (
+      {(status.stateUnreadable === true || shownWarnings.length > 0 || carryRaised) && (
         <>
           <h2 className="ct-settings__section">{t('sync.status.sectionWarnings')}</h2>
-          <ul className="ct-sync__warnings">
-            {status.stateUnreadable === true && (
-              <li className="ct-settings__row" data-warning="state-unreadable">
-                {t('status.syncStateUnreadable')}
-              </li>
-            )}
-            {shownWarnings.map((code) => (
-              <li key={code} className="ct-settings__row" data-warning={code}>
-                {warningText(code)}
-              </li>
-            ))}
-          </ul>
+          {(status.stateUnreadable === true || shownWarnings.length > 0) && (
+            <ul className="ct-sync__warnings">
+              {status.stateUnreadable === true && (
+                <li className="ct-settings__row" data-warning="state-unreadable">
+                  {t('status.syncStateUnreadable')}
+                </li>
+              )}
+              {shownWarnings.map((code) => (
+                <li key={code} className="ct-settings__row" data-warning={code}>
+                  {warningText(code)}
+                </li>
+              ))}
+            </ul>
+          )}
           <SyncDetailsRescue />
         </>
       )}
+      {/* Ligne du compte rendu : toujours à cette place, sous AVERTISSEMENTS quand `carry-report` est levé (même position dans l'arbre quand il
+          retombe : la feuille ouverte ne se referme pas). */}
+      {slots.carryReport === undefined ? <SyncDetailsCarryReportHost /> : slots.carryReport}
       {status.pendingFiles.length > 0 && (
         <>
           <h2 className="ct-settings__section">{t('sync.status.sectionPending')}</h2>
@@ -149,7 +156,6 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         </span>
       </div>
       {slots.conflicts ?? <SyncDetailsConflicts />}
-      {slots.carryReport === undefined ? <SyncDetailsCarryReportHost /> : slots.carryReport}
       {slots.reset ?? <SyncDetailsReset />}
     </div>
   );

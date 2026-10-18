@@ -107,3 +107,9 @@
   gap: 8px;
   padding-top: 8px;
 }
+
+/* Cause d'une entrée de l'historique : mêmes styles que la sous-ligne de la synchro, classe propre (un sélecteur `.ct-sync__sub` ne doit désigner que la ligne d'état). */
+.ct-carry__entryCause {
+  font-size: 13px;
+  color: var(--ct-color-achieved-text);
+}

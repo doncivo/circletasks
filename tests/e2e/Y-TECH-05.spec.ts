@@ -72,7 +72,7 @@ for (const kind of ['pc', 'iphone'] as const) {
     test.setTimeout(BUDGET_MS);
     const page = await start(browser, kind);
     await seedReport(page, 1);
-    await syncNow(page);
+    await syncNow(page, /^Synchro incomplète/);
 
     // Critère 16 : bandeau durable avec le nombre d'éléments rétablis (« À jeter » ; « Test Pc », recréée, n'est pas comptée : ADR 0011 §29 point 5).
     const banner = page.locator('.ct-status-banner').filter({ hasText: BANNER });
@@ -114,7 +114,7 @@ for (const kind of ['pc', 'iphone'] as const) {
     const page = await start(browser, kind);
     // Borne de 500 lignes gardées, toutes listes : 499 rétablies + 1 recréée « Test Pc » ; 12 de plus au-delà de la borne.
     await seedReport(page, 499, 12);
-    await syncNow(page);
+    await syncNow(page, /^Synchro incomplète/);
     await page.locator('.ct-status-banner').filter({ hasText: BANNER }).getByRole('button', { name: VIEW }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Compte rendu du changement d’époque' });

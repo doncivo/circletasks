@@ -7,7 +7,7 @@ import { logFailure } from '../../platform/desktop/log';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { CarryReportSheet } from './CarryReportSheet';
-import { peekCarryReportOpen, requestCarryReportOpen } from './carryReportOpen';
+import { subscribeCarryReportOpen, takeCarryReportOpen } from './carryReportOpen';
 import { carryCauseText, carryDateTime } from './carryReportText';
 import { refreshCarryLine } from './carryReportBannerLine';
 import { syncStore } from './syncStore';
@@ -35,11 +35,19 @@ export function SyncDetailsCarryReport() {
   const lastSyncAt = useFeatureStore(syncStore, (s) => s.status.lastSyncAt);
   const [loaded, setLoaded] = useState<Loaded | 'failed' | null>(null);
   const [version, setVersion] = useState(0);
-  const [openId, setOpenId] = useState<number | null>(() => peekCarryReportOpen());
+  const [openId, setOpenId] = useState<number | null>(null);
   const [seenFailed, setSeenFailed] = useState(false);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
 
-  useEffect(() => requestCarryReportOpen(null), []);
+  // Contre-revue, point 2 : la demande du bandeau est prise à l'affichage puis à chaque nouvelle demande (Détails déjà affiché), et effacée.
+  useEffect(() => {
+    const take = (): void => {
+      const id = takeCarryReportOpen();
+      if (id !== null) setOpenId(id);
+    };
+    take();
+    return subscribeCarryReportOpen(take);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -127,7 +135,7 @@ export function SyncDetailsCarryReport() {
               <button type="button" className="ct-settings__row ct-settings__rowButton ct-carry__entry" onClick={() => setOpenId(report.id)}>
                 <span className="ct-carry__entryText">
                   <span>{tCarry('epochAt', { date: epoch.date, time: epoch.time })}</span>
-                  <span className="ct-sync__sub">{carryCauseText(report.cause)}</span>
+                  <span className="ct-carry__entryCause">{carryCauseText(report.cause)}</span>
                 </span>
                 <span className="ct-settings__value" data-unseen={seenAt ? 'false' : 'true'}>
                   {seenAt ? tCarry('seenOn', { date: seenAt.date, time: seenAt.time }) : tCarry('unseen')}
