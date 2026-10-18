@@ -1,5 +1,5 @@
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlDriver, SqlRow } from '../driver';
+import type { SqlDriver, SqlParams, SqlRow } from '../driver';
 import { createSerializedDriver, type SerializedDriverOptions } from '../serializedDriver';
 
 /**
@@ -36,12 +36,12 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
   // Instructions préparées gardées par texte SQL : SQLite recompile à chaque préparation les programmes de tous les déclencheurs de la
   // table (une `UPDATE task` coûtait ~2,4 ms, pour 0,5 ms à l'insertion), et un report de 501 lignes en préparait des dizaines de milliers.
   const prepared = new Map<string, ReturnType<Db['prepare']>>();
-  const run = <T>(sql: string, params: readonly unknown[], consume: (stmt: ReturnType<Db['prepare']>) => T): T => {
+  const run = <T>(sql: string, params: SqlParams, consume: (stmt: ReturnType<Db['prepare']>) => T): T => {
     const cached = prepared.get(sql);
     const stmt = cached ?? db.prepare(sql);
     if (cached === undefined) prepared.set(sql, stmt);
     try {
-      if (params.length > 0) stmt.bind([...params] as never);
+      if (params.length > 0) stmt.bind(params);
       return consume(stmt);
     } finally {
       stmt.reset(true);
@@ -53,7 +53,7 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
       else run(sql, params, (stmt) => { while (stmt.step()); });
       return {
         rowsAffected: Number(db.changes()),
-        lastInsertId: Number(db.selectValue('SELECT last_insert_rowid()') ?? 0) || null,
+        lastInsertId: Number(sqlite3.capi.sqlite3_last_insert_rowid(db.pointer as number)) || null,
       };
     },
     select: async (sql, params) => {
