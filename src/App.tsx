@@ -26,6 +26,7 @@ import {
   HolidaySettingsScreen,
   ImportScreen,
   LogsScreen,
+  OnboardingHost,
   RecoveryFailureLazy,
   preloadScreens,
   QuietHoursRoute,
@@ -50,7 +51,7 @@ import { FocusHost } from './features/focus';
 import { registerGoalsSource } from './features/goals';
 import { registerRoutinesSource } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { OnboardingHost, restoreAppearance, startThemeSync } from './features/settings';
+import { restoreAppearance, startThemeSync } from './features/settings';
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
 import { UpdateBanner } from './features/updater';

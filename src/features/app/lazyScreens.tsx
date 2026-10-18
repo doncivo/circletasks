@@ -139,6 +139,12 @@ export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/Cal
 export const SyncDetailsScreen = lazyScreen<object>(() => import('../sync/SyncDetailsScreen').then((m) => ({ default: m.SyncDetailsScreen })), 'syncdetailsscreen');
 export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })), 'quiethoursroute');
 
+// BUNDLE-01 palier 2 : hôtes de la coquille (App.tsx), montés en permanence, qui ne rendent rien tant que leur état ne l'appelle pas. Chacun est
+// un bloc à part, préchargé au repos comme les écrans (`fallback: 'none'` : aucun repli dans la mise en page) ; un échec de chargement montre le
+// message et « Réessayer » de la frontière d'erreur. Les magasins d'état et les raccourcis (Ctrl+K, Ctrl+/) restent dans le départ.
+/** Assistant de premier lancement (P-05) : ouverture pilotée par l'état ; préchargé (l'assistant n'attend que le repos qui suit le premier rendu). */
+export const OnboardingHost = lazyScreen<object>(() => import('../settings/OnboardingHost').then((m) => ({ default: m.OnboardingHost })), 'onboardinghost', { fallback: 'none' });
+
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {
   let cancel: () => void = () => undefined;
