@@ -1,6 +1,7 @@
 import { Undo2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { t } from '../../i18n';
+import { isPublishBlockedCause, publishCauseText } from '../../i18n/syncPublishCauseText';
 import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
@@ -126,7 +127,8 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
               )}
               {shownWarnings.map((code) => (
                 <li key={code} className="ct-settings__row" data-warning={code}>
-                  {warningText(code)}
+                  {/* Y-FIX-02 (§30) : cause nommée de `publish-blocked`, texte du catalogue à la demande. */}
+                  {isPublishBlockedCause(code) ? publishCauseText(code) : warningText(code)}
                 </li>
               ))}
             </ul>
