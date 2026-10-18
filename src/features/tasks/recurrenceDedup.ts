@@ -1,29 +1,27 @@
-import { duplicateGroups, type DuplicateGroup, type OccurrenceRow } from '../../domain/occurrenceDedup';
-import type { TaskId } from '../../domain/types';
+import { duplicateGroups, groupKey, reconcileGroup, type GroupRow } from '../../domain/occurrenceDedup';
+import type { Hlc, IsoDateTime, RecurrenceId, TaskId } from '../../domain/types';
 import type { Repositories } from '../../db/repositories';
 import { logFailure } from '../../platform/desktop/log';
 import type { TaskUseCaseDeps } from './taskUseCases';
 
 /**
- * T-TECH-01 (B8, décisions D7 et D8) : nettoyage des occurrences dédoublées avant les identifiants déterministes. Module chargé à la
- * demande (bundle de départ, PRD 8), lancé par `startup.ts` au premier cycle de synchro conclu avec succès après la mise à jour.
+ * T-TECH-01 (B8, décisions D7 et D8) : nettoyage des occurrences dédoublées (versions d'avant les identifiants déterministes, ou
+ * appareils restés en version antérieure). Module chargé à la demande (bundle de départ, PRD 8), lancé par `startup.ts` après chaque
+ * cycle de synchro réussi.
  *
  * Technique (spike de la fiche, critère 14) : un passage JavaScript avec les vrais hlc, jamais une migration SQL. Une migration ne peut pas
  * poser de hlc : ses écritures ne se propagent pas, donc chaque appareil écarterait des lignes de son côté seulement et deux appareils
  * aux données différentes divergeraient (voir « Preuves » de docs/stories/T-TECH-01.md).
  *
- * Deux appareils aux données différentes (une complétion pas encore lue par l'un) écartent des lignes différentes, mais les deux
- * suppressions sont de vraies écritures : après synchronisation les bases sont identiques, sans survivante pour ce groupe. Le démarrage
- * suivant rétablit alors la ligne terminée écartée par erreur (`heal`) ; jusque-là elle est dans la Corbeille et dans les conflits.
+ * Deux appareils aux données différentes (une modification ou une complétion pas encore lue par l'un) peuvent écarter chacun la ligne que
+ * l'autre garde : les bases convergent, mais sans survivante, ou avec la terminée à la Corbeille. Le passage garde donc les clés des
+ * groupes qu'il a nettoyés (`sync_meta`) et, après chaque cycle réussi, applique `reconcileGroup` à chacune (règle déterministe : les deux
+ * appareils font la même écriture) ; une clé n'est retirée qu'une fois son groupe stable. Il est réexécutable : un doublon créé ensuite par
+ * un appareil resté en version antérieure est repris au cycle suivant.
  */
 
-/** Clé de `sync_meta` (locale) : état du passage de cet appareil ; absente tant que le passage n'a pas eu lieu. */
+/** Clé de `sync_meta` (locale) : clés `recurrence_id|series_index` des groupes nettoyés, encore suivis. */
 export const RECURRENCE_DEDUP_META = 'recurrenceDedup';
-
-/** Écarts à vérifier au démarrage suivant : lignes qui étaient « à faire » ici quand elles ont été écartées. */
-interface DedupState {
-  readonly heal: readonly TaskId[];
-}
 
 export interface RecurrenceDedupResult {
   readonly groups: number;
@@ -36,62 +34,65 @@ export interface RecurrenceDedupDeps extends Pick<TaskUseCaseDeps, 'data' | 'tas
   readonly log?: (message: string) => void;
 }
 
-function parseState(raw: string): DedupState {
+function parseKeys(raw: string | null): string[] {
+  if (raw === null) return [];
   try {
-    const value = JSON.parse(raw) as { heal?: unknown };
-    return { heal: Array.isArray(value.heal) ? value.heal.filter((id): id is TaskId => typeof id === 'string') : [] };
+    const value = JSON.parse(raw) as { groups?: unknown };
+    return Array.isArray(value.groups) ? value.groups.filter((key): key is string => typeof key === 'string') : [];
   } catch {
-    return { heal: [] };
+    return [];
   }
 }
 
-/** Écarte (corbeille de 30 jours, rappels compris) les lignes perdantes de chaque groupe ; rend les identifiants écartés. */
-async function discard(repos: Repositories, groups: readonly DuplicateGroup[]): Promise<TaskId[]> {
-  const ids = groups.flatMap((group) => group.discarded);
-  if (ids.length === 0) return [];
+/** Écarte (corbeille de 30 jours, rappels compris) ces lignes vivantes. */
+async function discard(repos: Repositories, ids: readonly TaskId[]): Promise<void> {
+  if (ids.length === 0) return;
   for (const task of await repos.tasks.softDelete(ids)) {
     await repos.reminders.softDeleteForTarget({ type: 'task', id: task.id }, task.deletedAt ?? undefined);
   }
-  return ids;
 }
 
-/** Rétablit une ligne terminée écartée ici quand elle était « à faire » et dont le groupe n'a plus aucune ligne vivante. */
-async function heal(repos: Repositories, ids: readonly TaskId[]): Promise<TaskId[]> {
-  const restored: TaskId[] = [];
-  for (const id of ids) {
-    const row = await repos.tasks.getById(id, { includeDeleted: true });
-    if (!row || row.deletedAt === null || row.status !== 'done' || row.recurrenceId === null) continue;
-    const series = await repos.tasks.listByRecurrence(row.recurrenceId);
-    if (series.some((t) => t.seriesIndex === row.seriesIndex)) continue;
-    await repos.tasks.restore([id]);
-    restored.push(id);
-  }
-  return restored;
+/** Rétablit une ligne à la corbeille avec les rappels supprimés en même temps qu'elle. */
+async function restore(repos: Repositories, id: TaskId, deletedAt: IsoDateTime | null): Promise<void> {
+  await repos.tasks.restore([id]);
+  if (deletedAt !== null) await repos.reminders.restoreForTarget({ type: 'task', id }, { deletedAt, hlc: '' as Hlc });
 }
 
 /**
- * Un seul passage de nettoyage par appareil, puis une seule vérification au démarrage suivant (`RECURRENCE_DEDUP_META`, posé dans la
- * même transaction que les écarts). Les écarts sont de vraies écritures (hlc de l'appareil, entrées d'envoi), donc publiées aux autres
- * appareils. Rend null s'il n'y a plus rien à faire.
+ * Un passage : suit les groupes déjà nettoyés (`reconcileGroup`), puis écarte les doublons vivants (survivant D7). Une seule transaction ;
+ * les écarts sont de vraies écritures (hlc de l'appareil, entrées d'envoi), donc publiées aux autres appareils.
  */
-export async function runRecurrenceDedupOnce(deps: RecurrenceDedupDeps): Promise<RecurrenceDedupResult | null> {
+export async function runRecurrenceDedup(deps: RecurrenceDedupDeps): Promise<RecurrenceDedupResult> {
   const outcome = await deps.data.transaction(async (repos) => {
     const raw = await repos.sync.getMeta(RECURRENCE_DEDUP_META);
-    if (raw !== null) {
-      const state = parseState(raw);
-      if (state.heal.length === 0) return null;
-      const restored = await heal(repos, state.heal);
-      await repos.sync.setMeta(RECURRENCE_DEDUP_META, JSON.stringify({ heal: [] }));
-      return { groups: 0, removed: [] as TaskId[], restored };
+    const removed: TaskId[] = [];
+    const restored: TaskId[] = [];
+    const tracked = new Set<string>();
+    for (const key of parseKeys(raw)) {
+      const cut = key.lastIndexOf('|');
+      const seriesIndex = Number(key.slice(cut + 1));
+      const tasks = (await repos.tasks.listByRecurrence(key.slice(0, cut) as RecurrenceId, { includeDeleted: true })).filter((t) => t.seriesIndex === seriesIndex);
+      const rows: GroupRow[] = tasks.map((t) => ({ id: t.id, recurrenceId: t.recurrenceId as RecurrenceId, seriesIndex, done: t.status === 'done', hlc: t.hlc, live: t.deletedAt === null }));
+      const plan = reconcileGroup(rows);
+      if (plan.restore === null && plan.discard.length === 0) continue; // groupe stable : plus suivi
+      tracked.add(key);
+      await discard(repos, plan.discard);
+      removed.push(...plan.discard);
+      if (plan.restore !== null) {
+        await restore(repos, plan.restore, tasks.find((t) => t.id === plan.restore)?.deletedAt ?? null);
+        restored.push(plan.restore);
+      }
     }
-    const rows: OccurrenceRow[] = await (await repos.occurrenceDedup()).listLiveDuplicates();
-    const groups = duplicateGroups(rows);
-    const removed = await discard(repos, groups);
-    const todo = new Set(rows.filter((r) => !r.done).map((r) => r.id));
-    await repos.sync.setMeta(RECURRENCE_DEDUP_META, JSON.stringify({ heal: removed.filter((id) => todo.has(id)) }));
-    return { groups: groups.length, removed, restored: [] as TaskId[] };
+    const groups = duplicateGroups(await (await repos.occurrenceDedup()).listLiveDuplicates());
+    for (const group of groups) {
+      await discard(repos, group.discarded);
+      removed.push(...group.discarded);
+      tracked.add(groupKey(group.recurrenceId, group.seriesIndex));
+    }
+    const next = JSON.stringify({ groups: [...tracked].sort() });
+    if (next !== (raw ?? JSON.stringify({ groups: [] }))) await repos.sync.setMeta(RECURRENCE_DEDUP_META, next);
+    return { groups: groups.length, removed, restored };
   });
-  if (!outcome) return null;
   deps.taskEntities.remove(outcome.removed);
   const result = { groups: outcome.groups, removed: outcome.removed.length, restored: outcome.restored.length };
   // D8 : aucune écriture silencieuse ; nombres seulement.

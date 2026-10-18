@@ -101,6 +101,8 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
   });
 
   it('B1 : fichiers iCloud en attente (waiting-icloud, ancienne heure de synchro) : le report part, le nettoyage ne tourne pas ; cycle réussi : il tourne', async () => {
+    for (const n of [2, 3]) await db.data.repos.tasks.create({ ...(await late()), id: asEntityId<TaskId>(`61000000-0000-4000-8000-00000000000${String(n)}`), seriesIndex: 5, title: 'Doublon' } as NewTask);
+    const liveDuplicates = (): Promise<number> => db.data.repos.tasks.listByRecurrence(RULE).then((rows) => rows.filter((t) => t.seriesIndex === 5).length);
     const { env } = fakeEnv(timers);
     const startup = startAppStartup(container(), env);
     toDispose.push(startup);
@@ -108,14 +110,14 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
     sync.setStatus({ phase: 'waiting-icloud', lastSyncAt: '2026-09-20T10:00:00.000Z' as never });
     await startup.firstCheck;
     expect(await late()).toMatchObject({ carriedOver: true });
-    expect(await db.data.repos.sync.getMeta('recurrenceDedup')).toBeNull();
+    expect(await liveDuplicates()).toBe(2); // pas de nettoyage sur une base incomplète
 
     const second = startAppStartup(container(), fakeEnv(fakeTimers()).env);
     toDispose.push(second);
     await second.ready;
     sync.setStatus({ phase: 'idle', lastSyncAt: '2026-09-23T10:00:00.000Z' as never });
     await second.firstCheck;
-    expect(await db.data.repos.sync.getMeta('recurrenceDedup')).not.toBeNull();
+    expect(await liveDuplicates()).toBe(1); // cycle réussi : nettoyé avant le report
   });
 
   it('critère 6 : un cycle en cours (phase syncing, progression) n’ouvre pas la porte', async () => {

@@ -4,7 +4,7 @@ import { asEntityId, asLocalDate, type DeviceId, type RecurrenceId, type Reminde
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createTaskEntities } from '../app/taskEntities';
-import { RECURRENCE_DEDUP_META, runRecurrenceDedupOnce } from './recurrenceDedup';
+import { runRecurrenceDedup } from './recurrenceDedup';
 
 /**
  * T-TECH-01 critères 15, 16 et 19 : nettoyage des doublons d'occurrences existants (passage JavaScript retenu par le spike, critère 14).
@@ -77,7 +77,7 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
     await db.data.repos.tasks.softDelete([id(15)]);
     const before = await dump(db);
 
-    const result = await runRecurrenceDedupOnce({ data: db.data, taskEntities: entities });
+    const result = await runRecurrenceDedup({ data: db.data, taskEntities: entities });
 
     expect(result).toEqual({ groups: 4, removed: 5, restored: 0 });
     const after = await dump(db);
@@ -94,14 +94,15 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
     expect(live).toEqual([[5, id(2)], [6, id(3)], [7, id(6)], [8, id(9)], [9, id(10)], [10, id(16)]]);
   });
 
-  it('critère 15 : rien à faire, ou passage déjà fait : aucune écriture ; le passage ne se rejoue pas', async () => {
+  it('critère 15 : rien à faire : aucune écriture ; réexécutable : un doublon arrivé ensuite est repris au passage suivant', async () => {
     await seed([task(1, 1), task(2, 2)]);
     const before = await dump(db);
-    expect(await runRecurrenceDedupOnce({ data: db.data, taskEntities: entities })).toEqual({ groups: 0, removed: 0, restored: 0 });
+    expect(await runRecurrenceDedup({ data: db.data, taskEntities: entities })).toEqual({ groups: 0, removed: 0, restored: 0 });
     expect(await dump(db)).toEqual(before);
-    await seed([task(3, 1)]); // un doublon arrive ensuite : le passage unique ne le reprend pas
-    expect(await runRecurrenceDedupOnce({ data: db.data, taskEntities: entities })).toBeNull();
-    expect((await dump(db)).filter((r) => r.deleted_at !== null)).toEqual([]);
+    await seed([task(3, 1)]); // un doublon arrive ensuite (appareil resté en version antérieure)
+    expect(await runRecurrenceDedup({ data: db.data, taskEntities: entities })).toEqual({ groups: 1, removed: 1, restored: 0 });
+    expect((await dump(db)).filter((r) => r.deleted_at !== null).map((r) => r.id)).toEqual([id(1)]);
+    expect(await runRecurrenceDedup({ data: db.data, taskEntities: entities })).toEqual({ groups: 0, removed: 0, restored: 0 });
   });
 
   it('critère 16 : les rappels de l’écartée sont supprimés avec elle, ceux de la survivante intacts', async () => {
@@ -110,7 +111,7 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
     await db.data.repos.reminders.replaceForTarget({ type: 'task', id: id(1) }, [reminder(1, id(1))]);
     await db.data.repos.reminders.replaceForTarget({ type: 'task', id: id(2) }, [reminder(2, id(2))]);
 
-    await runRecurrenceDedupOnce({ data: db.data, taskEntities: entities });
+    await runRecurrenceDedup({ data: db.data, taskEntities: entities });
 
     expect(await db.data.repos.reminders.listForTarget({ type: 'task', id: id(1) })).toEqual([]);
     expect((await db.data.repos.reminders.listForTarget({ type: 'task', id: id(2) })).map((r) => r.id)).toEqual([reminder(2, id(2)).id]);
@@ -133,7 +134,7 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
   it('critère 19 : l’entrée de journal technique porte des nombres, jamais un titre', async () => {
     await seed([task(1, 5), task(2, 5)]);
     const log = vi.fn();
-    await runRecurrenceDedupOnce({ data: db.data, taskEntities: entities, log });
+    await runRecurrenceDedup({ data: db.data, taskEntities: entities, log });
     expect(log).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledWith('recurrence-dedup {"groups":1,"removed":1,"restored":0}');
     expect(String(log.mock.calls[0]?.[0])).not.toContain('Occurrence');
@@ -142,8 +143,7 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
   it('critère 19 : rien à écarter, rien dans le journal', async () => {
     await seed([task(1, 5)]);
     const log = vi.fn();
-    await runRecurrenceDedupOnce({ data: db.data, taskEntities: entities, log });
+    await runRecurrenceDedup({ data: db.data, taskEntities: entities, log });
     expect(log).not.toHaveBeenCalled();
-    expect(await db.data.repos.sync.getMeta(RECURRENCE_DEDUP_META)).not.toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RecurrenceId, TaskId } from '../../../src/domain/types';
 import { createTaskEntities } from '../../../src/features/app/taskEntities';
-import { runRecurrenceDedupOnce } from '../../../src/features/tasks/recurrenceDedup';
+import { runRecurrenceDedup } from '../../../src/features/tasks/recurrenceDedup';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -51,7 +51,7 @@ async function legacyDuplicates(): Promise<[SimDevice, SimDevice]> {
   return [a, b];
 }
 
-const pass = (d: SimDevice) => runRecurrenceDedupOnce({ data: d.data, taskEntities: createTaskEntities(), log: () => undefined });
+const pass = (d: SimDevice) => runRecurrenceDedup({ data: d.data, taskEntities: createTaskEntities(), log: () => undefined });
 const rowsOf = (d: SimDevice): Promise<unknown[]> => d.driver.select('SELECT * FROM task ORDER BY id');
 const liveOf = (d: SimDevice): Promise<unknown[]> => d.driver.select(`SELECT id, status FROM task WHERE recurrence_id = '${R}' AND series_index = 1 AND deleted_at IS NULL ORDER BY id`);
 
@@ -80,6 +80,44 @@ describe('nettoyage sur deux appareils (T-TECH-01 critère 17)', () => {
     expect(await liveOf(a)).toEqual([]);
 
     // Démarrage suivant : la vérification rétablit la complétion écartée par erreur.
+    await pass(a);
+    await pass(b);
+    await settle(a, b);
+    expect(await liveOf(a)).toEqual([{ id: X, status: 'done' }]);
+    expect(await liveOf(b)).toEqual(await liveOf(a));
+    expect(await rowsOf(b)).toEqual(await rowsOf(a));
+  });
+
+  it('B2 cas 1 : deux lignes « à faire », une modification non publiée de A : chacun écarte la ligne que l’autre garde, une seule ligne revient', async () => {
+    const [a, b] = await legacyDuplicates();
+    a.clock.advance(1000);
+    await a.updateTask(X, { title: 'Vitamines (modifiée)' }); // hlc plus récent que Y, pas encore publié
+    a.clock.advance(1000);
+    await pass(a); // A garde X, écarte Y
+    await pass(b); // B ne voit pas la modification : garde Y, écarte X
+    await settle(a, b);
+    expect(await liveOf(a)).toEqual([]); // plus aucune ligne vivante : la série s'arrêterait
+    await pass(a); // cycles suivants : règle de rétablissement déterministe
+    await pass(b);
+    await settle(a, b);
+    await pass(a);
+    await pass(b);
+    await settle(a, b);
+    expect(await liveOf(a)).toHaveLength(1);
+    expect(await liveOf(b)).toEqual(await liveOf(a));
+    expect(await rowsOf(b)).toEqual(await rowsOf(a));
+  });
+
+  it('B2 cas 2 : la complétion arrive après le passage suivant de B : elle finit vivante, pas dans la Corbeille', async () => {
+    const [a, b] = await legacyDuplicates();
+    a.clock.advance(1000);
+    await a.updateTask(X, { status: 'done', doneAt: new Date(a.clock.nowMs()).toISOString() as never }); // non publiée
+    a.clock.advance(1000);
+    await pass(b); // B garde Y (à faire), écarte X
+    await settle(a, b); // A reçoit la suppression de X ; B reçoit enfin la complétion
+    await pass(b); // passage suivant de B : X est terminée et à la Corbeille, Y vivante à faire
+    await pass(a);
+    await settle(a, b);
     await pass(a);
     await pass(b);
     await settle(a, b);

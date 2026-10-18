@@ -103,6 +103,22 @@ export function startAppStartup(
   env.document.addEventListener('visibilitychange', onCheck);
   env.window.addEventListener('focus', onCheck);
   let disposed = false;
+  // T-TECH-01 (B2, I3) : après chaque cycle de synchro réussi (phase idle, heure de synchro changée), nettoyage des doublons d'occurrences
+  // (module à la demande) ; un à la fois, un seul de plus s'il en arrive pendant ; un échec est journalisé, nouvel essai au cycle suivant.
+  let cleaning: Promise<void> = Promise.resolve();
+  let queued = false;
+  let lastSync = container.sync?.status().lastSyncAt ?? null;
+  const stopCleaning = container.sync?.subscribe(() => {
+    const status = container.sync?.status();
+    if (!status || status.phase !== 'idle' || status.lastSyncAt === lastSync) return;
+    lastSync = status.lastSyncAt;
+    if (queued) return;
+    queued = true;
+    cleaning = cleaning.then(() => {
+      queued = false;
+      return disposed ? undefined : import('../tasks/recurrenceDedup').then((module) => module.runRecurrenceDedup(container)).then(() => undefined, (error: unknown) => logFailure('recurrence', error));
+    });
+  });
   let gate: FirstCycleGate | null = null;
   let first: Promise<void> = Promise.resolve();
   const ready = timeZone
@@ -116,10 +132,9 @@ export function startAppStartup(
     .then((opened) => {
       gate = opened;
       first = (async () => {
-        if (opened?.waits) {
-          // Premier cycle réussi : nettoyage des doublons d'occurrences avant le report ; un échec est journalisé, nouvel essai au démarrage suivant.
-          if ((await opened.outcome) === 'done' && !disposed) await import('../tasks/recurrenceDedup').then((module) => module.runRecurrenceDedupOnce(container)).catch((error: unknown) => logFailure('recurrence', error));
-        }
+        // Premier cycle réussi : le nettoyage des doublons d'occurrences (lancé par l'écoute ci-dessus) passe avant le report.
+        if (opened?.waits) await opened.outcome;
+        await cleaning;
         if (disposed) return;
         await rollover.start();
         checking = true;
@@ -135,6 +150,7 @@ export function startAppStartup(
       if (disposed) return;
       disposed = true;
       gate?.cancel();
+      stopCleaning?.();
       calendars.dispose();
       backups?.dispose();
       env.document.removeEventListener('visibilitychange', onCheck);

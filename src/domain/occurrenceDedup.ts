@@ -17,6 +17,12 @@ export interface OccurrenceRow {
   readonly hlc: Hlc;
 }
 
+/** Clé d'un groupe : une occurrence de série. */
+export const groupKey = (recurrenceId: RecurrenceId, seriesIndex: number): string => `${recurrenceId}|${String(seriesIndex)}`;
+
+/** Ordre D7 : terminée d'abord, hlc le plus récent, identifiant le plus petit. */
+const byRank = (a: OccurrenceRow, b: OccurrenceRow): number => Number(b.done) - Number(a.done) || compareCodeUnits(b.hlc, a.hlc) || compareCodeUnits(a.id, b.id);
+
 export interface DuplicateGroup {
   readonly recurrenceId: RecurrenceId;
   readonly seriesIndex: number;
@@ -33,15 +39,13 @@ export function duplicateGroups(rows: readonly OccurrenceRow[]): DuplicateGroup[
   const byKey = new Map<string, OccurrenceRow[]>();
   for (const row of rows) {
     if (row.seriesIndex < 0) continue;
-    const key = `${row.recurrenceId}|${String(row.seriesIndex)}`;
+    const key = groupKey(row.recurrenceId, row.seriesIndex);
     byKey.set(key, [...(byKey.get(key) ?? []), row]);
   }
   const groups: DuplicateGroup[] = [];
   for (const members of byKey.values()) {
     if (members.length < 2) continue;
-    const [survivor, ...others] = [...members].sort(
-      (a, b) => Number(b.done) - Number(a.done) || compareCodeUnits(b.hlc, a.hlc) || compareCodeUnits(a.id, b.id),
-    );
+    const [survivor, ...others] = [...members].sort(byRank);
     if (!survivor) continue;
     groups.push({
       recurrenceId: survivor.recurrenceId,
@@ -51,4 +55,30 @@ export function duplicateGroups(rows: readonly OccurrenceRow[]): DuplicateGroup[
     });
   }
   return groups.sort((a, b) => compareCodeUnits(a.survivor, b.survivor));
+}
+
+/** Ligne d'un groupe suivi, vivante ou à la corbeille. */
+export interface GroupRow extends OccurrenceRow {
+  readonly live: boolean;
+}
+
+export interface Reconciliation {
+  /** Ligne à rétablir (null : aucune). */
+  readonly restore: TaskId | null;
+  /** Lignes vivantes à écarter. */
+  readonly discard: readonly TaskId[];
+}
+
+/**
+ * Rétablissement après un nettoyage dont les deux appareils n'avaient pas les mêmes données (T-TECH-01 B2), sur les lignes d'un groupe
+ * déjà nettoyé : (1) aucune ligne vivante : la ligne que D7 désigne revient ; (2) une vivante, aucune terminée, mais une terminée à la
+ * corbeille (complétion arrivée après coup) : la terminée revient, les vivantes sont écartées. Les deux appareils, sur les mêmes lignes,
+ * font la même écriture. Autrement : rien (le hlc d'une ligne écartée est celui de son écart, il ne sert pas à défaire un nettoyage).
+ */
+export function reconcileGroup(rows: readonly GroupRow[]): Reconciliation {
+  const live = rows.filter((r) => r.live);
+  if (live.length === 0) return { restore: [...rows].sort(byRank)[0]?.id ?? null, discard: [] };
+  if (live.some((r) => r.done)) return { restore: null, discard: [] };
+  const done = rows.filter((r) => r.done).sort(byRank)[0];
+  return done ? { restore: done.id, discard: live.map((r) => r.id).sort(compareCodeUnits) } : { restore: null, discard: [] };
 }

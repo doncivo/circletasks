@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { duplicateGroups, type OccurrenceRow } from './occurrenceDedup';
+import { duplicateGroups, reconcileGroup, type GroupRow, type OccurrenceRow } from './occurrenceDedup';
 import { asEntityId, type Hlc, type RecurrenceId, type TaskId } from './types';
 
 const R = asEntityId<RecurrenceId>('11111111-1111-4111-8111-111111111111');
@@ -40,5 +40,23 @@ describe('survivant d’un groupe de doublons (T-TECH-01 D7, critère 15)', () =
   it('séries différentes : jamais regroupées', () => {
     const other = asEntityId<RecurrenceId>('33333333-3333-4333-8333-333333333333');
     expect(duplicateGroups([row(1, 5), { ...row(2, 5), recurrenceId: other }])).toEqual([]);
+  });
+});
+
+describe('rétablissement après un nettoyage aux données différentes (T-TECH-01 B2)', () => {
+  const g = (n: number, extra: Partial<GroupRow> = {}): GroupRow => ({ ...row(n, 1), live: false, ...extra });
+
+  it('aucune ligne vivante : la ligne désignée par D7 revient (terminée d’abord, puis hlc, puis id)', () => {
+    expect(reconcileGroup([g(1), g(2)])).toEqual({ restore: id(2), discard: [] });
+    expect(reconcileGroup([g(1, { done: true }), g(2)])).toEqual({ restore: id(1), discard: [] });
+  });
+
+  it('une vivante à faire et une terminée à la corbeille : la terminée revient, la vivante est écartée', () => {
+    expect(reconcileGroup([g(1, { done: true }), g(2, { live: true })])).toEqual({ restore: id(1), discard: [id(2)] });
+  });
+
+  it('groupe stable (une vivante, ou une vivante terminée) : rien, le hlc d’une ligne écartée ne défait pas le nettoyage', () => {
+    expect(reconcileGroup([g(1), g(2, { live: true })])).toEqual({ restore: null, discard: [] });
+    expect(reconcileGroup([g(1, { done: true, live: true }), g(2, { done: true })])).toEqual({ restore: null, discard: [] });
   });
 });
