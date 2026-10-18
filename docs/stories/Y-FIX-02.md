@@ -1,6 +1,6 @@
 # Y-FIX-02 — Plus d'impasse de première publication : un segment écrit sans état est repris par la tête locale, Rust juge
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-04 et Y-TECH-05, avant Y-FIX-03 ; ordre recommandé : Y-FIX-02, Y-IOS-07, Y-FIX-03, Y-IOS-05, car ces quatre stories touchent `engine.ts`, jamais en parallèle) · Agents : **sync-icloud** ; **desktop-tauri** seulement si `src-tauri/src/sync/store.rs` doit changer (voir « Décisions », point 6) · Relecture : code-reviewer (qa-test avant) · Estimation : **5 h** (audit B2) ; règle d'Ali : arrêt et alerte avant de continuer au-delà de **7 h 30** (+50 %) · Statut : **fiche écrite, à développer**
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-04 et Y-TECH-05, avant Y-FIX-03 ; ordre recommandé : Y-FIX-02, Y-IOS-07, Y-FIX-03, Y-IOS-05, car ces quatre stories touchent `engine.ts`, jamais en parallèle) · Agents : **sync-icloud** ; **desktop-tauri** seulement si `src-tauri/src/sync/store.rs` doit changer (voir « Décisions », point 6) · Relecture : code-reviewer (qa-test avant) · Estimation : **5 h** (audit B2) ; règle d'Ali : arrêt et alerte avant de continuer au-delà de **7 h 30** (+50 %) · Statut : **développée (rouge puis vert, bundle net −54), en attente de qa-test et de code-reviewer**
 Story technique, sans équivalent au PRD. Correctif du bloquant **B2** de `docs/audit-1.0.md` (section 3). Aucun écart au PRD à décider ici (voir « Écarts »). Avenant ADR 0011 réservé : **§30**.
 
 ## Constat de l'audit (B2, mot pour mot)
@@ -130,48 +130,81 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
 
 ## Écarts
 
-- Aucun écart au PRD ni à l'ADR 0011 à décider : l'avenant §30 complète §1.4 et §24 point 10 sans en modifier une règle.
-- **Limite de la rédaction de cette fiche** : le fichier `scenario2CrashBeforeState.test.ts` n'a pas pu être lu par l'auteur (pas de commande git dans cette séance) ; sa description (critère 1) vient de l'énoncé de la tâche et du critère 20 de `docs/stories/Y-TECH-03.md`. L'agent le lit avant de coder et confirme que son point d'arrêt correspond à P2 du critère 3 ; tout écart est noté ici.
+- Aucun écart au PRD ni à l'ADR 0011 : l'avenant §30 complète §1.4 et §24 point 10 sans en modifier une règle.
+- **Questions à Ali : recommandations suivies, en hypothèses** (à confirmer). Q1 : le cas « état supprimé après publication »
+  (`stateSeq` local > 0) n'est pas rouvert, `joinAfterRecords.test.ts:97` est inchangé et vert. Q2 : aucun bouton nouveau, la cause est
+  nommée dans Détails et « Synchroniser maintenant » retente.
+- **Scénario 2 : point d'arrêt P3, pas P2.** Fichier identique à `origin/y-tech-03-scenarios-rouges` (empreinte
+  `9f874aa6784f4c88a439cc57a248150b5e07048e` des deux côtés) ; son arrêt tombe sur l'écriture de `state.ctx` qui suit le premier
+  `appendJournal`, donc après la transaction d'ajout (`META.head` posé, `inflight` nul) : P3 du critère 3. P2 est couvert par
+  `firstPublicationCrashPoints.test.ts`. Aucune attente du scénario modifiée.
+- **Règle pure dans `src/domain/sync/firstPublication.ts`, pas dans `epoch.ts`** (bundle de départ : une fonction de `epoch.ts` y reste
+  même si seul un bloc à la demande l'appelle). Elle reçoit `files` (le `counted` de `listedFilesForPublish`) déjà calculé par le moteur et
+  n'importe que des types : un import d'`epoch.ts` depuis un bloc nouveau sortait `retention.ts` du bloc de départ (+4 016 octets mesurés).
+- **Chemins rares dans le bloc à la demande existant `src/sync/orphanEpoch.ts`** (`bound`, `deferred`, `resolveInflight` déplacé), pas
+  dans un bloc nouveau : un bloc nouveau qui importait `meta.ts` le sortait de `purge` (+4 945 octets) et ajoutait son nom haché au départ.
+  Conséquence : un échec de chargement de ce bloc pendant un cycle bloqué (ou avec une intention) fait échouer le cycle (erreur visible),
+  au lieu d'un `publish-deferred` journalisé ; `publish-blocked` est levé avant le chargement.
+- **Compensation dans `engine.ts`** : `openedHere` réutilise `orphanProof` (mêmes entrées dès que `currentEpoch === localEpoch` ; les
+  seules branches qui réécrivent `localEpoch` ou `META.snapshot` rendent cette égalité fausse ; `unreadable` est vide à cet endroit, sinon
+  l'étape (iii) a déjà rendu l'attente) ; son journal `own-state-recovered { epoch }` est écrit par le bloc à la demande (même forme).
+  `orphanEpoch*.test.ts`, `Y-IOS-02-FIX-02` et `scenario1*.test.ts` passent sans modification.
+- **Fixture voisine `tests/fixtures/sync/first-publication-bound.json`** (critère 8) : `publish-bound.json` est lue par Rust
+  (`sync_publish_bound.rs`) et n'est pas touchée. Cas (a) à (i) de la fiche, plus (c2), (j), (k), (l).
+- **Critère 2 (b)** : sans correction, l'état écrit par la reprise d'`inflight` était réécrit à l'étape 6 (`stateSeq` 2) ; `lastStateMeta`
+  suit désormais l'état écrit dans le cycle, la tête de l'étape 6 tient compte de `lastWritten` : `stateSeq` 1.
+- **Critère 4** : la file gardée est republiée **dans le même cycle** que la reprise (segment 1, `first_record` 0), pas au cycle suivant :
+  plus tôt que la fiche, dans la borne « au plus deux cycles » du critère 3.
+- **Critère 5, côté iPhone seulement ; défaut nouveau trouvé.** L'iPhone converge (segment 1 tronqué sans ligne complète, lot publié une
+  fois au segment 2 par `max + 1`, état à la tête de Rust, aucun avertissement). **Mais le PC reste « en attente d'iCloud » pour
+  toujours** sur le segment 1 tronqué : Rust ne l'a jamais connu (`own.json` inchangé par l'ajout en échec), il n'est jamais clos, et le
+  lecteur le prend pour un fichier en cours de téléchargement. Défaut de lecture distinct de B2, **déjà présent sur `main`** (même chemin :
+  l'ajout coupé puis `max + 1` existaient avant), non corrigé ici ; reproduit par un essai local (non commité) : `partialLastLine` sur le
+  premier `j-00000001.ctj` de l'iPhone, trois cycles du PC `waiting-icloud`, aucune tâche de l'iPhone reçue. Story à ouvrir (décision
+  d'Ali).
+- **Critère 6** : trois points d'arrêt pendant la reprise (avant `writeState`, entre `writeState` et sa transaction, entre cette
+  transaction et celle de `resolveInflight`), rangs comptés sur un passage identique sans arrêt.
+- **Critère 11** : avec `io`, la phase est l'erreur (bandeau d'erreur en tête) et `publish-blocked` suit avec sa cause ; avec
+  `state-mismatch`, le bandeau montre `publish-blocked`. La cause est nommée dans AVERTISSEMENTS de Détails, jamais en bandeau à part.
+  Arrêt P3 (aucune intention) : rien ne change d'un cycle à l'autre.
+- **Critère 13** : test Rust déjà présent, `y01_15_write_state_compares_head_paired_by_and_reserved_fields` (`sync_store.rs` 424) :
+  ajout du segment 1 sans état, `write_state` de `stateSeq` 1 accepté à la tête de `own`, `state-mismatch` sur un autre `record` ou
+  segment. Aucun test Rust nouveau, `store.rs` inchangé, `cargo test` non lancé.
+- **Instabilité constatée, non touchée** : `tests/unit/sync/epochCarryReportRules.test.ts` (501 tâches) dépasse parfois 5 s sur ce poste,
+  **aussi sur le code de référence** (2 dépassements mesurés sans le correctif), vert seul et dans la suite complète du module ensuite.
+  Délai jamais allongé ; à instruire à part.
+- **Limite de la rédaction de cette fiche** (inchangée) : le scénario 2 n'avait pas pu être lu par l'auteur ; lu par l'agent, voir
+  ci-dessus.
 
 ## Hors de cette story
 
 - La rotation de segment sur `cloud-pending` (Y-IOS-07, §27) ; la lecture muette d'un journal (Y-FIX-03) ; le transport muet (Y-IOS-05).
 - L'ouverture du cas « état supprimé après publication » (Question 1).
+- Le segment tronqué jamais clos qui tient le lecteur en attente (Écarts, critère 5).
 - Tout changement du format publié, de `state.ctx`, du PRD ou des paliers de BUNDLE-01 ; toute fonction de la liste « Hors périmètre » du PRD (section 1).
 
 ## Plan par phases
 
-1. **Lecture seule (30 min)** : reconfirmer les lignes du tableau de « Contexte » ; vérifier que `own.json` est persisté avant la réponse d'`append_journal` (décision 6) ; lire le scénario 2 et le placer sur P2 ; noter les octets du bundle de départ (358 357).
-2. **Rouge d'abord (45 min)** : reprendre `scenario2CrashBeforeState.test.ts` tel quel ; commit seul ; lancer en local (module seulement), copier le message d'erreur ; pousser la branche, citer le run CI rouge. Écrire ensuite les critères 3, 4, 7 et 9 en rouge (commit séparé), assertions de départ vertes.
-3. **Règle pure (45 min)** : `localBoundCovers` dans le domaine, table du critère 8 ; `npm run test:bundle` après le commit.
-4. **Moteur (1 h 15)** : trace locale d'ajout lue dans `engine.ts` (hors du départ si possible, module à la demande pour les causes), `publishAllowed` ouvert par la règle, `resolveInflight` sorti de la condition, `own-state-recovered { source }` ; critères 1, 2, 3, 4, 5, 9 verts ; `npm run test:bundle`.
-5. **Reprise et visibilité (1 h)** : critères 6, 7, 11, 12 (cause nommée dans le catalogue à la demande, Détails et bandeau) ; `npm run test:bundle`.
-6. **Non-régression et Rust (30 min)** : critères 10, 13, 14, 16, 17 ; mesure finale du bundle ; push ; CI « suite verte ».
-7. **Documentation et clôture (30 min)** : critère 19 ; qa-test, puis code-reviewer ; le product-owner vérifie les 19 critères avant « fait ».
-
-Total : environ 5 h. Poste le plus exposé : le bundle (marge de 43 octets) et les points d'arrêt P2 et P3 du banc (phases 4 et 5). Alerte à Ali à 7 h 30.
+Suivi (voir Preuves) : lecture seule, rouge d'abord (scénario 2 puis crashPoints), règle pure, moteur, visibilité, non-régression,
+documentation. Temps passé : environ 2 h 45 (estimation 5 h, alerte 7 h 30).
 
 ## Vérifications
 
-- Local : seulement les tests du module (critère 17) ; suite complète en CI.
-- CI : branche verte, statut « suite verte » avant fusion dans `main` ; aucun test désactivé ni délai allongé.
-- Preuve de détection : critère 1 (puis 3, 4, 7, 9) rouge avec le code actuel, run cité, puis vert.
-- Bundle : une mesure par commit, aucune exception.
-- Aucun fichier écrit hors du dépôt ; aucun secret ; consigne à rappeler à l'agent : fichiers temporaires dans le worktree.
-- Clôture refusée si un critère manque : « Preuves » doit porter les deux runs, les mesures du bundle et la confirmation des lignes.
+- Local : seulement les tests du module (critère 17) ; suite complète en CI (branche non poussée par l'agent : consigne).
+- Aucun test désactivé, allongé ni relancé ; aucun fichier écrit hors du dépôt (outils et mesures dans `test-results/yfix02/`, ignoré).
 
-## Preuves (à remplir)
+## Preuves
 
 | Élément | Valeur |
 |---|---|
-| Lignes reconfirmées avant le code | _à remplir par l'agent_ (tableau « Contexte » : adresses de `main` c01e961b à vérifier) |
-| `own.json` persisté après `append_journal` (décision 6) | _à remplir_ |
-| Scénario 2 : fichier identique à la branche `origin/y-tech-03-scenarios-rouges` | _à remplir (commit, empreinte ou `git diff` vide)_ |
-| Critère 1 rouge avec le code actuel | _commit, message d'erreur exact, run CI_ |
-| Critères 3, 4, 7, 9 rouges avec le code actuel | _commit, messages, run CI_ |
-| Critères 1 à 12 verts après correctif | _commit, run CI_ |
-| Bundle de départ (octets gzip, seuil 358 400) | départ 358 357 ; après chaque commit : _à remplir_ ; final : _à remplir_ (net <= 0) |
-| Test `joinAfterRecords.test.ts:97` inchangé et vert | _à remplir_ |
-| Avenant ADR | **§30** à écrire (§27 réservé à Y-IOS-07) |
-| Commandes (module seulement) | _à remplir_ |
-| Revue qa-test / code-reviewer | _à remplir_ |
+| Lignes reconfirmées avant le code | Tableau « Contexte » confirmé sur c01e961b, sans écart : `canPublish` `epoch.ts` 89-93, décision de publier `engine.ts` 539-590, `resolveInflight` 136-149 et 627-633, publication et état 947-969, `publisher.ts` 431-448, `isOrphanEpoch` `epoch.ts` 149-162 |
+| `own.json` persisté après `append_journal` (décision 6) | Oui : `SyncCore::append_journal` (`service.rs` 980-1008) appelle `save_own` (écriture de `sync/own.json`) avant de rendre le résultat ; `write_state` (`store.rs` 1299-1306) refuse `stateSeq` non croissant et toute tête différente de `own`. Le simulateur (`memory.ts` 1747-1790) applique les mêmes refus. Aucun changement Rust |
+| Scénario 2 : fichier identique à la branche | Oui, empreinte `9f874aa6784f4c88a439cc57a248150b5e07048e` (blob de `origin/y-tech-03-scenarios-rouges` et du worktree), commit `2c7a3191` (seul) |
+| Critère 1 rouge avec le code actuel | `2c7a3191` : `AssertionError: expected [ Array(1) ] to include 'state.ctx'` (`scenario2CrashBeforeState.test.ts:80:38`), assertions de départ vertes. Run CI : aucun (pas de push, consigne) |
+| Critères 2 à 7, 9, 11, 12 rouges avec le code actuel | `fa7fadf9` (seul) : 10 rouges, 4 verts (P1, P4, critères 4 et 5 ne passent pas par l'impasse). P2, P3, critère 7 : `expected [ Array(1) ] to include 'state.ctx'` ; critère 2 : `expected { …(6) } to be null` (`META.inflight` jamais résolu) ; critère 6 : `Error: aucun état écrit pendant la reprise` ; critère 9 : `expected [] to have a length of 1 but got +0` (`inflight-resolved` absent) ; critère 11 : `cycle 1: expected [ 'publish-blocked' ] to deeply equal ArrayContaining{…}` ; critère 12 : `expected [ 'publish-deferred', …(1) ] to deeply equal ArrayContaining{…}` |
+| Critères 1 à 12 verts après correctif | `cc84c304` (correctif), `1917baf1` (commentaires) : scénario 2 vert sans changement, 14/14 crashPoints, 14 cas de la table, 4 tests de Détails et bandeau. Run CI : à lancer au push |
+| Bundle de départ (octets gzip, seuil 358 400) | départ 358 357 ; `2c7a3191` : 358 357 ; `fa7fadf9` : 358 357 ; `cc84c304` : 358 303 ; `1917baf1` : 358 303 ; final : **358 303 (net −54, marge 97)**. Consommation : `engine.ts` (borne demandée au bloc, `resolveInflight` sans condition, rappel `io`, `stateSeq` 1 après reprise) ; compensé par `openedHere` sur `orphanProof`, `publish-deferred` et `resolveInflight` dans le bloc à la demande `orphanEpoch`. `npm run test:bundle` : 24/24 vert après chaque commit |
+| Test `joinAfterRecords.test.ts:97` inchangé et vert | Oui (aucune modification de `tests/unit/sync/pairing/`) |
+| Avenant ADR | **§30** écrit (§27 réservé à Y-IOS-07) |
+| Commandes (module seulement) | `CT_TEST_WORKERS=1 npx vitest run src/sync src/domain/sync tests/unit/sync tests/sim src/features/sync src/i18n --coverage.enabled=false` : 201 fichiers, 2 325 tests verts ; `npm run lint` vert ; `npm run typecheck` vert |
+| Revue qa-test / code-reviewer | _à faire_ |

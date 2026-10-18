@@ -1635,6 +1635,54 @@ Tests : `tests/unit/sync/epochCarryReport.test.ts` (critère 23 rouge puis vert,
 (un second compte rendu pendant un bandeau levé est compté à la relecture suivante) ; `carry-held` sans action pour en sortir (§28) ; libellés
 par parent (jour de routine, pause, rappel, session Focus) en repli « (sans titre) » + identifiant.
 
+### 30. Avenant Y-FIX-02 : première publication interrompue, borne locale, Rust juge (bloquant B2, 2026-10-18)
+
+Numéro : §27 reste réservé à Y-IOS-07 (rotation de segment sur `cloud-pending`, non touchée ici). Complète la section 1.4 (première
+publication) et §24 point 10, sans en modifier une règle. **Constat (audit B2)** : un segment écrit puis un arrêt avant `state.ctx`
+(échéance `hide`, application tuée, `io`) laissaient un fichier listé, aucun état, aucun accusé et `stateSeq` local à 0 : `canPublish`
+refusait, `openedHere` ne couvrait que l'instantané seul, `resolveInflight` n'était appelé que si la publication était permise ;
+`publish-blocked` pour toujours, alors que Rust connaissait la tête (`own.json`) et l'aurait acceptée.
+
+1. **Trace locale d'ajout.** `META.inflight` de l'époque courante, ou `META.head` de l'époque courante avec `segment >= 1`.
+2. **Borne locale (règle pure `localBoundCovers`, `src/domain/sync/firstPublication.ts`).** Ouverte si et seulement si (a) trace
+   locale d'ajout, (b) `stateSeq` local 0, (c) chaque fichier compté par `listedFilesForPublish` est expliqué (segments de l'époque
+   courante de numéro au plus le plus grand segment de la trace, instantané de l'époque courante enregistré dans `META.snapshot`),
+   (d) aucun appareil illisible au scan. `publishAllowed` = règle actuelle (`canPublish`, `openedHere`, état étranger ou illisible)
+   **ou** borne locale. Un fichier non expliqué garde le refus (`publish-blocked`, cause `unexplained-files`, compteur `unexplained`).
+   `stateSeq` local > 0 et état absent : inchangé (§24 point 10, `joinAfterRecords.test.ts:97`).
+3. **Rust juge.** Le moteur présente l'état avec la tête de sa trace, sans contrôle de tête de son côté ; `write_state` l'accepte si elle
+   égale `own.json` (persisté par `append_journal` avant sa réponse), sinon `state-mismatch`.
+4. **`inflight` résolu hors `publishAllowed`.** `resolveInflight` s'exécute dès qu'une intention existe (hypothèse « ajout réussi »,
+   tête `expect + count`) : acceptée, file retirée et `META.head` posé ; refusée, file gardée, publication reprise par l'existant ; `io`,
+   intention gardée pour le cycle suivant. Un fichier non expliqué interdit toute nouvelle publication mais ne laisse plus d'intention
+   orpheline. Un état écrit plus tôt dans le cycle n'est pas réécrit à l'identique à l'étape 6 (`stateSeq` 1 après la reprise).
+5. **Visible.** Refus ou `io` de l'état pendant une première publication ouverte par la borne : `publish-blocked` à chaque cycle et cause
+   `first-publication-state-refused` ; jamais « À jour ». Les causes sont portées par `warnings` hors de `SYNC_WARNINGS` (jamais un
+   bandeau à part : le bandeau montre `publish-blocked`, ou l'erreur d'abord) ; leur texte est dans la section AVERTISSEMENTS de Détails
+   (catalogue à la demande `src/i18n/*syncPublishCause.ts`). Aucune action nouvelle : « Synchroniser maintenant » retente.
+6. **Journal.** `own-state-recovered { epoch, source }` (`inflight` ou `local-head` ; `{ epoch }` seul pour `openedHere`),
+   `inflight-resolved { appended }`, `publish-deferred { reason, state, files, ignored, acks, localSeq, unexplained? }` : codes et
+   compteurs, jamais un nom de fichier.
+7. **Bundle de départ.** Chemins rares dans le bloc à la demande existant `src/sync/orphanEpoch.ts` (`bound`, `deferred`,
+   `resolveInflight`) ; aucun bloc nouveau (un bloc nouveau qui importait `meta.ts` ou `epoch.ts` les sortait de leur bloc de départ :
+   +4 945 et +4 016 octets). Départ 358 357 → 358 303 octets.
+
+Fenêtres d'arrêt (`crashPoints`, `tests/unit/sync/firstPublicationCrashPoints.test.ts`) :
+
+| Point | Arrêt | Trace au redémarrage | Reprise |
+| --- | --- | --- | --- |
+| P1 | après `inflight`, avant `appendJournal` | `inflight`, aucun segment | règle actuelle (aucun fichier) ; Rust refuse `expect + count`, file republiée au segment 1 |
+| P2 | après `appendJournal`, avant la transaction | `inflight`, segment 1 | borne `inflight` ; Rust accepte `{ 1, 1 }`, `stateSeq` 1, un cycle |
+| P3 | après la transaction, avant `writeState` | `META.head { 1, 1 }`, segment 1 | borne `local-head` ; état écrit à l'étape 6, un cycle |
+| P4 | après `writeState`, avant sa transaction | `state.ctx` publié | règle actuelle (état propre authentifié), `stateSeq` suivant |
+
+Limite connue (hors B2) : un premier ajout coupé (`partialLastLine`) laisse un segment tronqué que Rust ne connaît pas ; l'iPhone publie
+ensuite au segment `max + 1` avec la tête de Rust, mais ce segment tronqué n'est jamais clos et tient le lecteur de l'autre appareil « en
+attente d'iCloud » (défaut de lecture déjà présent sur main, à ouvrir en story). Tests : scénario 2 du banc
+(`tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, rouge puis vert), `firstPublicationCrashPoints.test.ts` (rouge puis vert),
+`src/domain/sync/firstPublication.test.ts` (table `tests/fixtures/sync/first-publication-bound.json`),
+`src/features/sync/publishBlockedCause.test.tsx` ; Rust : `y01_15_write_state_compares_head_paired_by_and_reserved_fields`.
+
 ## Conséquences
 
 - **Dépendances** (validées par l'architecte) :
