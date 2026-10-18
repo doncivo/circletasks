@@ -26,7 +26,7 @@ describe('textes du compte rendu du changement d’époque (Y-TECH-05)', () => {
     expect(tCarry('bannerNoRestored', { count: 2 })).toBe('Changement d’époque : aucun élément supprimé rétabli, autres éléments nommés : 2. Voir le compte rendu');
     expect(tCarry('summaryRecreated', { count: 2 })).toBe('Recréés : 2');
     expect(tCarry('summaryOthers', { count: 3 })).toBe('Rattachés ou mis de côté : 3');
-    expect(tCarry('more', { count: 12 })).toBe('et 12 autres');
+    expect(tCarry('more', { count: 12 })).toBe('Autres éléments : 12');
   });
 
   it('suit la langue courante', () => {

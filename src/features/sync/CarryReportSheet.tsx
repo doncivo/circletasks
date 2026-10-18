@@ -15,7 +15,7 @@ interface PagedListProps<T> {
   readonly title: string;
   /** Éléments gardés dans le compte rendu (au plus 500 toutes listes). */
   readonly items: readonly T[];
-  /** Éléments au-delà de la borne, comptés mais non nommés (« et {n} autres »). */
+  /** Éléments au-delà de la borne, comptés mais non nommés (« Autres éléments : {n} »). */
   readonly overflow: number;
   readonly itemKey: (item: T) => string;
   readonly render: (item: T) => ReactNode;
@@ -23,7 +23,7 @@ interface PagedListProps<T> {
 
 /**
  * Liste nommée, paginée par pages de 50 (sans délai ni virtualisation) : `<ul>` annoncée avec son nombre exact (gardés et au-delà de la
- * borne), « Afficher 50 de plus » tant qu'il en reste, « et N autres » une fois la liste entièrement affichée.
+ * borne), « Afficher 50 de plus » tant qu'il en reste, « Autres éléments : N » une fois la liste entièrement affichée.
  */
 function PagedList<T>({ title, items, overflow, itemKey, render }: PagedListProps<T>) {
   const [shown, setShown] = useState(CARRY_REPORT_PAGE);
@@ -119,7 +119,7 @@ export function CarryReportSheet({ report, devices, onClose, onSeen, seenFailed 
           <ul role="list" aria-label={tCarry('listLabel', { title: tCarry('writesTitle'), count: report.authors.length })} className="ct-carry__list">
             {report.authors.map((author) => (
               <li key={author.device} className="ct-carry__item">
-                <span className="ct-carry__label">{tCarry('writesBy', { device: name(author.device), count: author.fields + author.tombs + author.late })}</span>
+                <span className="ct-carry__label">{tCarry('writesBy', { device: name(author.device) })}</span>
                 <span className="ct-carry__meta">{tCarry('writesDetail', { fields: author.fields, rows: author.rows, tombs: author.tombs, late: author.late })}</span>
               </li>
             ))}
@@ -161,8 +161,15 @@ export function CarryReportSheet({ report, devices, onClose, onSeen, seenFailed 
           )}
         />
       )}
-      {(reattached.length > 0 || (held.length === 0 && report.overflowBy.parentReplaced > 0)) && <PagedList title={tCarry('reattachedTitle')} items={reattached} overflow={held.length === 0 ? report.overflowBy.parentReplaced : 0} itemKey={parentKey} render={parentItem} />}
-      {held.length > 0 && <PagedList title={tCarry('heldTitle')} items={held} overflow={report.overflowBy.parentReplaced} itemKey={parentKey} render={parentItem} />}
+      {/* Revue S5 : le débordement ne dit pas s'il s'agissait de lignes rattachées ou mises de côté : un seul compte, commun aux deux listes. */}
+      {reattached.length > 0 && <PagedList title={tCarry('reattachedTitle')} items={reattached} overflow={0} itemKey={parentKey} render={parentItem} />}
+      {held.length > 0 && <PagedList title={tCarry('heldTitle')} items={held} overflow={0} itemKey={parentKey} render={parentItem} />}
+      {report.overflowBy.parentReplaced > 0 && (
+        <section className="ct-carry__block">
+          {reattached.length === 0 && held.length === 0 && <h3 className="ct-settings__section">{tCarry('parentTitle')}</h3>}
+          <p className="ct-carry__overflow">{tCarry('more', { count: report.overflowBy.parentReplaced })}</p>
+        </section>
+      )}
 
       <div className="ct-carry__footer">
         {seenAt ? (

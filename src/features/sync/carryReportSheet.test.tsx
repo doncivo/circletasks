@@ -64,11 +64,11 @@ describe('résumé (critère 17 a à c)', () => {
     expect(within(dialog).getByText('Reporté par : Cet appareil')).toBeTruthy();
     expect(within(dialog).getByText('Éléments rétablis : 1')).toBeTruthy();
     const writes = within(dialog).getByRole('list', { name: 'Écritures reportées : 4' });
-    expect(within(writes).getByText('Écritures reportées par Cet appareil : 2')).toBeTruthy();
-    expect(within(writes).getByText('Écritures reportées par PC 2222 : 7')).toBeTruthy();
-    expect(within(writes).getByText('Champs : 5 · lignes : 2 · traces : 1 · pendant le changement : 1')).toBeTruthy();
-    expect(within(writes).getByText('Écritures reportées par PC 3333 (oublié) : 1')).toBeTruthy();
-    expect(within(writes).getByText('Écritures reportées par Appareil 44444444 : 1')).toBeTruthy();
+    expect(within(writes).getByText('Écritures reportées par Cet appareil')).toBeTruthy();
+    expect(within(writes).getByText('Écritures reportées par PC 2222')).toBeTruthy();
+    expect(within(writes).getByText('Champs : 5 · Lignes : 2 · Traces : 1 · Tardives : 1')).toBeTruthy();
+    expect(within(writes).getByText('Écritures reportées par PC 3333 (oublié)')).toBeTruthy();
+    expect(within(writes).getByText('Écritures reportées par Appareil 44444444')).toBeTruthy();
   });
 
   it('les trois causes', () => {
@@ -145,6 +145,30 @@ describe('listes nommées (critère 17 d à f)', () => {
     expect(within(dialog).getByText('Rattachés ou mis de côté : 5')).toBeTruthy();
   });
 
+  // Revue S5 : le débordement des lignes au parent remplacé n'est attribué ni aux seules « mises de côté » ni aux seules « rattachées » : un compte commun.
+  it('débordement des lignes au parent remplacé : un seul « Autres éléments : n » commun aux deux listes, aucune liste n’annonce ce reste', () => {
+    open(
+      report({
+        authors: [{ device: PC, fields: 3, rows: 3, tombs: 0, late: 0 }],
+        parentReplaced: [
+          { table: 'task', rowId: 'r1', column: 'project_id', parentId: 'P', space: 'pro', label: 'Rattachée', hlc: 'h' as Hlc, kind: 'reattached', cause: 'parent-replaced' },
+          { table: 'task', rowId: 'r2', column: 'project_id', parentId: 'P', space: 'pro', label: 'Mise de côté', hlc: 'h' as Hlc, kind: 'held', cause: 'parent-replaced' },
+        ],
+        overflow: 3,
+        overflowBy: { restored: 0, recreated: 0, parentReplaced: 3 },
+      }),
+    );
+    expect(screen.getAllByText('Autres éléments : 3')).toHaveLength(1);
+    expect(screen.getByRole('list', { name: 'Rattachés à « Sans projet » : 1' })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Mis de côté (parent remplacé) : 1' })).toBeTruthy();
+  });
+
+  it('débordement des lignes au parent remplacé sans aucune ligne gardée : « Autres éléments : n » sous un titre commun', () => {
+    open(report({ authors: [{ device: PC, fields: 3, rows: 3, tombs: 0, late: 0 }], overflow: 2, overflowBy: { restored: 0, recreated: 0, parentReplaced: 2 } }));
+    expect(screen.getByRole('heading', { name: 'Rattachés ou mis de côté' })).toBeTruthy();
+    expect(screen.getAllByText('Autres éléments : 2')).toHaveLength(1);
+  });
+
   it('au moins un rétabli : « Éléments rétablis : n » et pas la phrase « aucun »', () => {
     open(report({ authors: [{ device: PC, fields: 3, rows: 1, tombs: 0, late: 0 }], restored: [restoredItem(1)], recreated: [{ table: 'task', rowId: 'r', label: 'Test Pc', by: PC, deletedAt: null, deletedBy: null }] }));
     expect(screen.getByText('Éléments rétablis : 1')).toBeTruthy();
@@ -174,19 +198,19 @@ describe('500 lignes : pages de 50 (critère 22)', () => {
     overflowBy: { restored: 12, recreated: 0, parentReplaced: 0 },
   });
 
-  it('le premier rendu ne pose que la première page, le nombre exact est annoncé ; « Afficher 50 de plus » jusqu’à la fin, puis « et 12 autres »', () => {
+  it('le premier rendu ne pose que la première page, le nombre exact est annoncé ; « Afficher 50 de plus » jusqu’à la fin, puis « Autres éléments : 12 »', () => {
     open(big);
     const list = (): HTMLElement => screen.getByRole('list', { name: 'Rétablis alors que vous les aviez supprimés : 512' });
     // Premier rendu : 50 lignes dans le DOM sur 500 gardées.
     expect(within(list()).getAllByRole('listitem')).toHaveLength(CARRY_REPORT_PAGE);
     expect(document.querySelectorAll('.ct-carry__item')).toHaveLength(CARRY_REPORT_PAGE + 1);
-    expect(screen.queryByText(/^et \d+ autres$/)).toBeNull();
+    expect(screen.queryByText(/^Autres éléments : \d+$/)).toBeNull();
     for (let page = 2; page <= 10; page += 1) {
       fireEvent.click(screen.getByRole('button', { name: 'Afficher 50 de plus' }));
       expect(within(list()).getAllByRole('listitem')).toHaveLength(page * CARRY_REPORT_PAGE);
     }
     expect(screen.queryByRole('button', { name: 'Afficher 50 de plus' })).toBeNull();
-    expect(screen.getByText('et 12 autres')).toBeTruthy();
+    expect(screen.getByText('Autres éléments : 12')).toBeTruthy();
     expect(screen.getByText('Éléments rétablis : 512')).toBeTruthy();
   });
 });
