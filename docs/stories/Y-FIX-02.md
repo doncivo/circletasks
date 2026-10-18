@@ -1,6 +1,6 @@
 # Y-FIX-02 — Plus d'impasse de première publication : un segment écrit sans état est repris par la tête locale, Rust juge
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-04 et Y-TECH-05, avant Y-FIX-03 ; ordre recommandé : Y-FIX-02, Y-IOS-07, Y-FIX-03, Y-IOS-05, car ces quatre stories touchent `engine.ts`, jamais en parallèle) · Agents : **sync-icloud** ; **desktop-tauri** seulement si `src-tauri/src/sync/store.rs` doit changer (voir « Décisions », point 6) · Relecture : code-reviewer (qa-test avant) · Estimation : **5 h** (audit B2) ; règle d'Ali : arrêt et alerte avant de continuer au-delà de **7 h 30** (+50 %) · Statut : **développée (rouge puis vert, bundle net −54), en attente de qa-test et de code-reviewer**
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-04 et Y-TECH-05, avant Y-FIX-03 ; ordre recommandé : Y-FIX-02, Y-IOS-07, Y-FIX-03, Y-IOS-05, car ces quatre stories touchent `engine.ts`, jamais en parallèle) · Agents : **sync-icloud** ; **desktop-tauri** seulement si `src-tauri/src/sync/store.rs` doit changer (voir « Décisions », point 6) · Relecture : code-reviewer (qa-test avant) · Estimation : **5 h** (audit B2) ; règle d'Ali : arrêt et alerte avant de continuer au-delà de **7 h 30** (+50 %) · Statut : **développée, revue « à corriger » appliquée (B1, I1, I2, M1, M3, M5), en attente de contre-revue**
 Story technique, sans équivalent au PRD. Correctif du bloquant **B2** de `docs/audit-1.0.md` (section 3). Aucun écart au PRD à décider ici (voir « Écarts »). Avenant ADR 0011 réservé : **§30**.
 
 ## Constat de l'audit (B2, mot pour mot)
@@ -55,7 +55,7 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
    - `inflight` présent : `resolveInflight` (hypothèse « ajout réussi », 136-149) écrit l'état avec `head = expect + count` ; Rust accepte → `clearPublished`, `META.head`, `inflight` nul ; Rust refuse → `inflight` remis à nul, la file est gardée (hypothèse « ajout manqué »), la publication reprend au cycle suivant par l'existant (`segment-full` / `segment-mismatch` ouvrent `max + 1`, publisher 450-457).
    - `inflight` absent, `META.head` présent : l'état est écrit au point 6 du cycle avec la tête de `ownBounds` (`META.head`), sans rien republier.
    - Le journal technique reçoit `own-state-recovered` avec `{ epoch, source: 'local-head' }` (source `'inflight'` ou `'local-head'`), codes et compteurs seulement.
-4. **`inflight` résolu hors `publishAllowed`.** `resolveInflight` s'exécute dès qu'`inflight` existe, même si `publishAllowed` est faux (engine 627-633 perd sa condition) : c'est la trace locale elle-même et Rust juge la tête. Un fichier non expliqué continue d'interdire **toute nouvelle publication** (`publish-blocked`), mais ne laisse plus une intention d'ajout orpheline. Si la résolution est acceptée, `publishAllowed` est ré-évalué au même cycle ou au suivant, sans troisième cycle (test).
+4. **Intention gardée tant que la publication est refusée** (révisé en revue, B1, option (a) ; la première version résolvait `inflight` hors `publishAllowed`, ce qui republiait l'état d'un appareil bloqué). `resolveInflight` ne s'exécute que si `publishAllowed` est vrai : par la règle actuelle, ou par la borne locale dont la trace est l'intention elle-même (source `inflight`, P2). Rust juge la tête. Publication refusée (fichier non expliqué, état supprimé après publication) : l'intention reste posée et stable d'un cycle à l'autre, aucun état n'est écrit.
 5. **Ce que la règle ne change pas.**
    - `localStateSeq > 0` et état absent (test `joinAfterRecords.test.ts:97`) : **inchangé**, `publish-blocked` reste le verdict (§24 point 10 : état supprimé par un tiers, base éventuellement restaurée ; Rust maître de `stateSeq`). L'attente de ce test n'est pas touchée. Question 1 plus bas.
    - La rotation de segment sur `cloud-pending` à l'ajout appartient à **Y-IOS-07 (ADR 0011 §27)** : cette story ne touche ni `catch` de `publishOutbox` (publisher 447-460), ni `closed`, ni l'ouverture de `max + 1` hors reprise. Si Y-IOS-07 est fusionnée avant, la reprise de `inflight` réutilise son chemin sans le modifier.
@@ -96,7 +96,7 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
 ### La règle de la borne locale
 
 8. **Règle pure testée en table.** `localBoundCovers` (et la forme de `publishAllowed` qui s'en sert) est testée en table, fixture `tests/fixtures/sync/publish-bound.json` complétée (ou fixture voisine si le lecteur Rust de `publish-bound.json` refuse les clés inconnues : l'agent vérifie et ne casse pas `sync_publish_bound` côté Rust). Cas exacts : (a) `inflight` seul + segment 1 listé → ouvert ; (b) `META.head` `{1, n}` + segment 1 listé → ouvert ; (c) trace + segment 2 listé alors que la trace dit 1 → **fermé** ; (d) trace + segment d'une autre époque → **fermé** ; (e) trace + `localStateSeq = 1` → **fermé** (règle actuelle) ; (f) aucune trace + un segment listé → **fermé** ; (g) trace + fichier illisible dans le scan → **fermé** ; (h) aucun fichier listé, `stateSeq` 0 → ouvert (règle actuelle, inchangée) ; (i) trace sur une autre époque que la courante → **fermé**.
-9. **Fichier non expliqué : toujours bloqué, visible, `inflight` quand même résolu.** **Étant donné** `inflight` posé et un segment 2 déposé dans le dossier de l'appareil (non expliqué), **quand** le cycle s'exécute, **alors** `inflight` est résolu (`inflight-resolved` présent, `META.inflight` nul), aucune nouvelle publication n'est faite, `publish-blocked` est levé, `publish-deferred` porte `reason: 'unexplained-files'` et `unexplained: 1`, et le texte de Détails nomme la cause (critère 11).
+9. **Fichier non expliqué : toujours bloqué, visible, intention gardée tant que la publication est refusée** (révisé en revue, B1). **Étant donné** `inflight` posé et un segment 2 déposé dans le dossier de l'appareil (non expliqué), **quand** deux cycles s'exécutent, **alors** à chacun : aucun `state.ctx` n'est écrit, aucune publication n'est faite, `META.inflight` reste posé et identique, la file est inchangée, aucun `inflight-resolved` n'est journalisé, `publish-blocked` est levé, `publish-deferred` porte `reason: 'unexplained-files'` et `unexplained: 1`, et le texte de Détails nomme la cause (critère 11).
 10. **Le test de la règle actuelle reste vert, attente inchangée.** `joinAfterRecords.test.ts` ligne 97 (état supprimé après publication, `stateSeq` local > 0) passe **sans modification** : `warnings` contient `publish-blocked`, la ligne d'état ne contient pas « À jour ». Idem `scenario1OldRule.test.ts`, `scenario1Orphan.test.ts`, `orphanEpoch*.test.ts`, `Y-IOS-02-FIX-02` et les tests de `publish-bound`.
 
 ### Visibilité et absence d'échec silencieux
@@ -125,7 +125,7 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
 ## Limites assumées
 
 - La reprise suppose que `own.json` de Rust a été persisté après l'ajout ; sinon (arrêt entre l'ajout et la persistance), le fichier existe mais Rust ne le connaît pas : Rust refuse l'état, `inflight` est remis à nul, la file est gardée et le cycle suivant bute sur `segment-mismatch` puis ouvre le segment `max + 1`. Le segment 1 reste en doublon partiel côté lecteurs : sans perte, application idempotente par hlc. Cas à confirmer au critère 3 (P2).
-- Un fichier non expliqué (déposé par un tiers, reste d'une autre époque) garde le blocage actuel, visible mais sans action.
+- Un fichier non expliqué (déposé par un tiers, reste d'une autre époque) garde le blocage actuel, visible mais sans action ; une intention d'ajout éventuelle reste posée, sans être résolue, tant que la publication est refusée (revue B1).
 - Le cas « état supprimé après publication » n'est pas rouvert (Question 1).
 
 ## Écarts
@@ -155,13 +155,14 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
   suit désormais l'état écrit dans le cycle, la tête de l'étape 6 tient compte de `lastWritten` : `stateSeq` 1.
 - **Critère 4** : la file gardée est republiée **dans le même cycle** que la reprise (segment 1, `first_record` 0), pas au cycle suivant :
   plus tôt que la fiche, dans la borne « au plus deux cycles » du critère 3.
-- **Critère 5, côté iPhone seulement ; défaut nouveau trouvé.** L'iPhone converge (segment 1 tronqué sans ligne complète, lot publié une
-  fois au segment 2 par `max + 1`, état à la tête de Rust, aucun avertissement). **Mais le PC reste « en attente d'iCloud » pour
-  toujours** sur le segment 1 tronqué : Rust ne l'a jamais connu (`own.json` inchangé par l'ajout en échec), il n'est jamais clos, et le
-  lecteur le prend pour un fichier en cours de téléchargement. Défaut de lecture distinct de B2, **déjà présent sur `main`** (même chemin :
-  l'ajout coupé puis `max + 1` existaient avant), non corrigé ici ; reproduit par un essai local (non commité) : `partialLastLine` sur le
-  premier `j-00000001.ctj` de l'iPhone, trois cycles du PC `waiting-icloud`, aucune tâche de l'iPhone reçue. Story à ouvrir (décision
-  d'Ali).
+- **Critère 5 : partiellement tenu, côté iPhone seulement ; côté PC, défaut distinct B18** (constat B18 et story Y-FIX-05 proposés par
+  la revue, décision d'Ali attendue ; aucun code ici). Côté iPhone : segment 1 tronqué sans ligne complète, lot publié une fois au
+  segment 2 par `max + 1`, état à la tête de Rust, aucun avertissement. Côté PC, « en attente d'iCloud » pour toujours. Mécanisme confirmé
+  par la revue : l'ajout coupé laisse `own.segment = 0` ; l'ajout suivant ne ferme `own.segment` que si `own.record > 0`
+  (`store.rs` 1234) ; le segment 1 n'a donc jamais d'entrée `closed` ; le lecteur (`store.rs` 969-977) voit `partial_tail` vrai et répond
+  `cloud-pending` pour toujours. Plus général que le premier ajout : tout ajout coupé qui ouvre `own.segment + 1`, suivi d'un `max + 1`.
+  Déjà présent sur `main`. Piste pour la story : `append_journal` à `segment > own.segment + 1` dans la même époque ferme les segments
+  intermédiaires à 0 enregistrement, Rust maître de `closed`.
 - **Critère 6** : trois points d'arrêt pendant la reprise (avant `writeState`, entre `writeState` et sa transaction, entre cette
   transaction et celle de `resolveInflight`), rangs comptés sur un passage identique sans arrêt.
 - **Critère 11** : avec `io`, la phase est l'erreur (bandeau d'erreur en tête) et `publish-blocked` suit avec sa cause ; avec
@@ -175,6 +176,23 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
   Délai jamais allongé ; à instruire à part.
 - **Limite de la rédaction de cette fiche** (inchangée) : le scénario 2 n'avait pas pu être lu par l'auteur ; lu par l'agent, voir
   ci-dessus.
+
+## Revue
+
+Revue de code du 2026-10-18 : « à corriger ». Un commit par point ; bundle de départ mesuré après chaque commit (plafond 358 400, net
+<= 0 par rapport à 358 303).
+
+| Point | Commit | Rouge / vert | Départ |
+|---|---|---|---|
+| **B1** (bloquant) : `resolveInflight` publiait l'état d'un appareil bloqué. Option (a) : `if (inflight && publishAllowed)` | rouge `ac9a9dc4` (critère 9 récrit : aucun `state.ctx`, intention posée et stable ; nouveau `tests/unit/sync/pairing/stateDeletedInflight.test.ts`, voisin de `joinAfterRecords.test.ts:97` non modifié), vert `28e02051` | rouge : `firstPublicationCrashPoints.test.ts:343` `AssertionError: cycle 1: expected [ …(3) ] to not include 'state.ctx'` ; `stateDeletedInflight.test.ts:73` `AssertionError: expected [ …(3) ] to not include 'state.ctx'` ; vert après | 358 303 puis 358 260 (compensation : `relistOrphanEpoch` et `retryOrphanDeletion` chargés par le même site `firstModule`) |
+| **I1** : `orphanEpoch.ts` et les textes de cause gardés hors du départ | `64ca21bd` | rouge par sondes temporaires non commitées : `publishCauseText` utilisé dans `warningText` → « le texte de cause … est hors du départ » ×2, `assets/main-….js: expected true to be false` (départ 358 627) ; `import './orphanEpoch'` statique dans le moteur → « src/sync/orphanEpoch.ts est un bloc à la demande, hors du départ » rouge (départ 365 126) ; vert sans sonde, 27/27 | 358 260 |
+| **I2** : défaut du segment tronqué hors B2 | ce commit de documentation | Écarts, critère 5 (mécanisme et piste) ; aucun code | 358 273 |
+| **M1** : refus `openedHere` nommé `first-publication-state-refused` | `32b15d60` | `src/sync/publishDeferred.test.ts` ; sans le correctif : `AssertionError: expected { …(2) } to deeply equal { reason: 'state-refused', …(1) }` | 358 273 (variation dans le nom haché du bloc cité par `main`) |
+| **M3** : échec de chargement du bloc `orphanEpoch` | `4749da34` | `tests/unit/sync/firstPublicationLoadFailure.test.ts` : borne (P3) et reprise d'`inflight` (P1) : phase `error`, code `io`, jamais « À jour », intention et file gardées ; `publish-blocked` n'est pas levé (l'erreur passe avant), accepté par la revue. Aucun changement de code | 358 273 |
+| **M5** : objet `facts` sur plusieurs lignes | `1813cd07` | mise en forme seule | 358 273 |
+| **M2, M4** | non appliqués | contenu non transmis à l'agent dans la demande de correction : à reporter ici | - |
+
+Commandes après la revue : `CT_TEST_WORKERS=1 npx vitest run src/sync src/domain/sync tests/unit/sync src/features/sync src/i18n tests/bundle --coverage.enabled=false` : 204 fichiers, 2 332 tests verts, 2 dépassements de 5 s dans `tests/unit/sync/epochCarryReportRules.test.ts` (instabilité déjà constatée sur le code de référence, voir Écarts ; fichier relancé seul : 20/20 vert ; délai non allongé) ; `npm run lint` et `npm run typecheck` verts.
 
 ## Hors de cette story
 
@@ -207,4 +225,5 @@ documentation. Temps passé : environ 2 h 45 (estimation 5 h, alerte 7 h 30).
 | Test `joinAfterRecords.test.ts:97` inchangé et vert | Oui (aucune modification de `tests/unit/sync/pairing/`) |
 | Avenant ADR | **§30** écrit (§27 réservé à Y-IOS-07) |
 | Commandes (module seulement) | `CT_TEST_WORKERS=1 npx vitest run src/sync src/domain/sync tests/unit/sync tests/sim src/features/sync src/i18n --coverage.enabled=false` : 201 fichiers, 2 325 tests verts ; `npm run lint` vert ; `npm run typecheck` vert |
-| Revue qa-test / code-reviewer | _à faire_ |
+| Revue qa-test / code-reviewer | code-reviewer : « à corriger », points appliqués (section « Revue ») ; contre-revue et qa-test à faire |
+| Bundle de départ après la revue | 358 273 (net −84 par rapport à 358 357, −30 par rapport à 358 303) |
