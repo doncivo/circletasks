@@ -452,11 +452,14 @@ export const TOKEN_PAIRS: readonly TokenPair[] = [
   ['--ct-color-event-local-text', '--ct-color-event-local-bg'],
   ['--ct-color-today-badge', '--ct-color-bg'],
   ['--ct-color-warning-text', '--ct-color-warning-bg'],
+  ['--ct-color-on-nav', '--ct-color-nav-bg'],
 ];
 
 /** Éléments graphiques : 3:1 (WCAG 1.4.11). */
 export const GRAPHIC_TOKEN_PAIRS: readonly TokenPair[] = [
   ['--ct-color-goal', '--ct-color-bg'],
+  ['--ct-color-switch-on', '--ct-color-bg'],
+  ['--ct-color-switch-on-thumb', '--ct-color-switch-on'],
 ];
 
 /** Écran Focus (F-01 critère 13) : texte 4,5:1. */

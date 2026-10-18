@@ -45,7 +45,7 @@ html[data-privacy='on'] #ct-privacy-cover {
   height: 64px;
   border-radius: var(--ct-radius-round);
   background: var(--ct-color-surface-input);
-  color: var(--ct-color-icon-purple);
+  color: var(--ct-color-someday);
 }
 
 .ct-lock__app {

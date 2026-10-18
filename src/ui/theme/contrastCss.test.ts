@@ -70,6 +70,7 @@ const DECORATIFS: Readonly<Record<string, string>> = {
   '--ct-color-icon-amber': 'icône Lucide qui accompagne un libellé ; contraste des icônes en thème sombre reporté avec le balayage après la 1.0',
   '--ct-color-icon-blue': 'icône Lucide qui accompagne un libellé ; même report',
   '--ct-color-icon-green': 'icône Lucide qui accompagne un libellé ; même report',
+  '--ct-color-icon-purple': 'icône Lucide qui accompagne un libellé (le texte et le badge de l’écran de verrouillage utilisent --ct-color-someday) ; même report',
   '--ct-color-icon-red': 'icône Lucide qui accompagne un libellé ; même report',
   '--ct-color-icon-skyblue': 'icône Lucide qui accompagne un libellé ; même report',
   '--ct-focus-track': 'rail de l’arc de progression de l’écran Focus ; le temps restant est en texte (paires --ct-focus-*)',
