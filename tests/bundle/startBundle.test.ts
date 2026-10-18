@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { measureStart, readBuildFiles, startChunks as startChunksOf, type BuildFiles, type Manifest, type ManifestChunk } from './bundleMeasure';
+import { compareStartModules, describeComparison, initialList, normalizeSource, START_MODULES_FILE, updatedList, validateList, type StartModulesList } from './startModules';
 
 /**
  * Taille du bundle de départ (PRD 8, démarrage rapide) : `npm run build` vers un dossier temporaire avec le manifeste de Vite, puis somme
@@ -67,6 +68,44 @@ describe('bundle de départ (index.html)', () => {
     expect(normalized.total).toBeLessThan(LIMIT_BYTES);
     // Critère 4 : la normalisation ne relève pas le plafond de fait (et le modèle des hachages de Vite n'est pas périmé).
     expect(Math.abs(normalized.total - raw.total), `normalisé ${String(normalized.total)}, brut ${String(raw.total)}`).toBeLessThanOrEqual(NORMALIZATION_GAP_BYTES);
+  });
+
+  // BUNDLE-01 (critères 19 à 25) : garde par liste blanche des modules du départ, mécanisme principal ; le plafond reste le dernier juge. Les
+  // cartes de source des blocs de départ (`sourcemap` actif sans TAURI_ENV_PLATFORM) donnent l'ensemble exact des modules ; il est comparé à
+  // tests/bundle/start-modules.json, dans les deux sens. `UPDATE_START_MODULES=1` réécrit la liste (jamais en CI) ; un module entré y arrive
+  // dans `ajouts` avec une story et une raison vides, donc le test reste rouge jusqu'à leur saisie.
+  it('aucun module nouveau dans le départ : liste blanche tests/bundle/start-modules.json exacte dans les deux sens', () => {
+    const root = join(import.meta.dirname, '..', '..');
+    const actual = new Set<string>();
+    let maps = 0;
+    for (const chunk of startChunks()) {
+      if (!chunk.file.endsWith('.js')) continue;
+      const mapPath = join(outDir, `${chunk.file}.map`);
+      // Le bloc d'aide de Rolldown (`rolldown-runtime`) est émis sans carte : aucun module source.
+      if (!existsSync(mapPath)) continue;
+      maps += 1;
+      const map = JSON.parse(readFileSync(mapPath, 'utf8')) as { readonly sources: readonly string[] };
+      for (const source of map.sources) actual.add(normalizeSource(mapPath, source, root));
+    }
+    expect(maps).toBeGreaterThan(0);
+    expect(actual.size).toBeGreaterThan(100);
+    const listPath = join(root, START_MODULES_FILE);
+    const readList = (): StartModulesList => JSON.parse(readFileSync(listPath, 'utf8')) as StartModulesList;
+    if (process.env['UPDATE_START_MODULES'] === '1') {
+      if (process.env['CI']) throw new Error(`UPDATE_START_MODULES=1 est refusée en CI : ${START_MODULES_FILE} se met à jour en local, dans un commit qui justifie chaque ajout.`);
+      writeFileSync(listPath, `${JSON.stringify(existsSync(listPath) ? updatedList(readList(), actual) : initialList(actual), null, 2)}\n`);
+    }
+    const list = readList();
+    const problems = validateList(list, (file) => existsSync(join(root, file)));
+    expect(problems, problems.join('\n')).toEqual([]);
+    const sizeOf = (file: string): number | null => (existsSync(join(root, file)) ? statSync(join(root, file)).size : null);
+    const messages = describeComparison(compareStartModules(actual, list), sizeOf);
+    expect(messages, messages.join('\n')).toEqual([]);
+    // Critère 23 : aucun des modules sortis par les paliers 1 et 2 (ni leurs feuilles) n'est dans le départ ni dans la liste.
+    for (const gone of ['src/features/tasks/TaskDetail.tsx', 'src/features/tasks/TaskDetail.css', 'src/features/settings/OnboardingHost.tsx', 'src/features/settings/OnboardingHost.css', 'src/features/search/SearchOverlay.tsx', 'src/features/focus/FocusHost.tsx', 'src/features/shortcuts/ShortcutsHelp.tsx', 'src/features/shortcuts/ShortcutsHelp.css', 'src/features/updater/UpdateBanner.tsx', 'src/features/updater/UpdateBanner.css', 'src/features/events/HolidayDetailHost.tsx', 'src/features/events/HolidayDetail.css']) {
+      expect(actual.has(gone), gone).toBe(false);
+      expect(list.groupes.some((group) => group.fichiers?.includes(gone)) || list.ajouts.some((addition) => addition.fichier === gone), gone).toBe(false);
+    }
   });
 
   // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un

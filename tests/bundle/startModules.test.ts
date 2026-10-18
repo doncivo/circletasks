@@ -1,3 +1,4 @@
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compareStartModules, describeComparison, normalizeSource, updatedList, validateList, type StartModulesList } from './startModules';
 
@@ -49,10 +50,11 @@ describe('garde par liste blanche des modules du départ', () => {
   });
 
   it('chemins normalisés : relatifs à la racine, POSIX, node_modules à partir de la première occurrence', () => {
-    const root = 'C:/depot';
-    expect(normalizeSource('C:/tmp/out/assets/main-abc.js.map', '../../../../depot/src/App.tsx', root)).toBe('src/App.tsx');
-    expect(normalizeSource('C:/tmp/out/assets/main-abc.js.map', '../../../../depot/node_modules/react/index.js', root)).toBe('node_modules/react/index.js');
-    expect(normalizeSource('C:\\depot\\dist\\assets\\x.js.map', '..\\..\\src\\a\\b.ts', root)).toBe('src/a/b.ts');
+    const root = resolve('/', 'depot');
+    const map = resolve('/', 'tmp', 'out', 'assets', 'main-abc.js.map');
+    expect(normalizeSource(map, '../../../../depot/src/App.tsx', root)).toBe('src/App.tsx');
+    expect(normalizeSource(map, '../../../../depot/node_modules/react/index.js', root)).toBe('node_modules/react/index.js');
+    expect(normalizeSource(join(root, 'dist', 'assets', 'x.js.map'), join('..', '..', 'src', 'a', 'b.ts'), root)).toBe('src/a/b.ts');
   });
 
   it('forme de la liste : raisons, tri, doublons, fichiers existants, ajouts avec story et raison de 20 caractères', () => {
@@ -74,9 +76,9 @@ describe('garde par liste blanche des modules du départ', () => {
       'groupe 1 : fichiers non triés (src/main.tsx avant src/App.tsx)',
       'groupe 1 : doublon src/App.tsx',
       'src/absent.ts : fichier absent du dépôt',
-      'ajout src/x.ts : ID de story manquant ou invalide (« »)',
+      'ajout src/x.ts : ID de story manquant',
       'ajout src/x.ts : raison de 20 caractères au moins obligatoire',
-      'ajout src/y.ts : ID de story manquant ou invalide (« pas-un-id »)',
+      'ajout src/y.ts : ID de story invalide (« pas-un-id »)',
       'ajout src/y.ts : raison de 20 caractères au moins obligatoire',
     ]);
   });
@@ -88,6 +90,6 @@ describe('garde par liste blanche des modules du départ', () => {
     expect(next.groupes[1]).toEqual(LIST.groupes[1]);
     expect(next.ajouts).toEqual([...LIST.ajouts, { fichier: 'src/features/x/Y.tsx', story: '', raison: '' }]);
     // La liste réécrite reste rouge tant que l'ID et la raison manquent (critère 24).
-    expect(validateList(next, () => true)).toEqual(['ajout src/features/x/Y.tsx : ID de story manquant ou invalide (« »)', 'ajout src/features/x/Y.tsx : raison de 20 caractères au moins obligatoire']);
+    expect(validateList(next, () => true)).toEqual(['ajout src/features/x/Y.tsx : ID de story manquant', 'ajout src/features/x/Y.tsx : raison de 20 caractères au moins obligatoire']);
   });
 });
