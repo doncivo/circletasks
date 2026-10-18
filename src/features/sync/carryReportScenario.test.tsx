@@ -59,7 +59,7 @@ describe('Y-TECH-05 critère 26 : bandeau, écran et « J’ai vu » du compte r
     // Le moteur lève l'avertissement du compte rendu non acquitté.
     expect(warningsOf(s)).toContain('carry-report');
 
-    const container = containerOf(s);
+    let container = containerOf(s);
     integration = startSyncIntegration(container, NO_TIMERS);
     await integration.refreshed();
     view(container);
@@ -67,6 +67,21 @@ describe('Y-TECH-05 critère 26 : bandeau, écran et « J’ai vu » du compte r
     // Bandeau durable avec le nombre d'éléments rétablis (« À jeter » ; « Test Pc », recréée, n'est pas comptée : ADR §29 point 5) et accès au détail.
     const banner = await screen.findByText(BANNER);
     expect(banner).toBeTruthy();
+
+    // Revue I3, « à chaque ouverture » : avant « J'ai vu », redémarrage simulé de B puis un cycle : le bandeau est de nouveau là, même texte.
+    const text = banner.textContent;
+    integration.dispose();
+    cleanup();
+    useAppStatusStore.setState({ sources: {} });
+    await s.b.restart();
+    syncFolders(devices);
+    await s.b.cycle();
+    expect(warningsOf(s)).toContain('carry-report');
+    container = containerOf(s);
+    integration = startSyncIntegration(container, NO_TIMERS);
+    await integration.refreshed();
+    view(container);
+    expect((await screen.findByText(BANNER)).textContent).toBe(text);
     fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
     expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'sync' });
 
