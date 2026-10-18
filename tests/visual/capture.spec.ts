@@ -596,6 +596,19 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // Même écran en clair : le contour du pouce creux du désactivé y est le plus discret (UI-FIX-01, question 4 de la fiche).
+    name: 'Onglets-Clair',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await page.getByRole('button', { name: /^Onglets : / }).click();
+      await expect(page.getByRole('heading', { name: 'Onglets' })).toBeVisible();
+      await page.getByRole('switch', { name: 'Afficher Routines', exact: true }).click();
+      await expect(page.getByRole('switch', { name: 'Afficher Routines', exact: true })).toHaveAttribute('aria-checked', 'false');
+    },
+  },
+  {
     // Réglages avec un compte Google connecté : la ligne « Agendas · Rappels Apple » dit « N agendas » en vert (Reglages.html : « Connectés · 2 listes »).
     name: 'Reglages-Agendas',
     mockup: 'Reglages.html',

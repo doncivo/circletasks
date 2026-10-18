@@ -42,7 +42,7 @@
 
 /*
  * Désactivé (ne répond pas) distinct d'éteint (répond) sans dépendre de la couleur : curseur « interdit », pouce creux (contour de 2 px,
- * sans remplissage) et opacité 0,5 (UI-FIX-01, critère d'Ali du 2026-10-18). Le contour du pouce d'un interrupteur activé garde la couleur
+ * sans remplissage, contour de la couleur du texte : le plus sombre en clair, le plus clair en sombre) et opacité 0,5 (UI-FIX-01, critère d'Ali du 2026-10-18). Le contour du pouce d'un interrupteur activé garde la couleur
  * de son pouce pour rester lisible sur la piste activée.
  */
 .ct-switch:disabled {
@@ -52,7 +52,7 @@
 
 .ct-switch:disabled .ct-switch__thumb {
   background: transparent;
-  border: 2px solid var(--ct-color-switch-off-thumb);
+  border: 2px solid var(--ct-color-text);
 }
 
 .ct-switch[data-checked='true']:disabled .ct-switch__thumb {

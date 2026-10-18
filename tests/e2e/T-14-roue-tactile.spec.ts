@@ -1,5 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { openToday } from './helpers/today';
+import { afterFirstFrames } from './helpers/frames';
 
 /**
  * T-14 correctif (séance iPhone 0.3.0) et N-02 : l'heure se pose par DÉFILEMENT de la roue « Heures » (chemin du doigt : scroll, pas clavier),
@@ -8,11 +9,6 @@ import { openToday } from './helpers/today';
  * plus de 90 ms au milieu (fin de défilement détectée, choix appliqué par le parent), puis la suite du geste. Projets `iphone` (Chromium) et
  * `iphone-webkit` (WebKit, moteur de l'iPhone, build de production).
  */
-/** Deux images affichées : le premier calage de chaque roue (à l'image qui suit son montage) est fait, un défilement qui suit est un geste. Attente d'état, pas un délai. */
-async function afterFirstFrames(page: Page): Promise<void> {
-  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
-}
-
 async function dragWheel(wheel: Locator, toIndex: number): Promise<void> {
   await afterFirstFrames(wheel.page());
   const viewport = wheel.locator('.ct-wheel__viewport');

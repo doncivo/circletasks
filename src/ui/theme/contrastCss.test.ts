@@ -21,12 +21,16 @@ import {
   toHex,
   type Color,
   type Theme,
-} from './cssContrastKit';
+} from '../../../tests/unit/theme/cssContrastKit';
 
 /**
  * UI-FIX-01 : contraste calculé sur les règles CSS réelles de `src/**\/*.css` (analyse statique, jsdom ne charge aucun CSS), dans les deux thèmes.
  * Trois mécanismes : (a) paires de même règle (texte + fond) à 4,5:1 ; (b) relations de composants désignées par sélecteur à 3:1 ;
- * (c) inventaire : tout jeton de couleur est dans une paire, une relation, ou la liste fermée des jetons décoratifs.
+ * (c) inventaire : tout jeton de couleur est dans une paire, une relation, la liste fermée des jetons décoratifs ou celle des reports.
+ *
+ * Ce que ce test prouve : le texte d'une règle contre SON PROPRE fond (160 règles par thème), quelques relations désignées à la main, et que
+ * chaque jeton de couleur a été classé. Ce qu'il ne prouve pas : voir « ANGLES MORTS » dans `tests/unit/theme/cssContrastKit.ts` (texte hérité,
+ * fond d'un parent, couleurs du TSX, opacité des ancêtres), renvoyés au balayage en navigateur réel après la 1.0.
  */
 const rules = loadRules();
 const fmt = (n: number): string => n.toFixed(2).replace('.', ',');
@@ -50,29 +54,33 @@ const EXEMPTIONS: readonly { relation: string; theme: Theme; raison: string }[] 
   {
     relation: 'interrupteur éteint : piste sur la surface',
     theme: 'light',
-    raison: 'maquette Reglages.html (.sw, #DDD9E4 sur blanc = 1,37:1) conservée, décision d’Ali du 2026-10-18 ; l’état se lit aussi à la position du pouce',
+    raison: 'maquette Reglages.html (.sw, #DDD9E4 sur blanc = 1,39:1) conservée, décision d’Ali du 2026-10-18 ; l’état se lit aussi à la position du pouce',
   },
   {
     relation: 'interrupteur éteint : pouce sur la piste',
     theme: 'light',
-    raison: 'même maquette : pouce blanc sur #DDD9E4 (1,37:1) ; l’état se lit aussi à la position du pouce',
+    raison: 'même maquette : pouce blanc sur #DDD9E4 (1,39:1) ; l’état se lit aussi à la position du pouce',
+  },
+  {
+    relation: 'interrupteur désactivé-éteint : contour du pouce creux sur la piste',
+    theme: 'light',
+    raison:
+      'contour du texte (2,61:1) à l’opacité 0,5 de la décision 9 sur la piste composée ; WCAG 1.4.11 exempte les composants inactifs ; avant revue : contour blanc, 1,17:1 ; à confirmer par Ali (question 4 de la fiche)',
+  },
+  {
+    relation: 'interrupteur désactivé-éteint : contour du pouce creux sur la piste',
+    theme: 'dark',
+    raison: 'contour du texte (2,72:1) à l’opacité 0,5 sur la piste composée ; mêmes raisons ; à confirmer par Ali (question 4 de la fiche)',
   },
 ];
 
 /** Jetons de couleur qui ne servent à aucune paire texte / fond ni relation : bordures, ombres, pastels d’onglets, remplissages, accents. */
 const DECORATIFS: Readonly<Record<string, string>> = {
   '--ct-color-border': 'filet de séparation des lignes et cartes ; l’information est portée par le texte et l’espacement',
-  '--ct-color-border-strong': 'contour des boutons secondaires et des champs ; le libellé porte l’information',
   '--ct-color-select-ring': 'anneau de sélection d’une pastille, redondant avec la coche',
   '--ct-color-warning-border': 'bordure de l’encadré « lecture incertaine » ; le texte de l’encadré est dans la paire warning-text / warning-bg',
   '--ct-color-space-pro': 'couleur de base de la pastille Pro, mélangée au blanc en sombre ; contraste testé par contrast.test.ts (pastilles d’espace)',
   '--ct-color-space-perso': 'couleur de base de la pastille Perso ; même test dans contrast.test.ts (pastilles d’espace)',
-  '--ct-color-icon-amber': 'icône Lucide qui accompagne un libellé ; contraste des icônes en thème sombre reporté avec le balayage après la 1.0',
-  '--ct-color-icon-blue': 'icône Lucide qui accompagne un libellé ; même report',
-  '--ct-color-icon-green': 'icône Lucide qui accompagne un libellé ; même report',
-  '--ct-color-icon-purple': 'icône Lucide qui accompagne un libellé (le texte et le badge de l’écran de verrouillage utilisent --ct-color-someday) ; même report',
-  '--ct-color-icon-red': 'icône Lucide qui accompagne un libellé ; même report',
-  '--ct-color-icon-skyblue': 'icône Lucide qui accompagne un libellé ; même report',
   '--ct-focus-track': 'rail de l’arc de progression de l’écran Focus ; le temps restant est en texte (paires --ct-focus-*)',
   '--ct-focus-arc-paused': 'arc de progression en pause ; le texte « En pause » porte l’état',
   '--ct-focus-border': 'bordure des boutons de l’écran Focus ; leur libellé porte l’information',
@@ -84,6 +92,20 @@ const DECORATIFS: Readonly<Record<string, string>> = {
   '--ct-stats-bar-current': 'barre de la semaine courante ; même raison',
   '--ct-stats-bar-empty': 'barre vide du graphique ; même raison',
   '--ct-swipe-shadow': 'ombre portée des actions de geste',
+};
+
+/**
+ * Jetons de couleur dont le contraste n'est PAS vérifié et qui ne sont pas décoratifs : reportés au balayage des écrans en navigateur réel
+ * après la 1.0 (décision d'Ali du 2026-10-18, question 2 de la fiche UI-FIX-01). Un report n'est pas une exemption : le défaut est connu.
+ */
+const REPORTES: Readonly<Record<string, string>> = {
+  '--ct-color-icon-amber': 'icône Lucide qui accompagne un libellé ; contraste en sombre non mesuré (jeton identique dans les deux thèmes)',
+  '--ct-color-icon-blue': 'icône Lucide qui accompagne un libellé ; contraste en sombre non mesuré (jeton identique dans les deux thèmes)',
+  '--ct-color-icon-green': 'icône Lucide qui accompagne un libellé ; contraste en sombre non mesuré (jeton identique dans les deux thèmes)',
+  '--ct-color-icon-purple': 'icône Lucide ; 2,00:1 en sombre sur --ct-color-surface-input (les deux règles de texte concernées sont corrigées, les icônes restent)',
+  '--ct-color-icon-red': 'icône Lucide qui accompagne un libellé ; contraste en sombre non mesuré (jeton identique dans les deux thèmes)',
+  '--ct-color-icon-skyblue': 'icône Lucide qui accompagne un libellé ; contraste en sombre non mesuré (jeton identique dans les deux thèmes)',
+  '--ct-color-border-strong': 'contour des boutons secondaires et des champs (WCAG 1.4.11 pour les champs) : non mesuré, à traiter avec le balayage',
 };
 
 /* ------------------------------------------------------------ relations */
@@ -132,7 +154,29 @@ const TOKEN_RELATIONS: readonly (readonly [fg: string, bg: string, min: number])
   ['--ct-color-someday', '--ct-color-someday-bg', 4.5],
 ];
 
+/** Couleur d'un élément du bouton désactivé : l'opacité du bouton (`.ct-switch:disabled`) est composée sur la surface. */
+function dimmed(located: Located, theme: Theme): Located {
+  const opacity = Number.parseFloat(declOf(rules, '.ct-switch:disabled', 'opacity', theme));
+  return { color: compose(located.color, opacity, surface(theme).color), tokens: located.tokens };
+}
+
 const RELATIONS: readonly Relation[] = [
+  {
+    label: 'interrupteur désactivé-éteint : contour du pouce creux sur la piste',
+    of: (t) => ({
+      fg: dimmed(colorOfDecl(rules, '.ct-switch:disabled .ct-switch__thumb', 'border', t), t),
+      bg: dimmed(cascadeColor(rules, [TRACK], 'background', t), t),
+    }),
+    min: 3,
+  },
+  {
+    label: 'interrupteur désactivé-activé : contour du pouce creux sur la piste',
+    of: (t) => ({
+      fg: dimmed(colorOfDecl(rules, `.ct-switch[data-checked='true']:disabled ${THUMB}`, 'border-color', t), t),
+      bg: dimmed(cascadeColor(rules, [TRACK, CHECKED_TRACK], 'background', t), t),
+    }),
+    min: 3,
+  },
   ...TOKEN_RELATIONS.map(
     ([a, b, min]): Relation => ({ label: `${a} sur ${b}`, of: (t) => ({ fg: resolveToken(t, a), bg: resolveToken(t, b) }), min }),
   ),
@@ -196,7 +240,7 @@ describe.each(THEMES)('paires de même règle, thème %s', (theme) => {
     }
   });
 
-  it('toute règle avec texte et fond atteint 4,5:1', () => {
+  it('toute règle qui porte son texte et son propre fond atteint 4,5:1 (hors angles morts du noyau)', () => {
     const failures = analysis.pairs.filter((p) => p.ratio < 4.5).map((p) => `${p.id} (${names[theme]}) : ${p.fg} sur ${p.bg} = ${fmt(p.ratio)}:1 (minimum 4,5:1)`);
     expect(failures).toEqual([]);
   });
@@ -309,9 +353,10 @@ describe('interrupteur désactivé et interrupteur éteint distinguables entre e
     expect(declOf(rules, '.ct-switch:disabled', 'cursor', 'light')).toBe('not-allowed');
   });
 
-  it('pouce creux à l’état désactivé : fond transparent, bordure de 2 px du jeton du pouce', () => {
+  it('pouce creux à l’état désactivé : fond transparent, bordure de 2 px (jeton du texte, ou du pouce activé)', () => {
     expect(declOf(rules, '.ct-switch:disabled .ct-switch__thumb', 'background', 'light')).toBe('transparent');
-    expect(declOf(rules, '.ct-switch:disabled .ct-switch__thumb', 'border', 'light')).toBe('2px solid var(--ct-color-switch-off-thumb)');
+    expect(declOf(rules, '.ct-switch:disabled .ct-switch__thumb', 'border', 'light')).toBe('2px solid var(--ct-color-text)');
+    expect(declOf(rules, ".ct-switch[data-checked='true']:disabled .ct-switch__thumb", 'border-color', 'light')).toBe('var(--ct-color-switch-on-thumb)');
   });
 
   it('Switch.css ne contient ni littéral de couleur ni repli de var()', () => {
@@ -348,13 +393,7 @@ describe('inventaire des jetons de couleur', () => {
   const used = new Set<string>();
   for (const theme of THEMES) {
     for (const p of analyzeRules(rules, theme).pairs) p.tokens.forEach((t) => used.add(t));
-    for (const rel of RELATIONS) {
-      try {
-        measure(rel, theme).tokens.forEach((t) => used.add(t));
-      } catch {
-        // relation encore sans règle : son propre test échoue, l'inventaire n'en dépend pas
-      }
-    }
+    for (const rel of RELATIONS) measure(rel, theme).tokens.forEach((t) => used.add(t));
     for (const [a, b] of [...TOKEN_PAIRS, ...GRAPHIC_TOKEN_PAIRS, ...FOCUS_TOKEN_PAIRS]) {
       for (const token of [a, b]) if (token in themeTokens(rules, theme)) resolveToken(theme, token).tokens.forEach((t) => used.add(t));
     }
@@ -366,13 +405,14 @@ describe('inventaire des jetons de couleur', () => {
   });
 
   it('chaque jeton de couleur est dans une paire, une relation ou la liste DECORATIFS', () => {
-    const unclassified = all.filter((t) => !used.has(t) && !(t in DECORATIFS));
+    const unclassified = all.filter((t) => !used.has(t) && !(t in DECORATIFS) && !(t in REPORTES));
     expect(unclassified).toEqual([]);
   });
 
-  it('chaque entrée de DECORATIFS existe encore et a une raison', () => {
-    const stale = Object.keys(DECORATIFS).filter((t) => !all.includes(t));
+  it('chaque entrée de DECORATIFS et de REPORTES existe encore, a une raison et n’est que dans une des deux listes', () => {
+    const stale = [...Object.keys(DECORATIFS), ...Object.keys(REPORTES)].filter((t) => !all.includes(t));
     expect(stale).toEqual([]);
-    for (const [token, raison] of Object.entries(DECORATIFS)) expect(raison.length, token).toBeGreaterThan(10);
+    expect(Object.keys(DECORATIFS).filter((t) => t in REPORTES)).toEqual([]);
+    for (const [token, raison] of [...Object.entries(DECORATIFS), ...Object.entries(REPORTES)]) expect(raison.length, token).toBeGreaterThan(10);
   });
 });

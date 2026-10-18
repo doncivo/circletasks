@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openSpacesScreen, projectsOf } from './helpers/spaces';
+import { afterFirstFrames } from './helpers/frames';
 import { createTask, openToday } from './helpers/today';
 
 /**
@@ -11,11 +12,6 @@ import { createTask, openToday } from './helpers/today';
  * interrupteur désactivé côte à côte (curseur, pouce creux, bordure, opacité), clic sans effet sur le désactivé, trois signatures de
  * style calculé deux à deux différentes.
  */
-
-/** Deux images affichées : les transitions d'entrée sont posées avant la lecture des styles. Attente d'état, pas un délai. */
-async function afterFirstFrames(page: Page): Promise<void> {
-  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
-}
 
 type Rgba = readonly [number, number, number, number];
 
@@ -100,8 +96,8 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect(toast).toBeVisible();
       await afterFirstFrames(page);
       const c = await computed(toast);
-      expect(ratio(parseRgba(c.color), parseRgba(c.background)), `texte ${c.color} sur ${c.background}`).toBeGreaterThanOrEqual(4.5);
-      if (scheme === 'dark') expect(ratio(parseRgba(c.color), parseRgba(c.background))).toBeGreaterThanOrEqual(17);
+      // Mêmes planchers que le test statique (contrastCss.test.ts) : 14:1 en clair, 17:1 en sombre.
+      expect(ratio(parseRgba(c.color), own(c)), `texte ${c.color} sur ${c.background}`).toBeGreaterThanOrEqual(scheme === 'dark' ? 17 : 14);
     });
 
     test('bouton principal de l’écran des espaces et projets : texte lisible (critère 13)', async ({ page }) => {
@@ -112,8 +108,7 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect(primary).toBeVisible();
       await afterFirstFrames(page);
       const c = await computed(primary);
-      expect(ratio(parseRgba(c.color), parseRgba(c.background)), `texte ${c.color} sur ${c.background}`).toBeGreaterThanOrEqual(4.5);
-      if (scheme === 'dark') expect(ratio(parseRgba(c.color), parseRgba(c.background))).toBeGreaterThanOrEqual(17);
+      expect(ratio(parseRgba(c.color), own(c)), `texte ${c.color} sur ${c.background}`).toBeGreaterThanOrEqual(scheme === 'dark' ? 17 : 14);
     });
 
     test('interrupteur activé : piste et pouce lisibles (critère 13)', async ({ page }) => {
@@ -141,30 +136,27 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect(locked).toHaveAttribute('aria-checked', 'true');
       await afterFirstFrames(page);
 
-      // Désactivé-éteint : copie du DOM d’un interrupteur éteint dont on pose l’attribut `disabled` (aucune page de démonstration dans l’app).
-      const lockedOff = await off.evaluateHandle((el) => {
-        const copy = el.cloneNode(true) as HTMLButtonElement;
-        copy.disabled = true;
-        copy.setAttribute('data-ui-fix-01-copy', 'true');
-        el.after(copy);
-        return copy;
-      });
-      const copy = page.locator('[data-ui-fix-01-copy]');
-      await expect(copy).toBeDisabled();
-
       const read = async (button: Locator) => {
         const b = await computed(button);
         const t = await computed(button.locator('.ct-switch__thumb'));
         const k = await computed(button.locator('.ct-switch__track'));
         return { cursor: b.cursor, opacity: b.opacity, thumbBackground: t.background, thumbBorder: t.borderWidth, track: k.background };
       };
-      const signatures = {
-        active: await read(active),
-        off: await read(off),
-        lockedOff: await read(copy),
-        locked: await read(locked),
-      };
-      await lockedOff.dispose();
+      // Les trois lectures des vrais interrupteurs se font AVANT la copie : elle porterait le même nom accessible (mode strict de getByRole).
+      const signatures = { active: await read(active), off: await read(off), locked: await read(locked) };
+
+      // Désactivé-éteint : copie du DOM d’un interrupteur éteint dont on pose l’attribut `disabled` (aucune page de démonstration dans l’app).
+      // La copie reçoit un nom accessible distinct et se désigne par son attribut, jamais par `getByRole`.
+      await off.evaluate((el) => {
+        const copy = el.cloneNode(true) as HTMLButtonElement;
+        copy.disabled = true;
+        copy.setAttribute('aria-label', 'Copie désactivée (test UI-FIX-01)');
+        copy.setAttribute('data-ui-fix-01-copy', 'true');
+        el.after(copy);
+      });
+      const copy = page.locator('[data-ui-fix-01-copy]');
+      await expect(copy).toBeDisabled();
+      const lockedOff = await read(copy);
 
       // Éteint actif : curseur main, pouce plein et opaque, sans bordure, opacité 1.
       expect(signatures.off.cursor).toBe('pointer');
@@ -172,15 +164,15 @@ for (const scheme of ['dark', 'light'] as const) {
       expect(signatures.off.thumbBorder).toBe('0px');
       expect(signatures.off.opacity).toBe('1');
       // Désactivé : curseur interdit, pouce creux, bordure de 2 px, opacité 0,5.
-      for (const state of [signatures.lockedOff, signatures.locked]) {
+      for (const state of [lockedOff, signatures.locked]) {
         expect(state.cursor).toBe('not-allowed');
         expect(parseRgba(state.thumbBackground)[3]).toBe(0);
         expect(state.thumbBorder).toBe('2px');
         expect(state.opacity).toBe('0.5');
       }
       // Trois états (activé, éteint, désactivé-éteint) : signatures deux à deux différentes.
-      const sig = (s: typeof signatures.off): string => JSON.stringify(s);
-      expect(new Set([sig(signatures.active), sig(signatures.off), sig(signatures.lockedOff)]).size).toBe(3);
+      const sig = (s: typeof lockedOff): string => JSON.stringify(s);
+      expect(new Set([sig(signatures.active), sig(signatures.off), sig(lockedOff)]).size).toBe(3);
     });
   });
 }

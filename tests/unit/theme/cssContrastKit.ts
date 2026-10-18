@@ -4,7 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Noyau du test de contraste par règles CSS réelles (UI-FIX-01) : lecteur de feuilles de style (analyse statique, sans dépendance), résolution
- * des jetons `var(--x, repli)` dans les deux thèmes, formule de contraste WCAG. Les tests (`contrast.test.ts`, `contrastCss.test.ts`) l'importent.
+ * des jetons `var(--x, repli)` dans les deux thèmes, formule de contraste WCAG. Les tests (`src/ui/theme/contrast.test.ts` et `contrastCss.test.ts`)
+ * l'importent. Ce fichier est un outil de test (il lit le disque) : il vit sous `tests/`, hors de `src/` et de la couverture.
+ *
+ * ANGLES MORTS (assumés, renvoyés au balayage en navigateur réel après la 1.0, décision d'Ali du 2026-10-18) : l'analyse compare le texte d'une
+ * règle à SON PROPRE fond, rien d'autre. Ne sont donc jamais vus : le texte hérité d'un parent et le texte posé sur un fond que porte un
+ * parent ou une règle voisine (270 règles avec texte sans fond propre, 104 avec fond `transparent` ou `none`) ; les règles qui posent un fond
+ * sans texte (case cochée, FAB, rail d'onglets...) ; les couleurs posées dans le TSX (`style={{ ... }}`) ; l'opacité des ancêtres ; les états
+ * (`:hover`, `:focus`) qui changent le fond sans changer le texte. Les relations par sélecteur et par jetons de `contrastCss.test.ts` n'en
+ * couvrent que quelques-uns, désignés à la main.
  */
 
 export type Theme = 'light' | 'dark';
@@ -157,7 +165,7 @@ export function parseCss(text: string, file: string): CssRule[] {
   return out;
 }
 
-export const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+export const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'src');
 
 function cssFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -396,9 +404,9 @@ export function declOf(rules: readonly CssRule[], selector: string, prop: string
   return value;
 }
 
-export function hasDecl(rules: readonly CssRule[], selector: string, prop: string): boolean {
+export function hasDecl(rules: readonly CssRule[], selector: string, prop: string, theme: Theme): boolean {
   const wanted = normalizeSelector(selector);
-  return rules.some((r) => r.selector === wanted && r.decls[prop] !== undefined);
+  return rules.some((r) => r.selector === wanted && appliesTo(r, theme) && r.decls[prop] !== undefined);
 }
 
 /** Couleur opaque d'une propriété (`background`, `color`) ou d'un raccourci (`outline`, `border`) d'une règle désignée, dans un thème. */
@@ -415,14 +423,17 @@ export function colorOfDecl(rules: readonly CssRule[], selector: string, prop: s
 
 /* ------------------------------------------------------- inventaire des jetons */
 
-/** Jetons `--ct-*` dont la valeur se résout en couleur dans au moins un thème (déclarés dans n'importe quelle feuille). */
+/** Valeur qui a la forme d'une couleur (même si le lecteur ne sait pas la résoudre) : un tel jeton doit être classé, jamais ignoré. */
+const LOOKS_LIKE_COLOR = /^(#[0-9a-f]{3,8}\b|(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\()/i;
+
+/** Jetons `--ct-*` dont la valeur se résout en couleur, ou en a la forme sans pouvoir être résolue, dans au moins un thème. */
 export function colorTokens(rules: readonly CssRule[]): string[] {
   const names = new Set<string>();
   for (const theme of THEMES) {
     const tokens = themeTokens(rules, theme);
-    for (const name of Object.keys(tokens)) {
+    for (const [name, value] of Object.entries(tokens)) {
       if (!name.startsWith('--ct-')) continue;
-      if (resolveColor(`var(${name})`, tokens).ok) names.add(name);
+      if (resolveColor(`var(${name})`, tokens).ok || LOOKS_LIKE_COLOR.test(value.trim())) names.add(name);
     }
   }
   return [...names].sort();
@@ -430,7 +441,7 @@ export function colorTokens(rules: readonly CssRule[]): string[] {
 
 /** Couleur d'une propriété selon la cascade réelle : la dernière règle de la liste (priorité croissante) qui la déclare l'emporte. */
 export function cascadeColor(rules: readonly CssRule[], selectors: readonly string[], prop: string, theme: Theme): { color: Color; tokens: string[] } {
-  for (const selector of [...selectors].reverse()) if (hasDecl(rules, selector, prop)) return colorOfDecl(rules, selector, prop, theme);
+  for (const selector of [...selectors].reverse()) if (hasDecl(rules, selector, prop, theme)) return colorOfDecl(rules, selector, prop, theme);
   throw new Error(`aucune règle de ${selectors.join(' | ')} ne déclare ${prop}`);
 }
 

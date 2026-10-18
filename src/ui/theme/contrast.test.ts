@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FOCUS_TOKEN_PAIRS, GRAPHIC_TOKEN_PAIRS, TOKEN_PAIRS, contrast, parseHex } from './cssContrastKit';
+import { FOCUS_TOKEN_PAIRS, GRAPHIC_TOKEN_PAIRS, TOKEN_PAIRS, contrast, parseHex } from '../../../tests/unit/theme/cssContrastKit';
 
 /**
  * P-02 critère 5 : contraste AA (4,5:1 pour le texte) des paires de jetons, en clair et en sombre, pastilles d'espace comprises
