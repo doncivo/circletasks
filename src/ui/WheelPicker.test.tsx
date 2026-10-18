@@ -59,11 +59,26 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
+    // Première image écoulée ; le défilement natif (élan iOS après pointercancel) arrive sans pointerdown : c'est un geste (T-14-FIX-02).
+    act(() => void vi.advanceTimersByTime(16));
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
     expect(onChange).not.toHaveBeenCalled(); // attend la fin du défilement
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
+  });
+
+  it('après la première image, un défilement sans doigt (élan iOS après pointercancel) est un geste : choix posé, scrollTop non recalé', () => {
+    const onChange = vi.fn();
+    render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
+    const viewport = screen.getByText('01').parentElement as HTMLElement;
+    act(() => void vi.advanceTimersByTime(16));
+    fireEvent.pointerCancel(viewport);
+    viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
+    fireEvent.scroll(viewport);
+    act(() => void vi.advanceTimersByTime(120));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 2 + 5);
   });
 
   it('grisée : ni clavier, ni toucher, ni défilement, annoncée désactivée', () => {
@@ -94,6 +109,8 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
+    // Première image écoulée ; le défilement natif (élan iOS après pointercancel) arrive sans pointerdown : c'est un geste (T-14-FIX-02).
+    act(() => void vi.advanceTimersByTime(16));
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
     act(() => void vi.advanceTimersByTime(120));
@@ -109,6 +126,8 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
+    // Première image écoulée ; le défilement natif (élan iOS après pointercancel) arrive sans pointerdown : c'est un geste (T-14-FIX-02).
+    act(() => void vi.advanceTimersByTime(16));
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
     act(() => void vi.advanceTimersByTime(120));
@@ -206,9 +225,23 @@ describe('WheelPicker : roue longue (rendu par fenêtre)', () => {
     expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
   });
 
+  it('T-14-FIX-02 : un défilement sans doigt avant la première image (calage de scroll-snap de WebKit sur la fenêtre) n’est pas un choix', () => {
+    const onChange = vi.fn();
+    render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={onChange} />);
+    // WebKit cale la roue neuve (scrollTop 0) sur la première rangée rendue (INDEX - RADIUS) et envoie `scroll` avant l'image du calage initial.
+    viewport().scrollTop = (INDEX - RADIUS) * WHEEL_ITEM_HEIGHT;
+    fireEvent.scroll(viewport());
+    runFrames();
+    expect(viewport().scrollTop).toBe(INDEX * WHEEL_ITEM_HEIGHT);
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('spinbutton', { name: 'Jours' })).toHaveAttribute('aria-valuenow', String(INDEX));
+  });
+
   it('un défilement du doigt avant la première image l’emporte sur le calage initial', () => {
     const onChange = vi.fn();
     render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={onChange} />);
+    fireEvent.pointerDown(viewport());
     viewport().scrollTop = 90 * WHEEL_ITEM_HEIGHT;
     fireEvent.scroll(viewport());
     runFrames();

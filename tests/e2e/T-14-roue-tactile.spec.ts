@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openToday } from './helpers/today';
 
 /**
@@ -8,7 +8,13 @@ import { openToday } from './helpers/today';
  * plus de 90 ms au milieu (fin de défilement détectée, choix appliqué par le parent), puis la suite du geste. Projets `iphone` (Chromium) et
  * `iphone-webkit` (WebKit, moteur de l'iPhone, build de production).
  */
+/** Deux images affichées : le premier calage de chaque roue (à l'image qui suit son montage) est fait, un défilement qui suit est un geste. Attente d'état, pas un délai. */
+async function afterFirstFrames(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+}
+
 async function dragWheel(wheel: Locator, toIndex: number): Promise<void> {
+  await afterFirstFrames(wheel.page());
   const viewport = wheel.locator('.ct-wheel__viewport');
   const itemHeight = 32;
   for (let i = 1; i <= toIndex; i += 1) {
@@ -67,6 +73,8 @@ test.describe('T-14 correctif : roue des heures au doigt, puis rappel (N-02)', (
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     const hours = dialog.getByRole('spinbutton', { name: 'Heures' });
     const viewport = hours.locator('.ct-wheel__viewport');
+    await expect(dialog).toBeVisible();
+    await afterFirstFrames(page);
     await viewport.evaluate((el) => {
       el.scrollTop = 6 * 32 + 12;
     });
