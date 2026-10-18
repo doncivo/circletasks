@@ -5,6 +5,8 @@ import type { DeviceId, TaskId } from '../../../src/domain/types';
 import { SyncPlatformError, type SyncDeviceStatus, type SyncPlatform, type SyncStatus } from '../../../src/platform/sync/types';
 import { createSyncService, HIDE_SYNC_DEADLINE_MS } from '../../../src/sync';
 import { epochId } from '../../../src/domain/sync/format';
+import { WAITING_ICLOUD_LONG_MS } from '../../../src/domain/sync/limits';
+import { t } from '../../../src/i18n';
 import { armCrash } from '../../sim/syncCrash';
 import { createSimDevice, pair, SCHEMA_VERSION, setupFirst, syncFolders, taskSnapshot, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
@@ -332,6 +334,27 @@ describe('Y-FIX-05 C11 et C12 : critère 5 côté PC, segment tronqué jamais cl
     expect(segments(b).map((f) => f.slice(-14))).toEqual(['j-00000001.ctj', 'j-00000002.ctj', 'j-00000003.ctj']);
     await expectPcUnblocked(a, b, 2);
     expect((await ids(a)).filter((id) => id === U_ID)).toHaveLength(1);
+  });
+
+  it('C13 : segment réellement resté dans le nuage (C5) : aucun saut, attente prolongée visible au bout de 24 h, segment listé en attente', async () => {
+    const { a, b } = await joined();
+    await b.cycle();
+    syncFolders([a, b]);
+    // Chez le PC, le segment 1 de l'iPhone reste dans le nuage : tout téléchargement échoue (plan de pannes, aucun délai).
+    const file = a.folder.devices.get(b.id)?.epochs.values().next().value?.segments.get(1) as unknown as { availability: string } | undefined;
+    if (!file) throw new Error('segment 1 absent chez le PC');
+    file.availability = 'cloud';
+    a.folder.armFaults({ name: 'Y-FIX-05 C13', faults: [{ id: 'stay-cloud', op: 'hydrate', file: `devices/${B_ID}/*/j-00000001.ctj`, nth: 1, times: 'all', effect: 'download-error' }] });
+    const first = await a.cycle();
+    expect(first.phase).toBe('waiting-icloud');
+    a.clock.advance(WAITING_ICLOUD_LONG_MS);
+    const later = await a.cycle();
+    expect(later.phase).toBe('waiting-icloud');
+    // Le segment attendu est listé (le moteur y ajoute aussi « appareil/époque » : double compte signalé dans la fiche, Écarts, hors périmètre).
+    expect(later.pendingFiles).toContain(`${B_ID.slice(0, 8)}/${epochId(1, A_ID as DeviceId)}/j-00000001.ctj`);
+    expect(statusLine(later, a.clock.nowMs())).toBe(t('sync.status.waitingIcloudLongWindows'));
+    expect(skipped(a)).toEqual([]);
+    expect(await ids(a)).not.toContain(T_ID);
   });
 });
 
