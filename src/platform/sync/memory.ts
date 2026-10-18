@@ -227,7 +227,7 @@ export class MemorySyncFolder {
   private faultCounters: FaultCounters | null = null;
   /** Suppressions acceptées mais non propagées, rendues après `left` appels de `advanceCycle()`. */
   private readonly resurrections: { readonly deviceId: string; readonly file: string; readonly copy: MemFile; left: number }[] = [];
-  /** Appels muets en suspens (promesse jamais résolue tant que le test ne la libère pas). */
+  /** Appels muets en suspens : libérés par le test (`releaseMuted`) ou rejetés `cloud-pending` après `MUTE_DEADLINE_TURNS` tours. */
   private readonly muted: MutedCall[] = [];
   /** Panne muette déclenchée pendant l'appel en cours (lue par l'enveloppe des appels de lecture, même si l'erreur a été avalée). */
   private muteHit: FaultEntry | null = null;
@@ -1026,8 +1026,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return file.availability === 'local';
   };
   /**
-   * Y-TECH-03 : appel de lecture enveloppé : une panne muette armée le met en suspens (promesse jamais résolue tant que le test ne la libère
-   * pas par `MemorySyncFolder.releaseMuted`), même si le signal a été avalé en chemin. Sans plan armé : l'appel tel quel.
+   * Y-TECH-03 : appel de lecture enveloppé : une panne muette armée le met en suspens, même si le signal a été avalé en chemin ; le test le
+   * libère par `MemorySyncFolder.releaseMuted`, sinon il est rejeté `cloud-pending` après `MUTE_DEADLINE_TURNS` tours de micro-tâche
+   * (échéance comptée, Y-IOS-05). Sans plan armé : l'appel tel quel.
    */
   const muteable =
     <A, R>(call: string, run: (arg: A) => Promise<R>) =>
