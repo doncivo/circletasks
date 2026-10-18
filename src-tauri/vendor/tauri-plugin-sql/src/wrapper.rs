@@ -79,8 +79,8 @@ impl DbPool {
         conn_url: &str,
         _app: &AppHandle<R>,
     ) -> Result<Self, crate::Error> {
-        // CircleTasks (SEC-01) : l'URL est contrôlée AVANT toute lecture de chemin, création de dossier ou de fichier.
-        crate::guard::validate_db_url(conn_url)?;
+        // CircleTasks (SEC-01) : le contrôle de l'URL est fait par `load` puis par `connect_in`, AVANT toute lecture de chemin (le dossier
+        // de données n'est demandé que par la fermeture `app_dir`, appelée après ce contrôle).
         #[cfg(feature = "sqlite")]
         let app_dir = || _app.path().app_config_dir().expect("No App config path was found!");
         #[cfg(not(feature = "sqlite"))]
