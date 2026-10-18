@@ -74,17 +74,25 @@ private final class CoordinationGuard {
   }
 
   /// Issue d'une coordination : le résultat du corps s'il existe (une annulation ne défait pas un corps commencé) ; sinon
-  /// `cloud-pending` si la garde a tiré ; sinon `io` (erreur de coordination sans garde, comme avant).
+  /// `cloud-pending` si la garde a tiré **et** que `coordinate` s'est terminé par l'annulation (`NSUserCancelledError`, ou sans erreur) ;
+  /// sinon `io` : erreur de coordination sans garde, comme avant, ou autre erreur arrivée en même temps que la garde (jamais une attente
+  /// d'iCloud inventée pour une vraie panne). Jamais le texte de l'erreur système.
   func settle<T>(_ outcome: Result<T, Error>?, _ error: NSError?) throws -> T {
     if let result = outcome {
       return try result.get()
     }
-    if fired {
+    if fired && CoordinationGuard.isCancellation(error) {
       throw Failure(code: .cloudPending)
     }
-    // Erreur de coordination sans garde (ou corps jamais exécuté) : `io`, jamais le texte de l'erreur système.
-    _ = error
     throw Failure(code: .io)
+  }
+
+  /// Fin de `coordinate` due à `cancel()` : `NSUserCancelledError` du domaine Cocoa, ou aucune erreur (corps jamais exécuté).
+  private static func isCancellation(_ error: NSError?) -> Bool {
+    guard let error = error else {
+      return true
+    }
+    return error.domain == NSCocoaErrorDomain && error.code == NSUserCancelledError
   }
 }
 

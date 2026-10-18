@@ -1137,7 +1137,7 @@ fn swift_guard_class() -> String {
 }
 
 /// Critère 15 : chacune des quatre coordinations arme la garde avant `coordinate`, la désarme au retour, et rend son issue par
-/// `settle` (résultat du corps, sinon `cloud-pending` si la garde a tiré, sinon `io`) ; la garde appelle `coordinator.cancel()` après
+/// `settle` (résultat du corps, sinon `cloud-pending` si la garde a tiré et que `coordinate` a fini par l'annulation, sinon `io`) ; la garde appelle `coordinator.cancel()` après
 /// `coordinationGuardSeconds` par un `DispatchWorkItem`, sous verrou. Garde factorisée (une classe, quatre usages) : écart noté à la fiche.
 #[test]
 fn y_ios_05_15_every_coordination_is_guarded_and_cancelled() {
@@ -1146,9 +1146,14 @@ fn y_ios_05_15_every_coordination_is_guarded_and_cancelled() {
         assert!(guard.contains(piece), "CoordinationGuard : {piece}");
     }
     let settle = &guard[guard.find("func settle<T>(").expect("settle")..];
-    let (result, pending, io) = (settle.find("return try result.get()").unwrap(), settle.find("if fired {").unwrap(), settle.find("throw Failure(code: .io)").unwrap());
+    let (result, pending, io) = (settle.find("return try result.get()").unwrap(), settle.find("if fired && CoordinationGuard.isCancellation(error) {").expect("cloud-pending : garde tirée et annulation"), settle.find("throw Failure(code: .io)").unwrap());
     assert!(result < pending && pending < io, "ordre : résultat du corps, puis cloud-pending si la garde a tiré, puis io");
     assert!(settle[pending..io].contains("throw Failure(code: .cloudPending)"));
+    // Revue S2 : l'erreur de `coordinate` décide ; seule l'annulation (ou aucune erreur) après la garde donne `cloud-pending`.
+    let cancellation = &settle[settle.find("private static func isCancellation(_ error: NSError?) -> Bool {").expect("isCancellation")..];
+    assert!(cancellation.contains("guard let error = error else {\n      return true\n    }"), "aucune erreur : annulation");
+    assert!(cancellation.contains("return error.domain == NSCocoaErrorDomain && error.code == NSUserCancelledError"));
+    assert!(!settle.contains("_ = error"), "paramètre error employé");
     let code = swift_code();
     assert_eq!(code.matches("coordinator.cancel()").count(), 1, "cancel() seulement dans la garde");
     assert_eq!(code.matches("CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)").count(), 4);
