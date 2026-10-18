@@ -127,6 +127,8 @@ Fichier `tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, branche `or
 - La reprise suppose que `own.json` de Rust a été persisté après l'ajout ; sinon (arrêt entre l'ajout et la persistance), le fichier existe mais Rust ne le connaît pas : Rust refuse l'état, `inflight` est remis à nul, la file est gardée et le cycle suivant bute sur `segment-mismatch` puis ouvre le segment `max + 1`. Le segment 1 reste en doublon partiel côté lecteurs : sans perte, application idempotente par hlc. Cas à confirmer au critère 3 (P2).
 - Un fichier non expliqué (déposé par un tiers, reste d'une autre époque) garde le blocage actuel, visible mais sans action ; une intention d'ajout éventuelle reste posée, sans être résolue, tant que la publication est refusée (revue B1).
 - Le cas « état supprimé après publication » n'est pas rouvert (Question 1).
+- **Refus mal attribués (revue M2).** Un refus de Rust pour une autre raison que la tête (numéro d'état, `reset`, `forgotten`) est lu par `resolveInflight` comme « ajout manqué » : la file est gardée et republiée ; le doublon est sans perte, appliqué une seule fois grâce au hlc. Ce comportement existait déjà ; avec l'option (a) de B1, il ne s'applique de nouveau que si la publication est permise.
+- **Appareil illisible sans cause nommée (revue M4, cas (g) de la table de la règle).** Seul l'avertissement générique `publish-blocked` s'affiche, sans cause nommée dans Détails. Accepté comme limite.
 
 ## Écarts
 
@@ -190,7 +192,7 @@ Revue de code du 2026-10-18 : « à corriger ». Un commit par point ; bundle de
 | **M1** : refus `openedHere` nommé `first-publication-state-refused` | `32b15d60` | `src/sync/publishDeferred.test.ts` ; sans le correctif : `AssertionError: expected { …(2) } to deeply equal { reason: 'state-refused', …(1) }` | 358 273 (variation dans le nom haché du bloc cité par `main`) |
 | **M3** : échec de chargement du bloc `orphanEpoch` | `4749da34` | `tests/unit/sync/firstPublicationLoadFailure.test.ts` : borne (P3) et reprise d'`inflight` (P1) : phase `error`, code `io`, jamais « À jour », intention et file gardées ; `publish-blocked` n'est pas levé (l'erreur passe avant), accepté par la revue. Aucun changement de code | 358 273 |
 | **M5** : objet `facts` sur plusieurs lignes | `1813cd07` | mise en forme seule | 358 273 |
-| **M2, M4** | non appliqués | contenu non transmis à l'agent dans la demande de correction : à reporter ici | - |
+| **M2, M4** | notés dans « Limites assumées » (refus mal attribués ; appareil illisible sans cause nommée), sans code | - | 358 273 |
 
 Commandes après la revue : `CT_TEST_WORKERS=1 npx vitest run src/sync src/domain/sync tests/unit/sync src/features/sync src/i18n tests/bundle --coverage.enabled=false` : 204 fichiers, 2 332 tests verts, 2 dépassements de 5 s dans `tests/unit/sync/epochCarryReportRules.test.ts` (instabilité déjà constatée sur le code de référence, voir Écarts ; fichier relancé seul : 20/20 vert ; délai non allongé) ; `npm run lint` et `npm run typecheck` verts.
 
