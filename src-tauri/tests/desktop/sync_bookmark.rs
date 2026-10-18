@@ -1033,6 +1033,67 @@ fn y_ios_05_12_the_place_is_reserved_before_sending() {
     assert!(deadline.wait_abandoned(0, GUARD));
 }
 
+/// Aiguillage de test (revue I2) : la première commande désignée passe par un `DeadlineTransport` à échéance nulle (abandonnée de façon
+/// déterministe), toutes les autres par un second à échéance large (aucune course avec l'échéance nulle). Aucun comportement de fichier
+/// propre : les deux décorateurs enveloppent le même `MutedTransport`.
+struct FirstCallRouted {
+    command: &'static str,
+    first: Arc<DeadlineTransport>,
+    rest: Arc<DeadlineTransport>,
+    used: std::sync::atomic::AtomicBool,
+}
+
+impl BookmarkTransport for FirstCallRouted {
+    fn call(&self, command: &str, args: Value) -> Result<Value, String> {
+        if command == self.command && !self.used.swap(true, Ordering::SeqCst) {
+            return self.first.call(command, args);
+        }
+        self.rest.call(command, args)
+    }
+}
+
+/// Revue I2 (critère 12, ADR 0011 §32 point 3) : un `append` muet, abandonné à l'échéance puis libéré, écrit quand même (le faux répond
+/// tard). La réponse est jetée, l'effet sur le disque reste : l'ajout suivant du store au même endroit rend `segment-mismatch` sans rien
+/// écrire (même chemin qu'un arrêt brutal après l'écriture), le segment abandonné ne porte qu'un enregistrement, et l'ajout au segment
+/// suivant aboutit. Aucun enregistrement n'est écrit deux fois dans le segment.
+#[test]
+fn y_ios_05_12_late_append_effect_is_caught_by_segment_mismatch() {
+    use circletasks_lib::sync::service::AppendRequest;
+    let p = phone();
+    p.choose();
+    p.core.key_create().unwrap();
+    p.core.bind_device(DEV_A).unwrap();
+    p.core.scan(&[]).unwrap();
+    let (transport, release) = MutedTransport::new(p.plugin.clone(), Some("append"));
+    let first = Arc::new(DeadlineTransport::with_limits(transport.clone(), zero()));
+    let rest = Arc::new(DeadlineTransport::with_limits(transport.clone(), wide()));
+    let routed = Arc::new(FirstCallRouted { command: "append", first: first.clone(), rest, used: std::sync::atomic::AtomicBool::new(false) });
+    let now = p.clock.clone();
+    let (core, _backend) = ios_core(p.base.path().to_path_buf(), routed, p.vault.clone(), FakeUi::new(), Arc::new(move || now.load(Ordering::SeqCst)));
+    let ep = epoch(1, DEV_A);
+    let request = |segment: u64, ms: u64| AppendRequest { epoch: ep.clone(), segment, expect_records: 0, sv: 14, max_hlc: crate::sync_support::hlc(ms, DEV_A), records: vec!["{}".to_owned()] };
+    let segment1 = ["devices", DEV_A, ep.as_str(), "j-00000001.ctj"];
+    let records = |path: &[&str]| p.plugin.get(path).map(|bytes| String::from_utf8(bytes).unwrap().lines().count() - 1);
+    // L'ajout muet : abandonné à l'échéance, rien encore écrit.
+    assert_eq!(code(core.append_journal(&request(1, 10))), SyncCode::CloudPending);
+    assert_eq!(first.abandoned(), 1);
+    assert_eq!(records(&segment1), None);
+    // Réponse tardive : le faux écrit, la réponse est jetée.
+    release.0.send(()).unwrap();
+    assert!(first.wait_abandoned(0, GUARD));
+    assert_eq!(records(&segment1), Some(1), "l'appel abandonné a écrit");
+    drop(release);
+    // Même ajout au cycle suivant (la tête du store n'a pas bougé) : segment-mismatch, rien d'écrit.
+    assert_eq!(code(core.append_journal(&request(1, 10))), SyncCode::SegmentMismatch);
+    assert_eq!(records(&segment1), Some(1), "aucun enregistrement écrit deux fois dans le segment");
+    // Le moteur passe au segment suivant.
+    let next = core.append_journal(&request(2, 20)).unwrap();
+    assert_eq!(next.first_record, 0);
+    assert_eq!(records(&["devices", DEV_A, ep.as_str(), "j-00000002.ctj"]), Some(1));
+    assert_eq!(records(&segment1), Some(1));
+    assert_eq!(transport.commands().iter().filter(|c| *c == "append").count(), 2, "un append abandonné, un append au segment suivant");
+}
+
 /// Critère 13 : l'échéance inscrit `bookmark-call-timeout` avec le seul nom de la commande ; aucune ligne ne porte un chemin, un nom de
 /// fichier, un signet ou un argument.
 #[test]
