@@ -51,7 +51,8 @@ export async function startFirstCycleGate(sync: SyncEngineService, platform: Syn
     // Conclu : plus de cycle en cours, et l'état a changé depuis le démarrage (heure de dernière synchro, ou phase d'échec).
     if (status.phase === 'syncing' || status.progress !== null) return;
     if (status.lastSyncAt === initial.lastSyncAt && status.phase === initial.phase) return;
-    close(status.lastSyncAt === initial.lastSyncAt ? 'failed' : 'done');
+    // Réussi seulement si le cycle est complet (phase idle) et a daté la synchro ; fichiers iCloud en attente (waiting-icloud) ou échec : failed.
+    close(status.phase === 'idle' && status.lastSyncAt !== initial.lastSyncAt ? 'done' : 'failed');
   });
   const timer = timers.setTimeout(() => close('timeout'), FIRST_CYCLE_GATE_MS);
   function close(result: GateOutcome): void {

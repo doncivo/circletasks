@@ -100,6 +100,24 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
     expect(timers.clearTimeout).toHaveBeenCalled(); // la minuterie est retirée à l'ouverture
   });
 
+  it('B1 : fichiers iCloud en attente (waiting-icloud, ancienne heure de synchro) : le report part, le nettoyage ne tourne pas ; cycle réussi : il tourne', async () => {
+    const { env } = fakeEnv(timers);
+    const startup = startAppStartup(container(), env);
+    toDispose.push(startup);
+    await startup.ready;
+    sync.setStatus({ phase: 'waiting-icloud', lastSyncAt: '2026-09-20T10:00:00.000Z' as never });
+    await startup.firstCheck;
+    expect(await late()).toMatchObject({ carriedOver: true });
+    expect(await db.data.repos.sync.getMeta('recurrenceDedup')).toBeNull();
+
+    const second = startAppStartup(container(), fakeEnv(fakeTimers()).env);
+    toDispose.push(second);
+    await second.ready;
+    sync.setStatus({ phase: 'idle', lastSyncAt: '2026-09-23T10:00:00.000Z' as never });
+    await second.firstCheck;
+    expect(await db.data.repos.sync.getMeta('recurrenceDedup')).not.toBeNull();
+  });
+
   it('critère 6 : un cycle en cours (phase syncing, progression) n’ouvre pas la porte', async () => {
     const { env } = fakeEnv(timers);
     const startup = startAppStartup(container(), env);
