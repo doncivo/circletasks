@@ -26,7 +26,8 @@ export async function placeOccurrence(repos: Repositories, source: Task, date: L
   let taskId = await occurrenceTaskId(source.recurrenceId as NonNullable<Task['recurrenceId']>, seriesIndex);
   if (await purged('task', taskId)) taskId = uuidGenerator.next() as TaskId;
   const known = await repos.tasks.getById(taskId, { includeDeleted: true });
-  if (known && known.seriesIndex !== UNDONE_OCCURRENCE_INDEX) return null;
+  // M2 : seule une ligne supprimée ET annulée (-1) est ressuscitée ; une -1 restaurée à la main garde les modifications de l'utilisateur.
+  if (known && (known.deletedAt === null || known.seriesIndex !== UNDONE_OCCURRENCE_INDEX)) return null;
   const offsets = (await repos.reminders.listForTarget({ type: 'task', id: source.id })).map((r) => r.offsetMin);
   // `buildNextOccurrence` demande un identifiant par rappel, dans l'ordre des avances : calculés d'avance (le calcul est asynchrone).
   const reminderIds = await Promise.all(offsets.map(async (offset) => {

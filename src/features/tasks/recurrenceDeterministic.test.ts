@@ -153,6 +153,16 @@ describe('résurrection et corbeille (T-TECH-01 critères 4 et 5)', () => {
     expect((await series(db, true)).filter((t) => t.id === live[0]?.id)).toHaveLength(1);
   });
 
+  it('M2 : une ligne annulée (-1) restaurée à la main garde les modifications de l’utilisateur, elle n’est pas réécrite', async () => {
+    await useCases.complete(FIRST);
+    const nextId = await occurrenceTaskId(RULE_ID, 1);
+    await undo.undoLast();
+    await db.data.repos.tasks.restore([nextId]);
+    await db.data.repos.tasks.update(nextId, { note: 'modifiée par l’utilisateur' });
+    await useCases.complete(FIRST);
+    expect(must(await db.data.repos.tasks.getById(nextId))).toMatchObject({ note: 'modifiée par l’utilisateur', deletedAt: null });
+  });
+
   it('critère 5 : une occurrence mise à la corbeille à la main (index conservé) n’est pas recréée', async () => {
     db.clock.set(local(8, 24, 8));
     const [next] = await createRecurrenceUseCases(depsOf(db)).generateDue();
