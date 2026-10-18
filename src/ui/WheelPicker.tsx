@@ -126,6 +126,10 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
   );
 
   function handleScroll(): void {
+    // T-14-FIX-02 : tant que le premier calage attend son image, un `scroll` sans doigt posé n'est pas un geste. WebKit cale la roue neuve
+    // (scrollTop 0) sur la rangée rendue la plus proche (début de la fenêtre) et envoie cet événement avant l'image : pris pour un geste, il
+    // supprimait le calage initial et fixait le choix sur ce bord (la roue des jours s'ouvrait 40 jours avant aujourd'hui).
+    if (frame.current !== null && !touching.current) return;
     userScrolled.current = true;
     if (disabled) return;
     if (long) {

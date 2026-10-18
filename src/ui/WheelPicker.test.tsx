@@ -59,8 +59,11 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
+    // Le doigt pose la roue : un défilement avant la première image n'est un geste que s'il y a un doigt (T-14-FIX-02).
+    fireEvent.pointerDown(viewport);
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
+    fireEvent.pointerUp(viewport);
     expect(onChange).not.toHaveBeenCalled(); // attend la fin du défilement
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
@@ -94,8 +97,11 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
+    // Le doigt pose la roue : un défilement avant la première image n'est un geste que s'il y a un doigt (T-14-FIX-02).
+    fireEvent.pointerDown(viewport);
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
+    fireEvent.pointerUp(viewport);
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
     rerender(<WheelPicker label="Heures" items={items} index={2} onChange={onChange} />);
@@ -109,8 +115,11 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
+    // Le doigt pose la roue : un défilement avant la première image n'est un geste que s'il y a un doigt (T-14-FIX-02).
+    fireEvent.pointerDown(viewport);
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
+    fireEvent.pointerUp(viewport);
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
     rerender(<WheelPicker label="Heures" items={items} index={1} onChange={onChange} />);
