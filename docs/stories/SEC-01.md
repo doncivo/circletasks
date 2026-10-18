@@ -1,6 +1,6 @@
 # SEC-01 — Plugin SQL fermé : une seule base, ni ATTACH ni VACUUM INTO (bloquant B7)
 
-Module : M16 Sécurité (technique, sans équivalent au PRD : écart à noter dans docs/decisions.md) · Ordre de construction : palier 1.0, **étape 5** (après T-TECH-01) · Agents : **desktop-tauri** (code Rust du plugin vendu, tests Rust) + **security-privacy** (revue de la liste des refus, audit de clôture) · Relecture : code-reviewer · Estimation : **5 h** (alerte à Ali et arrêt si le réel dépasse **7,5 h**, soit +50 %) · Statut : **fiche écrite, à développer**
+Module : M16 Sécurité (technique, sans équivalent au PRD : écart à noter dans docs/decisions.md) · Ordre de construction : palier 1.0, **étape 5** (après T-TECH-01) · Agents : **desktop-tauri** (code Rust du plugin vendu, tests Rust) + **security-privacy** (revue de la liste des refus, audit de clôture) · Relecture : code-reviewer · Estimation : **5 h** (alerte à Ali et arrêt si le réel dépasse **7,5 h**, soit +50 %) · Statut : **développée le 2026-10-18 (3 commits de code), en attente de relecture, de la CI « suite verte » et de l’audit `security-privacy`**
 Origine : `docs/audit-1.0.md`, ligne B7 (bloquant, « Sécurité »). Règles d'Ali (docs/decisions.md, 2026-10-17) : test rouge avant et vert après, jamais de test désactivé ni allongé, aucun échec silencieux.
 Dépend de : rien d'ouvert. Touche : `src-tauri/vendor/tauri-plugin-sql/src` (`wrapper.rs`, `commands.rs`, `error.rs`, `Cargo.toml`), `src-tauri/Cargo.toml` et `Cargo.lock` si une dépendance directe est ajoutée, `src-tauri/src/startup_gate.rs` (câblage du journal), `src-tauri/tests`. **Ne touche pas le bundle de départ** (Rust), sauf si `src/db` change : la fiche l'interdit (voir critère 15).
 
@@ -86,21 +86,112 @@ Découpage : 1 + 1 + 1,5 + 1 + 0,5 = 5 h.
 - Règle d'Ali : arrêt et alerte si l'estimation dérape de plus de 50 % (au-delà de 7,5 h).
 - Clôture refusée si un critère manque : le product-owner vérifie les 17 critères avant « fait ».
 
-## Preuves (à remplir)
+## Preuves
+
+Branche `sec-01-plugin-sql-ferme`, depuis `main` 81e3a0ac. Aucun push, aucune PR.
 
 | Élément | Valeur |
 |---|---|
-| Rouge avant : commit et message d'échec exact des critères 2, 3, 4, 5, 7, 8, 9 sur `main` | |
-| Vert après : commit | |
-| Vérification : aucun code d'autorisation pour `VACUUM` dans la documentation SQLite (lien ou citation) | |
-| Voie retenue pour poser l'autorisateur (`after_connect` + `libsqlite3-sys` 0.30.1) | |
-| Voie retenue pour le critère 11 (migrations rejouées sur le pool Rust) | |
-| Recherche du critère 15 (résultat) | |
-| Commandes locales du module (date, tests) | |
-| CI « suite verte » (branche, run) | |
-| Audit `security-privacy` (date, conclusion) | |
+| Rouge avant : commit et message d'échec exact des critères 2, 3, 4, 5, 7, 8, 9 | Commit `e373bab7` (« tests rouges du plugin SQL fermé », bouchon `validate_db_url` qui accepte tout). `cargo test -p tauri-plugin-sql --features sqlite` : 10 échecs par assertion, 7 réussites (non-régression : critères 1, 3 légitime, 7 littéraux, 10). Messages exacts ci-dessous. |
+| Vert après : commit | `ca304e1b` (URL, limite, autorisateur, filtre `VACUUM` : les 10 tests rouges passent, 22 tests du plugin verts), puis `7354e5ff` (journal `sql-refused`, rejeu des instructions du front, deux pragmas internes de SQLite), puis le commit de documentation. |
+| Vérification : aucun code d'autorisation pour `VACUUM` dans la documentation SQLite | Vérifié le 2026-10-18 sur https://sqlite.org/c3ref/c_alter_table.html (« Authorizer Action Codes ») : la page liste 33 codes, de `SQLITE_CREATE_INDEX` (1) à `SQLITE_RECURSIVE` (33), dont `SQLITE_ATTACH` (24), `SQLITE_DETACH` (25), `SQLITE_PRAGMA` (19), `SQLITE_CREATE_VTABLE` (29), `SQLITE_FUNCTION` (31) ; le mot « vacuum » n'y figure pas (recherche par `curl` sur le texte de la page : 0 occurrence). Le filtre lexical (D4) est donc nécessaire. Constat en plus, prouvé par test : `VACUUM INTO` attache sa cible, donc la limite `SQLITE_LIMIT_ATTACHED = 0` le bloque déjà (`sec01_6_the_limit_alone_blocks_attach_and_vacuum_into` : autorisateur retiré et filtre contourné par un appel direct de sqlx). |
+| Voie retenue pour poser l'autorisateur | `SqlitePoolOptions::after_connect` de sqlx 0.8.6, puis `LockedSqliteHandle::as_raw_handle()`, puis `sqlite3_limit` et `sqlite3_set_authorizer` de `libsqlite3-sys` 0.30.1 (dépendance directe optionnelle du plugin vendu, liée à la fonctionnalité `sqlite`, déjà verrouillée : `Cargo.lock` gagne une seule ligne, aucune nouvelle bibliothèque). Tout le `unsafe` est dans `vendor/tauri-plugin-sql/src/guard.rs` (fonction de rappel, limite, pose de l'autorisateur, appel depuis `after_connect`), chaque bloc commenté. Les pragmas de connexion de sqlx (`journal_mode = WAL`, `foreign_keys = ON`) sont posés avant l'autorisateur. |
+| Voie retenue pour le critère 11 | Vitest génère, Rust rejoue : `tests/unit/sqlFrontReference.test.ts` enregistre toutes les instructions SQL (et paramètres) que `migrate()` envoie à un pilote réel (table de suivi, 19 migrations) dans `src-tauri/tests/fixtures/front-sql.json` (fichier généré ; le test Vitest échoue s'il est périmé ; régénération : `CT_UPDATE_SQL_REFERENCE=1`). `guard_tests.rs::sec01_11_every_statement_the_front_sends_passes_the_closed_plugin` les rejoue sur un pool à autorisateur actif. Le rejeu a trouvé deux pragmas internes de SQLite (Écarts, point 3). |
+| Recherche du critère 15 | Faite le 2026-10-18 sur `src` et `tests` : `ATTACH`, `DETACH`, `VACUUM`, `load_extension`, `readfile`, `writefile`, `fts3_tokenizer` (mots entiers, casse ignorée). Aucune instruction SQL ; seulement `VACUUM` dans des commentaires (`src/platform/backup/tauriBackup.ts:82,87`, `src/platform/tauri/migrationBackup.ts:13`) et des homonymes sans rapport (`detach` / `attach` : liens de tâches Apple Rappels, `testInfo.attach` de Playwright, `GoalAttachSwitch`, `useFocusTrap`). Pragmas du front : `foreign_keys = ON`, `journal_mode` (lecture et `= WAL`), `wal_checkpoint(TRUNCATE)`, rien d'autre. Aucun fichier de `src/` modifié (bundle de départ inchangé ; `npm run test:bundle` non relancé). |
+| Commandes locales du module (2026-10-18) | `cargo test -p tauri-plugin-sql --features sqlite --locked` : 24 tests et 1 doctest, tous verts. `cargo test --locked --features test-hooks --test desktop` (cible partagée) : 800 réussis, 0 échec, 2 ignorés (préexistants, par exemple `sync_crypto::print_rust_sealed`). `cargo clippy -p tauri-plugin-sql --features sqlite --all-targets --locked` et sans la fonctionnalité : aucun avertissement. `cargo clippy --locked --features test-hooks --all-targets` sur le programme : 8 à 9 avertissements, tous préexistants et hors des fichiers de la story (`src/backup.rs` ×7, `src/sync/mod.rs`, tests `export`, `sync_fixes`, `sync_qa_crypto`, `sync_fs_conformance`, `fake_bookmark`, `ocr_vision`, `applog`) : non corrigés ici, à traiter dans une story à part ; aucun dans `startup_gate.rs`, `lib.rs`, `sql_closed.rs` ni dans le plugin. `npx vitest run tests/unit/sqlFrontReference.test.ts` vert ; `npx eslint` du fichier et `npx tsc --noEmit` propres. |
+| CI « suite verte » (branche, run) | À faire après le push d'Ali (aucun push fait). |
+| Audit `security-privacy` (date, conclusion) | À rendre à la clôture (préparation : « Surfaces vérifiées » ci-dessous). |
 
-## Écarts (vide)
+### Messages d'échec exacts du commit rouge `e373bab7`
+
+```
+sec01_2 : validate_db_url("sqlite:C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\x.db") : refus `url` attendu, mais le plugin a accepté
+sec01_3 : connect_in("sqlite:C:\\...\\target\\db-load-xxxx\\escaped.db") : refus `url` attendu, mais le plugin a accepté
+sec01_4 : execute (attach-database) : refus `attach` attendu, autre erreur obtenue : error returned from database: (code: 14) unable to open database: ...\stolen-attach-database.db
+sec01_4 (fichier existant) : execute ATTACH d'un fichier existant : refus `attach` attendu, mais le plugin a accepté
+sec01_5 : select (plain) : refus `attach` attendu, autre erreur obtenue : error returned from database: (code: 14) unable to open database: ...
+sec01_6 : execute DETACH DATABASE x : refus `attach` attendu, autre erreur obtenue : error returned from database: (code: 1) no such database: x
+sec01_6 : assertion `left == right` failed: SQLITE_LIMIT_ATTACHED doit valoir 0 / left: 10 / right: 0
+sec01_7 : execute (vacuum-into) : refus `vacuum` attendu, mais le plugin a accepté
+sec01_8 : execute "PRAGMA writable_schema = 1" : refus `pragma` attendu, mais le plugin a accepté
+sec01_9 : select load_extension : refus `function` attendu, autre erreur obtenue : error returned from database: (code: 1) not authorized
+```
+
+Le critère 1, l'ouverture légitime du critère 3, l'absence de faux refus de `VACUUM` (critère 7, littéral) et la non-régression (critère 10 : instructions du front, table `fts5`) passent sur le commit rouge, comme attendu. Les tests du journal (critère 14) et du rejeu des migrations (critère 11) sont écrits avec le correctif : le crochet de journal n'existait pas, et le rejeu n'a de sens qu'avec l'autorisateur actif.
+
+## Écarts
+
+Hypothèses prises pour les « Questions à Ali » (recommandations du product-owner appliquées, à confirmer par Ali) : (1) dépendance directe `libsqlite3-sys` et bloc `unsafe` acceptés ; (2) liste blanche stricte de pragmas ; (3) aucun contrôle des chemins de `backup.rs` dans cette story ; (4) ordre du plan d'Ali gardé (étape 5).
+
+1. **`ATTACH` d'un fichier absent échouait déjà.** Le constat de l'audit et de la fiche (« `ATTACH ... AS x` puis `CREATE TABLE x.t` écrit un fichier arbitraire ») est inexact tel quel : sqlx ouvre la base principale sans `SQLITE_OPEN_CREATE`, donc l'`ATTACH` d'un fichier absent répond « unable to open database ». Le danger réel est l'`ATTACH` d'un fichier SQLite **existant** (lecture et écriture d'une autre base) ; un test l'exerce (`sec01_4_attaching_an_existing_foreign_database_is_refused_and_not_written`), en plus des formes de la fiche. `VACUUM INTO` créait bien un fichier (rouge prouvé : « le plugin a accepté »). `load` créait bien des fichiers n'importe où (`Sqlite::create_database`).
+2. **Code d'erreur de repli `auth`.** La fiche liste six codes ; un septième, `auth`, est renvoyé si SQLite répond « not authorized » sans qu'aucune raison n'ait été notée par l'autorisateur (ne devrait pas arriver). Il est journalisé comme les autres.
+3. **Deux pragmas de plus dans la liste blanche, en lecture seule, trouvés par le rejeu des migrations (critère 11).** `data_version` (émis par le module `fts5` lui-même à la création de `search_index`, migration 0011) et `quick_check` (émis par SQLite pour `ALTER TABLE ... ADD COLUMN ... CHECK`, migration 0018, sous la forme `pragma_quick_check(table, main)`). Sans eux, l'ouverture de toute base neuve ou à migrer échouait avec `sql-refused: pragma`. La liste blanche passe de trois à cinq pragmas ; aucun n'écrit. À relire par `security-privacy`.
+4. **Permissions Tauri sans portée (vérifié).** Les permissions du plugin (`vendor/tauri-plugin-sql/permissions`) sont par commande, « without any pre-configured scope » : aucune portée sur les arguments, la défense reste dans le code vendu. `capabilities/default.json` inchangé (D6).
+5. **`DbPool::execute`, `select`, `close` et `LastInsertId` deviennent publics** (le test du journal vit dans `tests/desktop`, hors du crate du plugin). Aucune commande Tauri nouvelle.
+6. **`DbPool::connect_in`** : `connect` est coupé en deux pour que le test du critère 3 fournisse un dossier de données dans `target/` sans `AppHandle` (un `mock_app` aurait créé un dossier dans le profil de l'utilisateur). Même comportement.
+7. **Borne de 1 000 refus** : c'est celle du journal existant (10 lignes par minute et par couple portée / code, puis résumé `log` / `suppressed`), pas un nouveau mécanisme ; testée avec 1 001 refus.
+8. **Visibilité d'un refus côté écran (règle « aucun échec silencieux »), vérifiée par lecture, sans changement de `src/`.** `Database.load` refusé tombe dans `DbStepError('load', erreur)` (`src/platform/tauri/sqlDriver.ts`), dont le message est le texte exact de l'erreur Tauri (`describeError`), donc `sql-refused: url` apparaît dans l'écran d'échec de base existant (`DbFailureDetails`). Un refus pendant une requête revient comme `DbError` par le pilote sérialisé, avec le même texte. Aucun test e2e ne l'exerce (pilote mémoire) : à voir à la séance finale si Ali le souhaite.
+9. **Fichier de référence de 245 Ko** (`src-tauri/tests/fixtures/front-sql.json`) : il contient les jeux de données des migrations (jours fériés). Acceptable pour un fichier de test, à signaler si la taille du dépôt compte.
+10. **Pas de `cargo clippy` dans `tests.yml`** : la commande est lancée en local (voir Preuves) ; à ajouter à la CI si Ali le souhaite (hors story).
+11. **Temps** : environ 4 h de travail effectif sur 5 h estimées (alerte à 7 h 30 non atteinte). La compilation du programme complet (5 à 9 minutes par essai de `--test desktop`) a motivé le choix de placer le rejeu des migrations dans le crate du plugin (essai en une minute).
+
+## Revue et audit
+
+Audit `security-privacy` : approuvé (aucun contournement trouvé sur le vrai pool : `ATTACH` par URI, vfs, `:memory:`, temp ; `pragma_*` en sous-requête, `WITH`, `RETURNING`, vue ; commentaires et casse ; `VACUUM` dans un `WITH` ; fonctions absentes de la version embarquée ; chaque connexion protégée, reconnexion comprise). Revue de code : « à corriger », rien de bloquant. Hypothèses sur les « Questions à Ali » : confirmées. Chaque point ci-dessous est un commit.
+
+| Point | Commit | Rouge / vert |
+|---|---|---|
+| I1 : le front émet-il un pragma ou une fonction refusés ? | `88fb11d8` | Test Vitest statique `tests/unit/sqlPragmaScan.test.ts` : parcourt `src/**` (hors tests et `src/i18n`, commentaires retirés), exige que tout `PRAGMA nom` et `pragma_nom` soit dans `PRAGMA_WHITELIST` **lue dans `guard.rs`** (liste unique, constante créée pour l'occasion), et qu'aucune fonction refusée ni `ATTACH` / `VACUUM` n'apparaisse dans du SQL. Rouge : avec `export const TMP_SEC01 = 'PRAGMA user_version';` ajouté temporairement dans `src/db/repositories/common.ts` (retiré), échec `AssertionError: pragma hors liste blanche du plugin SQL … expected [ Array(1) ] to deeply equal []` avec `src/db/repositories/common.ts : PRAGMA user_version`. Vert sur l'arbre propre (3 tests). ADR 0002 complété. Limite connue : la recherche statique ne voit pas un SQL construit à l'exécution. |
+| I2 : fichier cité dans le test de référence | `43d1b06f` | `guard_tests.rs`, pas `sql_closed.rs`. |
+| I3 : assertion toujours vraie | `3608a847` | `assert_eq!(attach_lines, 10)`, renvoi au test du débit d'`applog`. |
+| M1 revue : panic dans le rappel FFI | `03498e7a` | `catch_unwind` (`AssertUnwindSafe`) ; un panic devient `SQLITE_DENY`. |
+| M2 revue : `quick_check` | `f1002788` | Accepté seulement avec argument ; `("quick_check", None)` passe côté refus dans `sec01_8_pragma_white_list_cases`. |
+| M3 revue : contrôle redondant de `connect` | `54c6a32f` | Retiré ; `load` et `connect_in` restent. |
+| M4 revue : accents de `Cargo.toml` | `bef31638` | Corrigés. |
+| M1 audit : objets de schéma persistants | `27ffc0e7` (rouge), `bbd98245` (vert) | Rouge : `CREATE TRIGGER load_extension : refus `function` attendu, mais le plugin a accepté` ; `DEFENSIVE doit valoir 1, TRUSTED_SCHEMA 0 / left: 0 / right: 1`. Vert : `harden` pose `SQLITE_DBCONFIG_DEFENSIVE = 1` et `SQLITE_DBCONFIG_TRUSTED_SCHEMA = 0` (exposés par `libsqlite3-sys`), et `check_statement` refuse à la **création** un déclencheur ou une vue qui contient `load_extension`, `fts3_tokenizer`, `readfile`, `writefile`, `edit(` ou un `pragma_<nom>` hors liste blanche (mots du langage SQL seulement). Constat avant correctif : le déclencheur était créé puis chaque écriture de la table refusée, récupérable par `DROP TRIGGER`. Le rejeu des instructions du front (fts5, déclencheurs, `ALTER TABLE`) passe avec le schéma non fiable. |
+| M2 audit : instructions multiples | (documenté) | `execute` envoie le texte entier à sqlx, qui exécute les instructions une à une : `INSERT …; ATTACH …` exécute l'`INSERT` puis refuse l'`ATTACH`, sans retour arrière du premier. Le front n'envoie jamais d'instructions multiples hors migrations (une instruction par appel, `statements` du migrateur), et une transaction du front est annulée par son `ROLLBACK` ; aucun refus de queue ajouté (le refus se fait à l'instruction fautive, jamais en silence). |
+| M3 audit : second `load` | `2e6b15a2`, test dans `2b453fea` | **Écart volontaire avec la consigne** : le second `load` ferme le pool précédent (`close_previous`) au lieu d'être refusé. Raison : le front recharge sa WebView sans redémarrer Rust (`window.location.reload()` dans `src/platform/relaunch.ts`, `lockLayer.ts`, `SyncDetailsForget.tsx`) puis rappelle `load` alors que l'ancien pool est encore enregistré ; un refus interdirait toute réouverture jusqu'au redémarrage. Le défaut visé (connexion orpheline) est corrigé. À confirmer par Ali ou l'audit. |
+| M4 audit : raison de refus résiduelle | `2b453fea` | `clear_reason` avant chaque `execute` et `select`. Scénario de l'audit non reproduit : le test `sec01_9_a_stale_refusal_reason_never_survives_the_next_call` passe aussi sans le correctif (pas de rouge possible) ; il garde la propriété. |
+| M7 audit : commentaire de `Cargo.toml` | `11930626` | Cite `guard.rs`, `guard_tests.rs`, `commands.rs` et `libsqlite3-sys`. Note : `src/platform/backup/tauriBackup.ts:93` avale l'échec du point de contrôle `wal_checkpoint` (voulu : le pragma est en liste blanche, `VACUUM INTO` lit le WAL). |
+| Dette clippy | `becc9f17` | Une ligne dans `docs/dettes.md` (pas de story maintenant). |
+
+Sauvegardes, export, import et synchro : relus par l'audit, aucune story nécessaire (la ligne « validation des chemins » de « Surfaces vérifiées » est soldée).
+
+## Fichiers modifiés
+
+- `src-tauri/vendor/tauri-plugin-sql/Cargo.toml` : dépendance optionnelle `libsqlite3-sys` 0.30.1, liée à la fonctionnalité `sqlite`.
+- `src-tauri/vendor/tauri-plugin-sql/src/guard.rs` (nouveau) : `validate_db_url`, filtre lexical `VACUUM`, liste blanche de pragmas, autorisateur, limite d'attachement, crochet des refus.
+- `src-tauri/vendor/tauri-plugin-sql/src/guard_tests.rs` (nouveau) : 24 tests du plugin.
+- `src-tauri/vendor/tauri-plugin-sql/src/{error,lib,wrapper,commands}.rs` : variante `Error::Refused`, exports, `connect_in`, autorisateur posé dans `open_sqlite_pool`, contrôle de `execute` et `select`, `load`.
+- `src-tauri/src/startup_gate.rs`, `src-tauri/src/lib.rs` : `install_sql_refusal_hook`, appelé au début de `run()` et avant l'enregistrement tardif du plugin.
+- `src-tauri/tests/desktop/{sql_closed,main}.rs` : journal `sql-refused` et câblage.
+- `src-tauri/tests/fixtures/front-sql.json` (généré), `tests/unit/sqlFrontReference.test.ts` : référence des instructions du front.
+- `src-tauri/Cargo.lock` : une ligne (`libsqlite3-sys` dans les dépendances de `tauri-plugin-sql`).
+- `docs/stories/SEC-01.md`, `docs/adr/0002-acces-base-et-drivers.md` (avenant SEC-01), `docs/journal.md`, `docs/dettes.md`, `tests/unit/sqlPragmaScan.test.ts` (revue), `src-tauri/Cargo.toml` (commentaire).
+- Non touchés : `src/` (aucun fichier), `capabilities/`, `docs/decisions.md`, `docs/backlog.md`, `docs/audit-1.0.md` (à la charge d'Ali).
+
+## Surfaces vérifiées (préparation de l'audit `security-privacy`)
+
+Vérifiées par un test :
+- `load` : dix-huit formes d'URL refusées (`validate_db_url`), aucun fichier ni dossier créé pour le chemin absolu et les deux formes `..` (`connect_in`).
+- `ATTACH` (huit formes : commentaires, minuscules, chaînage, écriture), `DETACH`, par `execute` et par `select` ; fichier existant et fichier absent.
+- `VACUUM` (six formes) refusé par `execute` et `select`, sans faux refus pour un littéral, un commentaire ou un identifiant ; `VACUUM INTO` bloqué aussi par la seule limite d'attachement.
+- Pragmas : 27 formes hors liste refusées par `execute` et `select`, état relu par une autre connexion ; les fonctions-tables `pragma_*` passent par la même liste.
+- Fonctions `load_extension` (1 et 2 arguments) et `fts3_tokenizer` ; tables virtuelles `rtree` et `fts4` ; `fts5` acceptée.
+- Journal : code stable, aucune trace du texte SQL, de l'alias ni du chemin dans le fichier ; rafale de 1 001 refus bornée.
+
+Relues dans le code, à confirmer par l'audit :
+- Les blocs `unsafe` de `guard.rs` (descripteur de la connexion verrouillé par `LockedSqliteHandle`, chaîne C copiée avant usage, `Arc` volontairement non libéré : quelques octets par connexion).
+- `readfile`, `writefile`, `edit` figurent dans la liste de refus mais n'existent pas dans la bibliothèque embarquée (SQLite n'appelle l'autorisateur que pour une fonction existante) : défense sans effet testable aujourd'hui.
+- Une migration enregistrée par `Builder::add_migrations` (non utilisée par l'application) s'exécute hors de `execute` : non filtrée, mais son SQL est du code compilé.
+- Une erreur sqlx « not authorized » est reconnue par le code 23 ou par le préfixe du message ; une autre source de « not authorized » serait classée `auth`.
+- Le crochet de journal est global au processus et posé une seule fois (le premier gagne).
+
+Laissées, hors story (à signaler) :
+- **Validation des chemins des commandes de sauvegarde et de fichiers** (`backup.rs` : `restore_backup`, `check_backup`, `list_backups`, `reveal_backups_folder` ; `export_save_file`, `import_open_file`) : relues par l'audit, aucune story nécessaire (voir « Revue et audit »).
+- Les autres plugins et commandes (fichiers, shell, notifications, opener) ; la clé de signature (CI-SEC-01).
+- Ce que la WebView peut encore faire dans la base légitime : lire, modifier, supprimer ses données (inhérent), ouvrir une transaction longue.
+- Les fichiers temporaires que SQLite écrit seul (tri volumineux) : non pilotables par le front (`temp_store_directory` refusé).
 
 ## Questions à Ali (sans blocage ; recommandation du product-owner entre parenthèses)
 

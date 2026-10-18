@@ -79,6 +79,21 @@ impl DbPool {
         conn_url: &str,
         _app: &AppHandle<R>,
     ) -> Result<Self, crate::Error> {
+        // CircleTasks (SEC-01) : le contrôle de l'URL est fait par `load` puis par `connect_in`, AVANT toute lecture de chemin (le dossier
+        // de données n'est demandé que par la fermeture `app_dir`, appelée après ce contrôle).
+        #[cfg(feature = "sqlite")]
+        let app_dir = || _app.path().app_config_dir().expect("No App config path was found!");
+        #[cfg(not(feature = "sqlite"))]
+        let app_dir = std::path::PathBuf::new;
+        Self::connect_in(conn_url, app_dir).await
+    }
+
+    /// `connect` avec le dossier de données fourni par l'appelant (testable sans `AppHandle`, donc sans toucher au profil de l'utilisateur).
+    pub(crate) async fn connect_in(
+        conn_url: &str,
+        _app_dir: impl FnOnce() -> std::path::PathBuf,
+    ) -> Result<Self, crate::Error> {
+        crate::guard::validate_db_url(conn_url)?;
         match conn_url
             .split_once(':')
             .ok_or_else(|| crate::Error::InvalidDbUrl(conn_url.to_string()))?
@@ -86,10 +101,7 @@ impl DbPool {
         {
             #[cfg(feature = "sqlite")]
             "sqlite" => {
-                let app_path = _app
-                    .path()
-                    .app_config_dir()
-                    .expect("No App config path was found!");
+                let app_path = _app_dir();
 
                 create_dir_all(&app_path).expect("Couldn't create app config dir");
 
@@ -145,10 +157,14 @@ impl DbPool {
         Ok(())
     }
 
-    pub(crate) async fn close(&self) {
+    /// Ferme le pool (CircleTasks : public pour les tests du programme).
+    pub async fn close(&self) {
         match self {
             #[cfg(feature = "sqlite")]
-            DbPool::Sqlite(pool) => pool.close().await,
+            DbPool::Sqlite(pool) => {
+                crate::guard::forget_pool(pool);
+                pool.close().await
+            }
             #[cfg(feature = "mysql")]
             DbPool::MySql(pool) => pool.close().await,
             #[cfg(feature = "postgres")]
@@ -158,14 +174,17 @@ impl DbPool {
         }
     }
 
-    pub(crate) async fn execute(
+    /// Exécute une instruction (CircleTasks, SEC-01 : après le filtre `VACUUM` ; pour le reste, l'autorisateur SQLite du pool décide).
+    pub async fn execute(
         &self,
         _query: String,
         _values: Vec<JsonValue>,
     ) -> Result<(u64, LastInsertId), crate::Error> {
+        crate::guard::check_statement(&_query)?;
         Ok(match self {
             #[cfg(feature = "sqlite")]
             DbPool::Sqlite(pool) => {
+                crate::guard::clear_reason(pool);
                 let mut query = sqlx::query(&_query);
                 for value in _values {
                     if value.is_null() {
@@ -178,7 +197,7 @@ impl DbPool {
                         query = query.bind(value);
                     }
                 }
-                let result = pool.execute(query).await?;
+                let result = pool.execute(query).await.map_err(|e| crate::guard::sqlite_error(pool, e))?;
                 (
                     result.rows_affected(),
                     LastInsertId::Sqlite(result.last_insert_rowid()),
@@ -226,14 +245,17 @@ impl DbPool {
         })
     }
 
-    pub(crate) async fn select(
+    /// Lit des lignes (mêmes garde-fous que [`DbPool::execute`]).
+    pub async fn select(
         &self,
         _query: String,
         _values: Vec<JsonValue>,
     ) -> Result<Vec<IndexMap<String, JsonValue>>, crate::Error> {
+        crate::guard::check_statement(&_query)?;
         Ok(match self {
             #[cfg(feature = "sqlite")]
             DbPool::Sqlite(pool) => {
+                crate::guard::clear_reason(pool);
                 let mut query = sqlx::query(&_query);
                 for value in _values {
                     if value.is_null() {
@@ -246,7 +268,7 @@ impl DbPool {
                         query = query.bind(value);
                     }
                 }
-                let rows = pool.fetch_all(query).await?;
+                let rows = pool.fetch_all(query).await.map_err(|e| crate::guard::sqlite_error(pool, e))?;
                 let mut values = Vec::new();
                 for row in rows {
                     let mut value = IndexMap::default();
@@ -378,13 +400,17 @@ pub async fn open_sqlite_pool(conn_url: &str) -> Result<Pool<Sqlite>, sqlx::Erro
     use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
     let options = SqliteConnectOptions::from_str(conn_url)?.journal_mode(SqliteJournalMode::Wal).foreign_keys(true);
-    SqlitePoolOptions::new()
+    // CircleTasks (SEC-01) : limite d'attachement à 0 et autorisateur sur chaque connexion (voir `guard`), posés après les pragmas ci-dessus.
+    let state = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0));
+    let pool = crate::guard::harden_pool_options(SqlitePoolOptions::new(), std::sync::Arc::clone(&state))
         .max_connections(1)
         .min_connections(0)
         .idle_timeout(None)
         .max_lifetime(None)
         .connect_with(options)
-        .await
+        .await?;
+    crate::guard::register_pool(&pool, &state);
+    Ok(pool)
 }
 
 #[cfg(all(test, feature = "sqlite"))]

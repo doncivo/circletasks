@@ -21,9 +21,12 @@
 mod commands;
 mod decode;
 mod error;
+mod guard;
 mod wrapper;
 
 pub use error::Error;
+/// CircleTasks (SEC-01) : crochet appelé à chaque refus du plugin (code stable), pour le journal du programme.
+pub use guard::set_refusal_hook;
 pub use wrapper::DbPool;
 /// CircleTasks : pool à une connexion, réexporté pour les tests de l'app (aucune 2e connexion pendant une restauration, P-04-iOS).
 #[cfg(feature = "sqlite")]
@@ -55,7 +58,7 @@ pub struct DbInstances(pub RwLock<HashMap<String, DbPool>>);
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub(crate) enum LastInsertId {
+pub enum LastInsertId {
     #[cfg(feature = "sqlite")]
     Sqlite(i64),
     #[cfg(feature = "mysql")]
@@ -257,3 +260,6 @@ impl Builder {
             .build()
     }
 }
+
+#[cfg(all(test, feature = "sqlite"))]
+mod guard_tests;

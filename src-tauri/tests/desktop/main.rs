@@ -30,6 +30,7 @@ mod restore_qa_ios;
 mod restore_recovery;
 mod shortcut;
 mod signing;
+mod sql_closed;
 mod speech;
 mod support;
 mod sync_bookmark;
