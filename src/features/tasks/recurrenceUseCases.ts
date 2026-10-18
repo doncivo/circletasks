@@ -41,7 +41,6 @@ function fieldsOf(rule: RecurrenceFields): RecurrenceFields {
  * `source` n'est ni terminée ni passée (suppression « cette occurrence »).
  */
 export async function createNextOccurrence(
-  _deps: RecurrenceDeps,
   repos: Repositories,
   source: Task,
   today: LocalDate,
@@ -96,7 +95,7 @@ export function createRecurrenceUseCases(deps: RecurrenceDeps): RecurrenceUseCas
         const out: Task[] = [];
         for (const task of undone) {
           if (task.recurrenceId === null) continue;
-          const next = await createNextOccurrence(deps, repos, task, today);
+          const next = await createNextOccurrence(repos, task, today);
           if (next) out.push(next.task);
         }
         return out;

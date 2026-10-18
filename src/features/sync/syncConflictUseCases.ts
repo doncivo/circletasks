@@ -274,7 +274,7 @@ async function writeValue(
       wasCarriedOver = done.carriedOver;
       if (done.carriedOver) done = await repos.tasks.update(id, { carriedOver: false });
       // Annulation d'une restauration « à faire » : l'occurrence suivante existe déjà depuis la première fin.
-      if (restore.doneAt === null && done.recurrenceId) next = await createNextOccurrence(deps, repos, done, todayLocal(deps.clock));
+      if (restore.doneAt === null && done.recurrenceId) next = await createNextOccurrence(repos, done, todayLocal(deps.clock));
       if (next) outcome.publish.push(next.task);
     } else {
       await repos.tasks.reopen(id);

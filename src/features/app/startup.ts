@@ -142,6 +142,8 @@ export function startAppStartup(
       return opened?.waits ? undefined : first;
     });
   void ready.then(() => createTrashUseCases(container).purgeExpired()).catch(() => undefined);
+  // M4 : le module d'écriture des occurrences est préchargé après le premier rendu (la première complétion d'une récurrente ne l'attend pas).
+  void ready.then(() => import('../tasks/occurrencePlacement')).catch(() => undefined);
   return {
     ready,
     firstCheck: ready.then(() => first),

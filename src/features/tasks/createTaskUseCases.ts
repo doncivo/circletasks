@@ -247,7 +247,7 @@ function createBaseTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
           ? await deps.data.transaction(async (repos) => {
               let done = await repos.tasks.complete(id, doneAt);
               if (current.carriedOver) done = await repos.tasks.update(id, { carriedOver: false });
-              const created = done.recurrenceId ? await createNextOccurrence(deps, repos, done, todayLocal(deps.clock)) : null;
+              const created = done.recurrenceId ? await createNextOccurrence(repos, done, todayLocal(deps.clock)) : null;
               return { updated: done, next: created };
             })
           : { updated: await deps.data.repos.tasks.complete(id, doneAt), next: null };
@@ -451,7 +451,7 @@ function createBaseTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
           await repos.reminders.softDeleteForTarget({ type: 'task', id }, task.deletedAt ?? undefined);
           done.push(task);
           if (options?.continueSeries && before.recurrenceId !== null) {
-            const next = await createNextOccurrence(deps, repos, before, todayLocal(deps.clock), { ignoreDue: true });
+            const next = await createNextOccurrence(repos, before, todayLocal(deps.clock), { ignoreDue: true });
             if (next) created.push(next);
           }
         }
