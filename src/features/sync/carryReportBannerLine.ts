@@ -1,11 +1,10 @@
 import { t } from '../../i18n';
-import { tCarry } from '../../i18n/syncCarryReportText';
+import { carryFailureCause, tCarry } from '../../i18n/syncCarryReportText';
 import { logFailure } from '../../platform/desktop/log';
 import { carryReportBannerFacts, carryReportElements, carryReportOthers } from '../../sync/epochCarryReportBanner';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { requestCarryReportOpen } from './carryReportOpen';
-import { carryFailureCause } from './carryReportText';
 import { carryLines } from './syncRestoreState';
 
 /**

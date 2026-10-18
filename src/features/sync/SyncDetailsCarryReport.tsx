@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EpochCarryReport } from '../../domain/sync/epochCarryReport';
 import { EPOCH_CARRY_REPORT_KEEP } from '../../domain/sync/epochCarryReportView';
-import { tCarry } from '../../i18n/syncCarryReportText';
+import { carryFailureCause, tCarry } from '../../i18n/syncCarryReportText';
 import { carryReportFailure, clearCarryReportFailure, type CarryReportFailure } from '../../sync/epochCarryReportBanner';
 import { logFailure } from '../../platform/desktop/log';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { CarryReportSheet } from './CarryReportSheet';
 import { peekCarryReportOpen, requestCarryReportOpen } from './carryReportOpen';
-import { carryCauseText, carryDateTime, carryFailureCause } from './carryReportText';
+import { carryCauseText, carryDateTime } from './carryReportText';
 import { refreshCarryLine } from './carryReportBannerLine';
 import { syncStore } from './syncStore';
 import './CarryReport.css';

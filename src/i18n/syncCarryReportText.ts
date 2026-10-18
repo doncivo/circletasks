@@ -8,6 +8,15 @@ import { syncCarryReportFr } from './fr.syncCarryReport';
  */
 export type SyncCarryReportTextKey = keyof typeof syncCarryReportFr;
 
+/**
+ * Cause d'un échec d'enregistrement du compte rendu, lisible par famille (stockage plein, base refusée, autre), le code entre parenthèses
+ * (revue S3). Le code reste celui du journal technique : jamais un libellé de l'erreur.
+ */
+export function carryFailureCause(code: string): string {
+  const family = /FULL|IOERR/i.test(code) ? 'failedFull' : /^SQLITE_|^Db/i.test(code) ? 'failedRefused' : 'failedOther';
+  return tCarry('failedCause', { family: tCarry(family), code });
+}
+
 export function tCarry(key: SyncCarryReportTextKey, params?: Readonly<Record<string, string | number>>): string {
   const text: string = (getLocale() === 'en' ? syncCarryReportEn : syncCarryReportFr)[key];
   return params ? text.replace(/\{(\w+)\}/g, (match, name: string) => (params[name] === undefined ? match : String(params[name]))) : text;
