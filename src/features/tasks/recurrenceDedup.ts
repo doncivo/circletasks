@@ -1,4 +1,4 @@
-import { duplicateGroups, groupKey, reconcileGroup, type GroupRow } from '../../domain/occurrenceDedup';
+import { DEDUP_FAILURES_META, duplicateGroups, groupKey, reconcileGroup, type GroupRow } from '../../domain/occurrenceDedup';
 import type { Hlc, IsoDateTime, RecurrenceId, TaskId } from '../../domain/types';
 import type { Repositories } from '../../db/repositories';
 import { logFailure } from '../../platform/desktop/log';
@@ -34,12 +34,14 @@ export interface RecurrenceDedupDeps extends Pick<TaskUseCaseDeps, 'data' | 'tas
   readonly log?: (message: string) => void;
 }
 
-function parseKeys(raw: string | null): string[] {
+/** Clés suivies ; un état illisible (écrit par une autre version) est journalisé, jamais avalé, et repart de zéro. */
+function parseKeys(raw: string | null, log: (message: string) => void): string[] {
   if (raw === null) return [];
   try {
     const value = JSON.parse(raw) as { groups?: unknown };
     return Array.isArray(value.groups) ? value.groups.filter((key): key is string => typeof key === 'string') : [];
   } catch {
+    log('recurrence-dedup-state-unreadable {"code":"parse"}');
     return [];
   }
 }
@@ -63,12 +65,13 @@ async function restore(repos: Repositories, id: TaskId, deletedAt: IsoDateTime |
  * les écarts sont de vraies écritures (hlc de l'appareil, entrées d'envoi), donc publiées aux autres appareils.
  */
 export async function runRecurrenceDedup(deps: RecurrenceDedupDeps): Promise<RecurrenceDedupResult> {
+  const log = deps.log ?? ((message: string) => logFailure('recurrence', message));
   const outcome = await deps.data.transaction(async (repos) => {
     const raw = await repos.sync.getMeta(RECURRENCE_DEDUP_META);
     const removed: TaskId[] = [];
     const restored: TaskId[] = [];
     const tracked = new Set<string>();
-    for (const key of parseKeys(raw)) {
+    for (const key of parseKeys(raw, log)) {
       const cut = key.lastIndexOf('|');
       const seriesIndex = Number(key.slice(cut + 1));
       const tasks = (await repos.tasks.listByRecurrence(key.slice(0, cut) as RecurrenceId, { includeDeleted: true })).filter((t) => t.seriesIndex === seriesIndex);
@@ -96,7 +99,27 @@ export async function runRecurrenceDedup(deps: RecurrenceDedupDeps): Promise<Rec
   deps.taskEntities.remove(outcome.removed);
   const result = { groups: outcome.groups, removed: outcome.removed.length, restored: outcome.restored.length };
   // D8 : aucune écriture silencieuse ; nombres seulement.
-  if (result.removed + result.restored > 0) (deps.log ?? ((message) => logFailure('recurrence', message)))(`recurrence-dedup ${JSON.stringify(result)}`);
+  if (result.removed + result.restored > 0) log(`recurrence-dedup ${JSON.stringify(result)}`);
   if (outcome.restored.length > 0) deps.taskEntities.publish(await deps.data.repos.tasks.listByIds(outcome.restored));
   return result;
+}
+
+/**
+ * Passage compté (I4) : un échec est journalisé, compté dans `sync_meta` (`DEDUP_FAILURES_META`) puis relancé à l'appelant ; un passage réussi
+ * remet le compteur à zéro. Au seuil, une ligne des Détails de la synchro le dit (`SyncDetailsDedup`).
+ */
+export async function runRecurrenceDedupCounted(deps: RecurrenceDedupDeps): Promise<RecurrenceDedupResult> {
+  const sync = deps.data.repos.sync;
+  try {
+    const result = await runRecurrenceDedup(deps);
+    if ((await sync.getMeta(DEDUP_FAILURES_META)) !== null) await sync.setMeta(DEDUP_FAILURES_META, null);
+    return result;
+  } catch (error) {
+    try {
+      await sync.setMeta(DEDUP_FAILURES_META, String(Number((await sync.getMeta(DEDUP_FAILURES_META)) ?? 0) + 1));
+    } catch (counterError) {
+      logFailure('recurrence', counterError);
+    }
+    throw error;
+  }
 }

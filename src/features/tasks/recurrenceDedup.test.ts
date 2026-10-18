@@ -4,7 +4,8 @@ import { asEntityId, asLocalDate, type DeviceId, type RecurrenceId, type Reminde
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createTaskEntities } from '../app/taskEntities';
-import { runRecurrenceDedup } from './recurrenceDedup';
+import { DEDUP_FAILURES_META } from '../../domain/occurrenceDedup';
+import { RECURRENCE_DEDUP_META, runRecurrenceDedup, runRecurrenceDedupCounted } from './recurrenceDedup';
 
 /**
  * T-TECH-01 critères 15, 16 et 19 : nettoyage des doublons d'occurrences existants (passage JavaScript retenu par le spike, critère 14).
@@ -145,5 +146,22 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
     const log = vi.fn();
     await runRecurrenceDedup({ data: db.data, taskEntities: entities, log });
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it('I4 : les échecs sont comptés dans sync_meta (journalisés, relancés), un passage réussi remet le compteur à zéro', async () => {
+    const broken = { ...db.data, transaction: () => Promise.reject(new Error('base occupée')) } as typeof db.data;
+    for (let n = 1; n <= 3; n += 1) {
+      await expect(runRecurrenceDedupCounted({ data: broken, taskEntities: entities, log: () => undefined })).rejects.toThrow('base occupée');
+      expect(await db.data.repos.sync.getMeta(DEDUP_FAILURES_META)).toBe(String(n));
+    }
+    await runRecurrenceDedupCounted({ data: { ...db.data, repos: db.data.repos, transaction: db.data.transaction }, taskEntities: entities, log: () => undefined });
+    expect(await db.data.repos.sync.getMeta(DEDUP_FAILURES_META)).toBeNull();
+  });
+
+  it('I4 : un état suivi illisible est journalisé (jamais avalé) et le passage repart de zéro', async () => {
+    await db.data.repos.sync.setMeta(RECURRENCE_DEDUP_META, 'pas du JSON');
+    const log = vi.fn();
+    await runRecurrenceDedup({ data: db.data, taskEntities: entities, log });
+    expect(log).toHaveBeenCalledWith('recurrence-dedup-state-unreadable {"code":"parse"}');
   });
 });

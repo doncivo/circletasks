@@ -17,6 +17,10 @@ export interface OccurrenceRow {
   readonly hlc: Hlc;
 }
 
+/** `sync_meta` (local) : échecs de suite du nettoyage ; au-delà de `DEDUP_FAILURE_LIMIT`, une ligne dans les Détails de la synchro (T-TECH-01 I4). */
+export const DEDUP_FAILURES_META = 'recurrenceDedupFailures';
+export const DEDUP_FAILURE_LIMIT = 3;
+
 /** Clé d'un groupe : une occurrence de série. */
 export const groupKey = (recurrenceId: RecurrenceId, seriesIndex: number): string => `${recurrenceId}|${String(seriesIndex)}`;
 

@@ -116,7 +116,7 @@ export function startAppStartup(
     queued = true;
     cleaning = cleaning.then(() => {
       queued = false;
-      return disposed ? undefined : import('../tasks/recurrenceDedup').then((module) => module.runRecurrenceDedup(container)).then(() => undefined, (error: unknown) => logFailure('recurrence', error));
+      return disposed ? undefined : import('../tasks/recurrenceDedup').then((module) => module.runRecurrenceDedupCounted(container)).then(() => undefined, (error: unknown) => logFailure('recurrence', error));
     });
   });
   let gate: FirstCycleGate | null = null;

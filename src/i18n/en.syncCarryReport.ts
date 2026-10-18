@@ -2,6 +2,7 @@ import type { syncCarryReportFr } from './fr.syncCarryReport';
 
 /** Epoch change report (same keys as `fr.syncCarryReport.ts`). */
 export const syncCarryReportEn: Record<keyof typeof syncCarryReportFr, string> = {
+  dedupFailed: 'Cleaning up duplicate occurrences failed several times in a row; it will be retried at the next sync.',
   title: 'Epoch change report',
   epochAt: 'Epoch of {date} at {time}',
   causeRestore: 'Restore "Apply everywhere"',
