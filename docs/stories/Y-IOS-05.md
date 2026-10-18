@@ -1,6 +1,6 @@
 # Y-IOS-05 — Un appel iCloud qui ne répond pas ne fige plus la synchro : échéance sur le transport, annulation de la coordination
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-07) · Agents : **sync-icloud** (`src/platform/sync/memory.ts`, scénario 5 du banc) + **ios-mobile** (`FolderBookmarkPlugin.swift`) + **desktop-tauri** (`src-tauri/src/sync/bookmark.rs`, `commands_ios.rs`, tests Rust) · Relecture : code-reviewer · Statut : **fiche écrite, à développer** (2026-10-18)
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-07) · Agents : **sync-icloud** (`src/platform/sync/memory.ts`, scénario 5 du banc) + **ios-mobile** (`FolderBookmarkPlugin.swift`) + **desktop-tauri** (`src-tauri/src/sync/bookmark.rs`, `commands_ios.rs`, tests Rust) · Relecture : code-reviewer · Statut : **développée, en attente de push, CI, compilation iPhone, QA et revue** (2026-10-18)
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-18). Correctif du **bloquant B6** de `docs/audit-1.0.md` (« Synchro figée sans erreur sur un appel iCloud qui ne répond pas »). Aucun écart au PRD. Identifiant Y-IOS-03 évité (hypothèse rejetée, decisions.md 2026-10-08).
 Dépend de : Y-TECH-03 (fait : banc, plan de pannes, effet `mute` de `memory.ts`, `mutedCalls` / `releaseMuted`), Y-IOS-01 et Y-IOS-02 (faits : plugin folder-bookmark, `BookmarkFs`). Base : `main` c01e961b.
 Estimation : **7 h**. Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de **10 h 30**).
@@ -120,16 +120,54 @@ Après installation de l'IPA issue de `build-ios.yml` (voie SideStore) : lancer 
 
 | Élément | Valeur |
 |---|---|
-| Scénario 5 rouge avec le code actuel (message d'erreur, commit, run CI) | *à compléter* |
-| Scénario 5 vert après correctif (commit, run CI) | *à compléter* |
-| Contrôle de câblage Rust rouge puis vert (commits) | *à compléter* |
-| Bundle de départ après chaque commit TypeScript (octets gzip, seuil 358 400, départ 358 357) | *à compléter* |
-| Compilation iPhone (`build-ios.yml`, run) | *à compléter* |
-| Vérification manuelle d'Ali (mode avion, durée de sortie, journal) | *à compléter à la livraison* |
+| Scénario 5 rouge avec le code actuel (message d'erreur, commit, run CI) | Commit `6885488b` (fichier seul, repris tel quel de `origin/y-tech-03-scenarios-rouges`), rouge en local sur `main` c01e961b : `AssertionError: le cycle ne s’est pas terminé à l’échéance comptée de l’appel: expected null not to be null` (`scenario5MuteTransport.test.ts:54:92`, assertion (a)). Run CI : *à compléter au push* (pas de push par l'agent). |
+| Scénario 5 vert après correctif (commit, run CI) | Commit `1f7638e3` (`memory.ts`, `MUTE_DEADLINE_TURNS = 100`) : vert en local, attentes inchangées. Run CI : *à compléter au push*. |
+| Contrôle de câblage Rust rouge puis vert (commits) | Rouge : commit `e5a06db1` (test seul, compilé, échec d'assertion et non de compilation) : `panicked at tests\desktop\sync_bookmark.rs:687:5: commands_ios.rs : le transport du plugin passe par DeadlineTransport::new`. Vert : commit `f92cc92d` (`y_ios_05_14_production_transport_is_wrapped_by_the_deadline ... ok`). |
+| Bundle de départ après chaque commit TypeScript (octets gzip, seuil 358 400, départ 358 357) | Après `1f7638e3` : **358 357** octets (inchangé, marge 43) ; `memory.ts` de la synchro n'est pas dans le build livré (import dynamique du mode dev, absent de `dist`). `npm run test:bundle` vert (24 tests). Les autres commits ne touchent pas `src/`. |
+| Compilation iPhone (`build-ios.yml`, run) | *à compléter* (une compilation pour le lot terminé, après le push) |
+| Vérification manuelle d'Ali (mode avion, durée de sortie, journal) | *à compléter à la livraison* (procédure : section « Vérification manuelle ») |
+
+Tests locaux (module seulement, 2026-10-18) : `cargo test --test desktop --features test-hooks` : 794 réussis, 2 ignorés préexistants
+(`sync_crypto.rs:367`, `sync_folder.rs:181`), 0 échec ; les 12 tests `y_ios_05_*` relancés cinq fois de suite, verts à chaque fois.
+`CT_TEST_WORKERS=1 npx vitest run src/platform/sync src/sync tests/unit/sync --coverage.enabled=false` : 1 703 réussis au deuxième passage ;
+au premier et au troisième passage, 2 puis 4 tests de `epochCarryReplacedParentResume.test.ts` / `epochCarryReportRules.test.ts` (Y-FIX-04,
+Y-TECH-05, hors de cette story, sans panne `mute`) ont dépassé le délai de 5 s de Vitest sous charge de la machine (verts seuls, 28 sur 28) :
+signalé, non modifié, à suivre en CI. Lint et typage verts.
+
+Fichiers modifiés : `src/platform/sync/memory.ts`, `src/platform/sync/memoryFaults.test.ts`,
+`tests/unit/sync/hostile/scenario5MuteTransport.test.ts` (nouveau, repris tel quel), `tests/unit/sync/hostile/scenario5MuteFollowUp.test.ts`
+(nouveau, critères 5 et 6), `tests/unit/sync/hostile/fakesLoadFixtures.test.ts` (exemption `MutedTransport`), `src-tauri/src/sync/bookmark.rs`,
+`src-tauri/src/sync/commands_ios.rs`, `src-tauri/src/sync/limits.rs`, `src-tauri/tests/desktop/sync_bookmark.rs`,
+`src-tauri/plugins/folder-bookmark/ios/Sources/FolderBookmarkPlugin.swift`, `docs/stories/Y-IOS-05.md`, `docs/adr/0011-synchronisation-icloud.md`
+(§32), `docs/dettes.md`, `docs/journal.md`. Non touchés : `src/sync/engine.ts`, `publisher.ts`, `src/domain/sync/epoch.ts` (Y-FIX-02),
+`tests/fixtures/sync/fault-plan.json`, `service.rs`, `store.rs`, `lib.rs` du plugin. Aucune branche Y-FIX-02 sur `origin` au démarrage : pas de
+recoupement constaté (à recontrôler avant le push).
 
 ## Écarts
 
 Aucun écart au PRD.
+
+Écarts de réalisation (2026-10-18, agent) :
+- **Questions à Ali 1 à 5** appliquées selon leurs recommandations, comme hypothèses (20 s / `timeoutMs` + 5 s / 15 s ; seul l'état illisible
+  devient `cloud` ; un appel abandonné toléré ; `Duration::ZERO` ; bundle : aucun levier nécessaire, net 0 octet).
+- **Critère 4** : le listage d'époque (`listGate`) n'est traversé que par `scan`, pas par `readSnapshot` ; le test arme donc trois pannes
+  `mute` (lecture du segment pour `readJournal`, lecture de l'instantané pour `readSnapshot`, listage d'époque pour `scan`) et lance les appels
+  l'un après l'autre (le faux n'attribue la panne muette qu'à l'appel en cours).
+- **Critère 5** : `outcome: 'done'` est interne au moteur ; le test le lit par l'état (`phase: idle`, `errorCode` absent, `errorStreak`
+  absent, `lastSyncAt` daté du nouveau cycle).
+- **Critère 8 par `ios_core`** : avec une échéance nulle, tout appel non muet pourrait lui aussi dépasser l'échéance (course) ; pour un
+  résultat déterministe, le test du scan rend muette toute commande (`"*"`) : le premier appel du cycle (`resolve` du contrôle du dossier) est
+  abandonné, les suivants sont refusés sans envoi. Le cas `list` muet est prouvé au niveau de `BookmarkFs` (avec `status`, `readFrom`,
+  `append`, `resolve`).
+- **Critère 15** : la garde est factorisée dans une classe Swift `CoordinationGuard` (un `DispatchWorkItem`, un `coordinator.cancel()`) employée
+  par les quatre coordinations ; le contrôle statique compte quatre armements, quatre désarmements et quatre issues `settle`, et un seul
+  `cancel()` (dans la garde), au lieu de quatre copies du même code.
+- **Critères 15 à 18** : contrôles statiques écrits en Rust dans `sync_bookmark.rs` (modèle existant : `swift_code()`, contrat
+  `folder-bookmark-contract.json`), pas en Vitest.
+- **Journal `bookmark-call-skipped`** ajouté (commande refusée sans envoi derrière un appel abandonné), en plus de `bookmark-call-timeout`.
+- **`fault-plan.json`** : non modifié ; son texte d'aide dit encore « promesse jamais résolue dans memory.ts » pour `mute`, désormais rejetée
+  à l'échéance comptée : à reformuler par la story qui touchera le plan (aucun champ concerné).
+- `docs/decisions.md`, `docs/backlog.md`, `docs/audit-1.0.md` et la fiche Y-IOS-07 : laissés au product-owner (consigne du lancement).
 
 Signalés au product-owner (à traiter hors de cette fiche) : (1) `docs/stories/Y-IOS-07.md`, section « Ordre et dossiers partagés », dit `store.rs` « partagé avec Y-IOS-05 pour le seul appel de lecture » : Y-IOS-05 ne touche pas `store.rs` (l'échéance est sous `BookmarkFs`), la phrase est à corriger ; (2) l'audit dit « `"error"` traité comme `cloud` » : la fiche en précise la portée (état illisible seulement, lien conservé en `unsafe-folder`), décision 5.
 
