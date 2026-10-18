@@ -5,6 +5,7 @@ import { carryReportBannerFacts, carryReportElements, carryReportOthers } from '
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { requestCarryReportOpen } from './carryReportOpen';
+import { carryFailureCause } from './carryReportText';
 import { carryLines } from './syncRestoreState';
 
 /**
@@ -24,7 +25,7 @@ async function carryReportLine(container: AppContainer): Promise<{ readonly mess
       useNavigationStore.getState().navigate({ tab: 'settings', screen: 'sync' });
     };
   };
-  if (failure) return { message: tCarry('failed', { cause: failure.code }), onAction: open(null) };
+  if (failure) return { message: tCarry('failed', { cause: carryFailureCause(failure.code) }), onAction: open(null) };
   if (reports.length === 0) return null;
   const restored = carryReportElements(reports);
   const message = restored > 0 ? tCarry('banner', { count: restored }) : tCarry('bannerNoRestored', { count: carryReportOthers(reports) });

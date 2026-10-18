@@ -32,6 +32,15 @@ export function carryDeviceName(id: DeviceId, reporter: DeviceId, devices: reado
   return device.status === 'forgotten' ? tCarry('forgottenDevice', { device: name }) : name;
 }
 
+/**
+ * Cause d'un échec d'enregistrement du compte rendu, lisible par famille (stockage plein, base refusée, autre), le code entre parenthèses
+ * (revue S3). Le code reste celui du journal technique : jamais un libellé de l'erreur.
+ */
+export function carryFailureCause(code: string): string {
+  const family = /FULL|IOERR/i.test(code) ? 'failedFull' : /^SQLITE_|^Db/i.test(code) ? 'failedRefused' : 'failedOther';
+  return tCarry('failedCause', { family: tCarry(family), code });
+}
+
 export function carryCauseText(cause: EpochCarryCause): string {
   return tCarry(cause === 'restore' ? 'causeRestore' : cause === 'concurrent' ? 'causeConcurrent' : 'causeReset');
 }

@@ -7,7 +7,7 @@ import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { CarryReportSheet } from './CarryReportSheet';
 import { peekCarryReportOpen, requestCarryReportOpen } from './carryReportOpen';
-import { carryCauseText, carryDateTime } from './carryReportText';
+import { carryCauseText, carryDateTime, carryFailureCause } from './carryReportText';
 import { refreshCarryLine } from './carryReportBannerLine';
 import { syncStore } from './syncStore';
 import './CarryReport.css';
@@ -99,7 +99,7 @@ export function SyncDetailsCarryReport() {
       <h2 className="ct-settings__section">{tCarry('title')}</h2>
       {loaded.failure && (
         <div className="ct-settings__row ct-carry__problem" data-testid="carry-report-failed">
-          <span>{tCarry('failed', { cause: loaded.failure.code })}</span>
+          <span>{tCarry('failed', { cause: carryFailureCause(loaded.failure.code) })}</span>
           <Button variant="secondary" className="ct-carry__seen" onClick={() => void failureSeen()}>
             {tCarry('seen')}
           </Button>

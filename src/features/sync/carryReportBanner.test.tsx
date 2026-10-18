@@ -235,10 +235,24 @@ describe('« J’ai vu » (critère 18)', () => {
 });
 
 describe('échec d’enregistrement du compte rendu (critère 14)', () => {
+  // Revue S3 : la cause est lisible par famille, le code entre parenthèses.
+  it.each([
+    ['SQLITE_FULL', 'stockage plein ou illisible (SQLITE_FULL)'],
+    ['SQLITE_READONLY', 'écriture refusée par la base de données (SQLITE_READONLY)'],
+    ['DbError', 'écriture refusée par la base de données (DbError)'],
+    ['unreadable', 'cause inattendue (unreadable)'],
+  ])('la cause « %s » est dite par famille : %s', async (code, cause) => {
+    await db.data.repos.sync.setMeta(EPOCH_CARRY_REPORT_FAILED_META, JSON.stringify({ epoch: '2-a', at: NOW, code }));
+    await start();
+    const text = `Le compte rendu du changement d’époque n’a pas pu être enregistré : ${cause}`;
+    await screen.findByTestId('carry-report-failed');
+    expect(screen.getAllByText(text)).toHaveLength(2);
+  });
+
   it('bandeau et Détails disent la cause ; « J’ai vu » efface la marque et le bandeau', async () => {
     await db.data.repos.sync.setMeta(EPOCH_CARRY_REPORT_FAILED_META, JSON.stringify({ epoch: '2-a', at: NOW, code: 'ReportRefused' }));
     await start();
-    const text = 'Le compte rendu du changement d’époque n’a pas pu être enregistré : ReportRefused';
+    const text = 'Le compte rendu du changement d’époque n’a pas pu être enregistré : cause inattendue (ReportRefused)';
     const row = await screen.findByTestId('carry-report-failed');
     await screen.findByRole('button', { name: 'Voir le problème de synchronisation' });
     expect(screen.getAllByText(text)).toHaveLength(2);
