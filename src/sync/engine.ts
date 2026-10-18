@@ -727,6 +727,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (resume) await doResume();
 
     let allRead = true;
+    /**
+     * Y-FIX-03 (ADR 0011 §31) : une lecture en échec n'est jamais muette. Code passager (`io`…) : le cycle échoue avec lui, comme un échec
+     * de publication (`publishError`, premier code rencontré) ; code permanent (chemin de la troncature) : `lastSyncAt` gelé (`readFailed`).
+     */
+    let publishError: string | null = null;
+    let readFailed = false;
     /** Appareils lus jusqu'à leur tête dans ce cycle (leurs segments listés dans le nuage ont été téléchargés par la lecture). */
     const readToHead = new Set<DeviceId>();
     for (let pass = 0; pass < 2; pass += 1) {
@@ -862,6 +868,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         });
         if (outcome.status !== 'complete') allRead = false;
         else readToHead.add(target.id);
+        if (outcome.status === 'error') publishError ??= outcome.errorCode;
+        else if (outcome.status === 'truncated' && outcome.errorCode) readFailed = true;
         if (outcome.status === 'cloud-pending') pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
         if (outcome.status === 'truncated') {
           truncatedThisCycle.add(target.id);
@@ -948,14 +956,13 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (carryRaised) seen.warnings = [...(seen.warnings ?? []), 'carry-report'];
 
     // 5. Publication.
-    let publishError: string | null = null;
     if (publishAllowed) {
       const before = await repos.sync.outboxCount();
       if (before > 0) {
         const result = await publishOutbox(deps, currentEpoch, head, bounds.maxSegment);
         if (result.published > 0) work();
         head = result.head;
-        publishError = result.error;
+        publishError ??= result.error;
       }
       await repos.sync.saveState(self, { epoch: currentEpoch, cursorSegment: head.segment, cursorRecord: head.record, ackHlc: head.hlc, headSegment: head.segment, headRecord: head.record, headHlc: head.hlc });
     } else {
@@ -1062,7 +1069,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // 8. Heure de dernière synchro (jamais après l'échéance d'un cycle borné : le cycle n'est pas complet).
     deps.deadline?.check('finish');
     const lastSyncAt = iso(deps.clock.nowMs());
-    if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
+    if (publishError === null && !readFailed && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
     // Y-11 (revue 13) : un appareil attendu par la réinitialisation est toujours dans APPAREILS (« jamais vu » s'il n'a jamais été lu).
     const resetWaiting = directive.kind === 'initiator' ? directive.view.waiting : [];
     const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv, logger), scan, self, [...(await readWaitingDevices(repos)), ...resetWaiting]);
@@ -1070,7 +1077,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const resetLag = options.resetCheck ? resetLagging(deps, { scan, forget: forgetView, accepted, own: lastWritten ?? ownState }) : undefined;
     const lag = resetLag === undefined ? {} : { resetLag };
     if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch, ...lag };
-    return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked, ...lag };
+    return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 && !readFailed ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked, ...lag };
   } catch (error) {
     if (isCycleInterrupted(error)) throw error;
     const code = syncErrorCodeOf(error);

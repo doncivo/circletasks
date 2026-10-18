@@ -3,6 +3,7 @@ import { recordIsAhead, recordMaxHlc } from '../domain/sync/drift';
 import { parseJournalRecord } from '../domain/sync/parse';
 import type { DeviceId, Hlc } from '../domain/types';
 import { syncErrorCodeOf } from '../platform/sync/types';
+import { syncErrorFamily } from '../domain/sync/errorFamily';
 import { compareCursors } from '../domain/sync/epoch';
 import { applyOps, mergeTouched, type ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
@@ -130,7 +131,9 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
       if (code === 'newer-format') return finish('newer-major', code);
       if (code === 'key-mismatch') return finish('foreign', code);
       if (code === 'cloud-pending') return finish('cloud-pending', code);
-      return finish('error', code);
+      // Y-FIX-03 (ADR 0011 §31) : passagère (`io`, verrou d'iCloud pour Windows) : `error`, le cycle échoue avec ce code ; permanente
+      // (`bad-header`, `decrypt-failed`…) : fichier illisible, chemin de la troncature (reprise depuis l'instantané, sinon `corrupt`).
+      return finish(syncErrorFamily(code) === 'transient' ? 'error' : 'truncated', code);
     }
     let positions = recordPositions(from, page.records.length, page.next);
     if (limit !== undefined) {
