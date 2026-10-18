@@ -33,4 +33,5 @@ export type ScreenName =
   | 'searchoverlay'
   | 'focushost'
   | 'shortcutshelp'
-  | 'updatebanner';
+  | 'updatebanner'
+  | 'holidaydetailhost';

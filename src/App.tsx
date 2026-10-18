@@ -24,6 +24,7 @@ import {
   EventsScreen,
   FocusHost,
   GoalsScreen,
+  HolidayDetailHost,
   HolidaySettingsScreen,
   ImportScreen,
   LogsScreen,
@@ -50,7 +51,7 @@ import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
 import { registerExternalEventsSource } from './features/calendars';
 import { registerChecklistsSource } from './features/checklists';
-import { EventEditorHost, HolidayDetailHost, registerEventsSource } from './features/events';
+import { EventEditorHost, registerEventsSource } from './features/events';
 import { registerGoalsSource } from './features/goals';
 import { registerRoutinesSource } from './features/routines';
 import { registerSearchShortcut } from './features/search';

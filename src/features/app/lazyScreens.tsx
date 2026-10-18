@@ -152,6 +152,8 @@ export const FocusHost = lazyScreen<object>(() => import('../focus/FocusHost').t
 export const ShortcutsHelp = lazyScreen<object>(() => import('../shortcuts/ShortcutsHelp').then((m) => ({ default: m.ShortcutsHelp })), 'shortcutshelp', { fallback: 'none' });
 /** Bandeau de mise à jour (D-03) : apparition pilotée par updaterStore (vérification lancée après le premier rendu) ; préchargé. */
 export const UpdateBanner = lazyScreen<object>(() => import('../updater/UpdateBanner').then((m) => ({ default: m.UpdateBanner })), 'updatebanner', { fallback: 'none' });
+/** Fiche d'un jour férié (E-03) : ouverte sur un geste (DetailTarget holiday) ; préchargée. */
+export const HolidayDetailHost = lazyScreen<object>(() => import('../events/HolidayDetailHost').then((m) => ({ default: m.HolidayDetailHost })), 'holidaydetailhost', { fallback: 'none' });
 
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {
