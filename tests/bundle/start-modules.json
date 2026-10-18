@@ -6,6 +6,7 @@
       "fichiers": [
         "src/App.tsx",
         "src/features/app/AppContainerContext.tsx",
+        "src/features/app/AppStatusBanner.tsx",
         "src/features/app/DbFailureDetails.tsx",
         "src/features/app/UndoToast.tsx",
         "src/features/app/appStatus.ts",
