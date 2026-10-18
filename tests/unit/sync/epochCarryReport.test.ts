@@ -116,6 +116,7 @@ function expected(s: Scenario, reporter: DeviceId, createdAt: string): EpochCarr
     recreated: [{ table: 'task', rowId: s.ids.testPc, label: 'Test Pc', by: C_ID, deletedAt: null, deletedBy: null }],
     parentReplaced: [],
     overflow: 0,
+    overflowBy: { restored: 0, recreated: 0, parentReplaced: 0 },
     banner: true,
     acknowledgedAt: null,
     damaged: false,

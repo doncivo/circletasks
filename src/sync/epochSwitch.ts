@@ -68,7 +68,7 @@ interface SwitchProgress {
   readonly from: { readonly deviceId: DeviceId; readonly seq: number };
   /** Plus grand numéro de la file au début de (a) : (b) ne vide la file que jusqu'à lui. */
   readonly maxSeq: number;
-  /** Y-TECH-05 : compte rendu de ce report, créé au début de (c) (null : création impossible, échec journalisé et visible). */
+  /** Y-TECH-05 : compte rendu de ce report, créé dans la première page de (c) ou dans (d) (null : création impossible, échec journalisé et visible). */
   readonly report?: number | null;
 }
 

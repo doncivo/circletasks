@@ -19,6 +19,8 @@ async function dbAt(version: number): Promise<SqlDriver> {
   return db;
 }
 
+const EMPTY_COLUMNS = 'authors, restored, recreated, parent_replaced, overflow, overflow_by';
+const EMPTY_VALUES = "'[]', '[]', '[]', '[]', 0, '{}'";
 const outbox = (db: SqlDriver) => db.select('SELECT table_name, row_id, field FROM sync_outbox ORDER BY seq');
 
 /** Toutes les tables existantes (sauf `schema_migrations` et la nouvelle) : contenu complet, pour « aucune donnée existante modifiée ». */
@@ -48,26 +50,27 @@ describe('migration 0019 : compte rendu du report d’époque (Y-TECH-05)', () =
       ['reporter', 'TEXT', 1, null, 0],
       ['opener', 'TEXT', 1, null, 0],
       ['mode', 'TEXT', 1, null, 0],
-      ['authors', 'TEXT', 1, "'[]'", 0],
-      ['restored', 'TEXT', 1, "'[]'", 0],
-      ['recreated', 'TEXT', 1, "'[]'", 0],
-      ['parent_replaced', 'TEXT', 1, "'[]'", 0],
-      ['overflow', 'INTEGER', 1, '0', 0],
-      ['banner', 'INTEGER', 1, '0', 0],
+      ['authors', 'TEXT', 1, null, 0],
+      ['restored', 'TEXT', 1, null, 0],
+      ['recreated', 'TEXT', 1, null, 0],
+      ['parent_replaced', 'TEXT', 1, null, 0],
+      ['overflow', 'INTEGER', 1, null, 0],
+      ['overflow_by', 'TEXT', 1, null, 0],
+      ['banner', 'INTEGER', 1, null, 0],
       ['created_at', 'TEXT', 1, null, 0],
       ['acknowledged_at', 'TEXT', 0, null, 0],
     ]);
     const insert = (cause: string, mode: string, banner = 0) =>
-      db.execute('INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, banner, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', ['e', cause, DEV, DEV, mode, banner, AT]);
+      db.execute(`INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, banner, created_at, ${EMPTY_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ${EMPTY_VALUES})`, ['e', cause, DEV, DEV, mode, banner, AT]);
     await insert('restore', 'replace');
     await insert('concurrent', 'replace', 1);
     await insert('reset', 'merge');
     await expect(insert('autre', 'replace')).rejects.toThrow();
     await expect(insert('restore', 'autre')).rejects.toThrow();
     await expect(insert('restore', 'replace', 2)).rejects.toThrow();
-    expect(await db.select('SELECT authors, restored, recreated, parent_replaced, overflow, acknowledged_at FROM epoch_carry_report WHERE id = 1')).toEqual([
-      { authors: '[]', restored: '[]', recreated: '[]', parent_replaced: '[]', overflow: 0, acknowledged_at: null },
-    ]);
+    // Aucune valeur par défaut (texte court : le registre des migrations est dans le départ) : une colonne oubliée est refusée.
+    await expect(db.execute('INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, banner, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)', ['e', 'restore', DEV, DEV, 'replace', AT])).rejects.toThrow();
+    expect(await db.select('SELECT acknowledged_at FROM epoch_carry_report WHERE id = 1')).toEqual([{ acknowledged_at: null }]);
     await db.close();
   });
 
@@ -89,7 +92,7 @@ describe('migration 0019 : compte rendu du report d’époque (Y-TECH-05)', () =
     expect(SYNC_TABLES.map((t) => t.name)).not.toContain('epoch_carry_report');
     const db = await dbAt(19);
     expect(await db.select("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'epoch_carry_report'")).toEqual([]);
-    await db.execute('INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, created_at) VALUES (?, ?, ?, ?, ?, ?)', ['e', 'restore', DEV, DEV, 'replace', AT]);
+    await db.execute(`INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, banner, created_at, ${EMPTY_COLUMNS}) VALUES (?, ?, ?, ?, ?, 0, ?, ${EMPTY_VALUES})`, ['e', 'restore', DEV, DEV, 'replace', AT]);
     await db.execute('UPDATE epoch_carry_report SET restored = ?, acknowledged_at = ? WHERE id = 1', ['[{"label":"À jeter"}]', AT]);
     expect(await outbox(db)).toEqual([]);
     expect(await db.select('SELECT * FROM sync_field_clock')).toEqual([]);

@@ -37,6 +37,7 @@ describe('EpochCarryReportRepository', () => {
       recreated: [{ table: 'task', rowId: 't', label: 'Test Pc', by: 'c' as DeviceId, deletedAt: null, deletedBy: null }],
       parentReplaced: [{ table: 'task', rowId: 'p', column: 'project_id', parentId: 'P', space: 'pro', label: 'Sous P', hlc: 'h' as Hlc, kind: 'reattached', cause: 'parent-replaced' }],
       overflow: 4,
+      overflowBy: { restored: 1, recreated: 3, parentReplaced: 0 },
     };
     await reports.save(id, body, true);
     expect(await reports.get(id)).toEqual({ id, ...head('2-x'), ...body, authors: [body.authors[1], body.authors[0]], banner: true, acknowledgedAt: null, damaged: false });

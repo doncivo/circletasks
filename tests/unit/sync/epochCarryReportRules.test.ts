@@ -75,6 +75,7 @@ describe('Y-TECH-05 : constitution et persistance du compte rendu', () => {
       recreated: [{ table: 'task', rowId: t?.id, label: 'Tâche 0', by: B_ID, deletedAt: null, deletedBy: null }],
       parentReplaced: notice.reattached.map((item) => ({ ...(item as object), kind: 'reattached', cause: 'parent-replaced' })),
       overflow: 0,
+      overflowBy: { restored: 0, recreated: 0, parentReplaced: 0 },
       banner: true,
       acknowledgedAt: null,
       damaged: false,
@@ -115,7 +116,7 @@ describe('Y-TECH-05 : constitution et persistance du compte rendu', () => {
     await applyEverywhere(a, copy);
     await rounds(devices);
     expect((await reportsOf(b)).map(stable)).toEqual([
-      { id: 0, createdAt: null, epoch: JSON.parse((await a.data.repos.sync.getMeta('epoch')) ?? 'null') as string, cause: 'restore', reporter: B_ID, opener: A_ID, mode: 'replace', authors: [], restored: [], recreated: [], parentReplaced: [], overflow: 0, banner: false, acknowledgedAt: null, damaged: false },
+      { id: 0, createdAt: null, epoch: JSON.parse((await a.data.repos.sync.getMeta('epoch')) ?? 'null') as string, cause: 'restore', reporter: B_ID, opener: A_ID, mode: 'replace', authors: [], restored: [], recreated: [], parentReplaced: [], overflow: 0, overflowBy: { restored: 0, recreated: 0, parentReplaced: 0 }, banner: false, acknowledgedAt: null, damaged: false },
     ]);
   });
 
@@ -161,6 +162,7 @@ describe('Y-TECH-05 : constitution et persistance du compte rendu', () => {
     expect(report?.recreated.map((i) => i.rowId)).toEqual(ids.slice(0, 500));
     expect(report?.parentReplaced).toEqual([]);
     expect(report?.overflow).toBe(COUNT * 2 - 500);
+    expect(report?.overflowBy).toEqual({ restored: 0, recreated: 1, parentReplaced: COUNT });
     expect(report?.authors).toEqual([{ device: B_ID, fields: TASK_COLUMNS * COUNT, rows: COUNT, tombs: 0, late: 0 }]);
   });
 });

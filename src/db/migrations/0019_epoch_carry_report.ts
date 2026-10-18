@@ -15,6 +15,6 @@ export const migration0019EpochCarryReport: Migration = {
   version: 19,
   name: 'epoch_carry_report',
   statements: [
-    "CREATE TABLE epoch_carry_report (id INTEGER PRIMARY KEY, epoch TEXT NOT NULL, cause TEXT NOT NULL CHECK (cause IN ('restore', 'concurrent', 'reset')), reporter TEXT NOT NULL, opener TEXT NOT NULL, mode TEXT NOT NULL CHECK (mode IN ('replace', 'merge')), authors TEXT NOT NULL DEFAULT '[]', restored TEXT NOT NULL DEFAULT '[]', recreated TEXT NOT NULL DEFAULT '[]', parent_replaced TEXT NOT NULL DEFAULT '[]', overflow INTEGER NOT NULL DEFAULT 0, banner INTEGER NOT NULL DEFAULT 0 CHECK (banner IN (0, 1)), created_at TEXT NOT NULL, acknowledged_at TEXT)",
+    "CREATE TABLE epoch_carry_report (id INTEGER PRIMARY KEY, epoch TEXT NOT NULL, cause TEXT NOT NULL CHECK (cause IN ('restore', 'concurrent', 'reset')), reporter TEXT NOT NULL, opener TEXT NOT NULL, mode TEXT NOT NULL CHECK (mode IN ('replace', 'merge')), authors TEXT NOT NULL, restored TEXT NOT NULL, recreated TEXT NOT NULL, parent_replaced TEXT NOT NULL, overflow INTEGER NOT NULL, overflow_by TEXT NOT NULL, banner INTEGER NOT NULL CHECK (banner IN (0, 1)), created_at TEXT NOT NULL, acknowledged_at TEXT)",
   ],
 };

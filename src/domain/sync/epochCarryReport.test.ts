@@ -127,6 +127,7 @@ describe('borne de 500 lignes nommées et ordre déterministe (critère 11)', ()
     const body = addNamed(EMPTY_CARRY_REPORT_BODY, { restored: items });
     expect(body.restored).toHaveLength(EPOCH_CARRY_REPORT_MAX_NAMED);
     expect(body.overflow).toBe(n - EPOCH_CARRY_REPORT_MAX_NAMED);
+    expect(body.overflowBy).toEqual({ restored: n - EPOCH_CARRY_REPORT_MAX_NAMED, recreated: 0, parentReplaced: 0 });
     const expected = [...items].sort((a, b) => ((b.deletedAt ?? '') < (a.deletedAt ?? '') ? -1 : (b.deletedAt ?? '') > (a.deletedAt ?? '') ? 1 : a.rowId < b.rowId ? -1 : 1)).slice(0, 500);
     expect(body.restored.map((i) => i.rowId)).toEqual(expected.map((i) => i.rowId));
   });
@@ -145,6 +146,7 @@ describe('borne de 500 lignes nommées et ordre déterministe (critère 11)', ()
     expect(once.overflow).toBe(1_200 + 10 + 2 - 500);
     const small = addNamed(EMPTY_CARRY_REPORT_BODY, { parentReplaced: parent, recreated: recreated.slice(0, 1), restored: items.slice(0, 1) }, 2);
     expect([small.restored.length, small.recreated.length, small.parentReplaced.length, small.overflow]).toEqual([1, 1, 0, 2]);
+    expect(small.overflowBy).toEqual({ restored: 0, recreated: 0, parentReplaced: 2 });
   });
 
   it('une ligne de nouveau supprimée plus loin dans le report sort des listes', () => {

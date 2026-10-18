@@ -75,6 +75,14 @@ export interface EpochCarryReportBody {
   readonly parentReplaced: readonly EpochCarryParentItem[];
   /** Lignes nommées au-delà de `EPOCH_CARRY_REPORT_MAX_NAMED`, toutes listes confondues. */
   readonly overflow: number;
+  /** Répartition exacte de `overflow` par liste (nombre exact d'éléments d'une liste = sa longueur + sa part). */
+  readonly overflowBy: EpochCarryOverflow;
+}
+
+export interface EpochCarryOverflow {
+  readonly restored: number;
+  readonly recreated: number;
+  readonly parentReplaced: number;
 }
 
 export interface EpochCarryReportHead {
@@ -97,7 +105,7 @@ export interface EpochCarryReport extends EpochCarryReportHead, EpochCarryReport
   readonly damaged: boolean;
 }
 
-export const EMPTY_CARRY_REPORT_BODY: EpochCarryReportBody = { authors: [], restored: [], recreated: [], parentReplaced: [], overflow: 0 };
+export const EMPTY_CARRY_REPORT_BODY: EpochCarryReportBody = { authors: [], restored: [], recreated: [], parentReplaced: [], overflow: 0, overflowBy: { restored: 0, recreated: 0, parentReplaced: 0 } };
 
 /**
  * Correspondance unique table publiée → colonne de libellé (null : aucune, repli) et clé du type d'élément en français (`kind`, clé de
@@ -276,12 +284,15 @@ export function addNamed(
     ...parentReplaced.map((item) => ({ r: { rank: 2, date: null, table: item.table, rowId: `${item.rowId}\u0000${item.column}` }, list: 2 as const, item })),
   ].sort((a, b) => compareRanked(a.r, b.r));
   const kept = ranked.slice(0, max);
+  const evicted = ranked.slice(max);
+  const by = (list: 0 | 1 | 2): number => evicted.filter((k) => k.list === list).length;
   return {
     authors: body.authors,
     restored: kept.filter((k) => k.list === 0).map((k) => k.item as EpochCarryNamedItem),
     recreated: kept.filter((k) => k.list === 1).map((k) => k.item as EpochCarryNamedItem),
     parentReplaced: kept.filter((k) => k.list === 2).map((k) => k.item as EpochCarryParentItem),
-    overflow: body.overflow + ranked.length - kept.length,
+    overflow: body.overflow + evicted.length,
+    overflowBy: { restored: body.overflowBy.restored + by(0), recreated: body.overflowBy.recreated + by(1), parentReplaced: body.overflowBy.parentReplaced + by(2) },
   };
 }
 

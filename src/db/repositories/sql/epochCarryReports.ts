@@ -1,4 +1,4 @@
-import type { EpochCarryAuthorCount, EpochCarryNamedItem, EpochCarryParentItem, EpochCarryReport, EpochCarryReportBody, EpochCarryReportHead } from '../../../domain/sync/epochCarryReport';
+import type { EpochCarryAuthorCount, EpochCarryOverflow, EpochCarryNamedItem, EpochCarryParentItem, EpochCarryReport, EpochCarryReportBody, EpochCarryReportHead } from '../../../domain/sync/epochCarryReport';
 import type { DeviceId, IsoDateTime } from '../../../domain/types';
 import type { SqlExecutor, SqlRow } from '../../driver';
 import type { EpochCarryReportRepository } from '../epochCarryReportRepository';
@@ -9,7 +9,7 @@ import type { EpochCarryReportRepository } from '../epochCarryReportRepository';
  * `damaged` (signalé à l'écran), jamais un échec de lecture.
  */
 
-const COLUMNS = 'id, epoch, cause, reporter, opener, mode, authors, restored, recreated, parent_replaced, overflow, banner, created_at, acknowledged_at';
+const COLUMNS = 'id, epoch, cause, reporter, opener, mode, authors, restored, recreated, parent_replaced, overflow, overflow_by, banner, created_at, acknowledged_at';
 
 function parseList<T>(raw: unknown, damaged: { value: boolean }): T[] {
   try {
@@ -20,6 +20,20 @@ function parseList<T>(raw: unknown, damaged: { value: boolean }): T[] {
   }
   damaged.value = true;
   return [];
+}
+
+function parseOverflow(raw: unknown, damaged: { value: boolean }): EpochCarryOverflow {
+  try {
+    const value = (typeof raw === 'string' ? JSON.parse(raw) : null) as Partial<Record<keyof EpochCarryOverflow, unknown>> | null;
+    if (value && typeof value === 'object') {
+      const n = (x: unknown): number => (typeof x === 'number' ? x : 0);
+      return { restored: n(value.restored), recreated: n(value.recreated), parentReplaced: n(value.parentReplaced) };
+    }
+  } catch {
+    // signalé par `damaged`
+  }
+  damaged.value = true;
+  return { restored: 0, recreated: 0, parentReplaced: 0 };
 }
 
 function rowToReport(r: SqlRow): EpochCarryReport {
@@ -36,6 +50,7 @@ function rowToReport(r: SqlRow): EpochCarryReport {
     recreated: parseList<EpochCarryNamedItem>(r['recreated'], damaged),
     parentReplaced: parseList<EpochCarryParentItem>(r['parent_replaced'], damaged),
     overflow: Number(r['overflow']),
+    overflowBy: parseOverflow(r['overflow_by'], damaged),
     banner: r['banner'] === 1,
     createdAt: r['created_at'] as IsoDateTime,
     acknowledgedAt: (r['acknowledged_at'] as IsoDateTime | null) ?? null,
@@ -46,7 +61,10 @@ function rowToReport(r: SqlRow): EpochCarryReport {
 export function createEpochCarryReportRepository(db: SqlExecutor): EpochCarryReportRepository {
   return {
     async create(head: EpochCarryReportHead) {
-      const done = await db.execute('INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, created_at) VALUES (?, ?, ?, ?, ?, ?)', [head.epoch, head.cause, head.reporter, head.opener, head.mode, head.createdAt]);
+      const done = await db.execute(
+        "INSERT INTO epoch_carry_report (epoch, cause, reporter, opener, mode, created_at, authors, restored, recreated, parent_replaced, overflow, overflow_by, banner) VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', '[]', '[]', 0, '{}', 0)",
+        [head.epoch, head.cause, head.reporter, head.opener, head.mode, head.createdAt],
+      );
       if (done.lastInsertId !== null) return done.lastInsertId;
       const rows = await db.select<{ id: number }>('SELECT MAX(id) AS id FROM epoch_carry_report');
       return rows[0]?.id as number;
@@ -57,12 +75,13 @@ export function createEpochCarryReportRepository(db: SqlExecutor): EpochCarryRep
     },
     async save(id, body: EpochCarryReportBody, banner) {
       const authors = [...body.authors].sort((a, b) => (a.device < b.device ? -1 : a.device > b.device ? 1 : 0));
-      await db.execute('UPDATE epoch_carry_report SET authors = ?, restored = ?, recreated = ?, parent_replaced = ?, overflow = ?, banner = ? WHERE id = ?', [
+      await db.execute('UPDATE epoch_carry_report SET authors = ?, restored = ?, recreated = ?, parent_replaced = ?, overflow = ?, overflow_by = ?, banner = ? WHERE id = ?', [
         JSON.stringify(authors),
         JSON.stringify(body.restored),
         JSON.stringify(body.recreated),
         JSON.stringify(body.parentReplaced),
         body.overflow,
+        JSON.stringify(body.overflowBy),
         banner ? 1 : 0,
         id,
       ]);
