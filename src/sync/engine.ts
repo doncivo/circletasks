@@ -623,9 +623,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const nextState = async (h: DeviceAck): Promise<PublishedDeviceState> => buildState(currentEpoch, h, stateSeq + 1, snapshotMeta, purgeHorizon, await ackMap());
 
     if (first?.covers) onStateIo = () => deferPublish(true);
-    // Y-FIX-02 (§30, revue B1) : intention d'ajout résolue seulement si la publication est permise (règle actuelle ou borne locale de source
-    // `inflight`) ; refusée, l'intention reste posée, stable d'un cycle à l'autre, et aucun état n'est écrit. Rust juge la tête présentée.
-    if (inflight && publishAllowed) {
+    // Y-FIX-02 (§30, revue B1, contre-revue S3) : intention d'ajout résolue seulement si la publication est permise par la règle actuelle, ou
+    // par la borne locale dont la trace est cette intention (source `inflight`, donc de l'époque courante) ; une borne `local-head` ou
+    // `openedHere` ne résout pas une intention d'une autre époque. Refusée, l'intention reste posée, stable, et aucun état n'est écrit.
+    // `first` est nul exactement quand la règle actuelle permet ; sa `source` n'est rendue que pour une borne ouverte.
+    if (inflight && (!first || first.source === 'inflight')) {
       await (await firstModule()).resolveInflight(deps, inflight, async (h) => {
         const ok = await writeState(await nextState(h), true);
         if (ok) head = h;

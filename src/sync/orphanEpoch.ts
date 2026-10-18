@@ -160,13 +160,16 @@ type Logger = SyncDeps['logger'];
  * Y-IOS-02 (`openedHere`, journal `own-state-recovered { epoch }`) puis Y-FIX-02 : borne locale (règle pure `localBoundCovers`) ; ouverte :
  * journal `own-state-recovered { epoch, source }`. `openedHere` implique son instantané compté : `canPublish` seul l'a refusé, c'est une reprise.
  */
+// Contre-revue S3 : `source` n'est rendue que pour une borne ouverte (fermée : null), si bien que le moteur ne résout une intention par la
+// borne que si `source === 'inflight'` (trace de l'époque courante), et ne nomme la cause d'un refus que si `source` n'est pas nulle.
 export function bound(logger: Logger, facts: PublishFacts): LocalBound {
   if (facts.opened) {
     logger.log('own-state-recovered', { epoch: facts.currentEpoch });
     return { covers: true, source: null, unexplained: 0 };
   }
   const bound = localBoundCovers(facts);
-  if (bound.covers) logger.log('own-state-recovered', { epoch: facts.currentEpoch, source: bound.source });
+  if (!bound.covers) return { ...bound, source: null };
+  logger.log('own-state-recovered', { epoch: facts.currentEpoch, source: bound.source });
   return bound;
 }
 

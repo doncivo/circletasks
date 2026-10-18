@@ -1653,7 +1653,8 @@ refusait, `openedHere` ne couvrait que l'instantané seul, `resolveInflight` n'�
 3. **Rust juge.** Le moteur présente l'état avec la tête de sa trace, sans contrôle de tête de son côté ; `write_state` l'accepte si elle
    égale `own.json` (persisté par `append_journal` avant sa réponse), sinon `state-mismatch`.
 4. **Intention gardée tant que la publication est refusée** (revue B1, option a). `resolveInflight` ne s'exécute que si la publication
-   est permise : par la règle actuelle, ou par la borne locale dont la trace est l'intention elle-même (source `inflight`, cas P2). Il
+   est permise : par la règle actuelle, ou par la borne locale dont la trace est l'intention elle-même (source `inflight`, cas P2) ; une
+   borne de source `local-head` ou l'exception `openedHere` ne résout jamais une intention (d'une autre époque, contre-revue S3). Il
    pose l'hypothèse « ajout réussi » (tête `expect + count`) : acceptée, file retirée et `META.head` posé ; refusée, file gardée,
    publication reprise par l'existant ; `io`, intention gardée pour le cycle suivant. Publication refusée (fichier non expliqué, état
    supprimé après publication) : l'intention reste posée et stable d'un cycle à l'autre, aucun état n'est écrit, aucune file n'est
