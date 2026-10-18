@@ -23,7 +23,7 @@
 .ct-weekday-toggles__day[aria-checked='true'] {
   background: var(--ct-routine-done, var(--ct-color-nav-bg));
   border-color: var(--ct-routine-done, var(--ct-color-nav-bg));
-  color: var(--ct-routine-done-text, var(--ct-color-accent-on));
+  color: var(--ct-routine-done-text, var(--ct-color-on-nav));
 }
 
 .ct-weekday-toggles__day:focus-visible {

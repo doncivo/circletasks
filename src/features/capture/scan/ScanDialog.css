@@ -305,11 +305,12 @@
   border: 2px solid var(--ct-color-accent);
   border-radius: 7px;
   background: var(--ct-color-surface);
-  color: var(--ct-color-accent-on);
+  color: var(--ct-color-text);
 }
 
 .ct-scan__box[data-checked='true'] {
   background: var(--ct-color-accent);
+  color: var(--ct-color-accent-on);
 }
 
 .ct-scan__field {

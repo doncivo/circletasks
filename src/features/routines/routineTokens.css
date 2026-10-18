@@ -22,6 +22,7 @@
     --ct-routine-off-border: #4a4066;
     --ct-routine-off-text: #b7aecd;
     --ct-routine-heat-missed: #2a2242;
+    --ct-routine-heat-text: #f1eef8;
     --ct-routine-today-ring: #8fc4ea;
   }
 }
@@ -31,5 +32,6 @@
   --ct-routine-off-border: #4a4066;
   --ct-routine-off-text: #b7aecd;
   --ct-routine-heat-missed: #2a2242;
+  --ct-routine-heat-text: #f1eef8;
   --ct-routine-today-ring: #8fc4ea;
 }
