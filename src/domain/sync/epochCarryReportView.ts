@@ -11,7 +11,7 @@ import type { SyncTableName } from './syncTables';
 
 /** Comptes rendus gardés : au-delà, les plus anciens **acquittés** sont supprimés ; un non acquitté ne l'est jamais. */
 export const EPOCH_CARRY_REPORT_KEEP = 20;
-/** Clé de `sync_meta` (locale) : le compte rendu d'un report n'a pas pu être enregistré (persistant, levé jusqu'au compte rendu suivant). */
+/** Clé de `sync_meta` (locale) : le compte rendu d'un report n'a pas pu être enregistré (persistant : levé tant que « J'ai vu » ne l'a pas effacée, jamais effacé par le moteur ni par un compte rendu suivant). */
 export const EPOCH_CARRY_REPORT_FAILED_META = 'epochCarryReportFailed';
 /** Journal technique (code d'erreur seulement) : lecture du compte rendu (avertissement `carry-report`) impossible dans un cycle ; le cycle continue, l'avertissement est levé. */
 export const EPOCH_CARRY_REPORT_READ_FAILED_EVENT = 'epoch-carry-report-read-failed';

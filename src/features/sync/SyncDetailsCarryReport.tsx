@@ -3,6 +3,7 @@ import type { EpochCarryReport } from '../../domain/sync/epochCarryReport';
 import { EPOCH_CARRY_REPORT_KEEP } from '../../domain/sync/epochCarryReportView';
 import { tCarry } from '../../i18n/syncCarryReportText';
 import { carryReportFailure, clearCarryReportFailure, type CarryReportFailure } from '../../sync/epochCarryReportBanner';
+import { logFailure } from '../../platform/desktop/log';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { CarryReportSheet } from './CarryReportSheet';
@@ -11,6 +12,11 @@ import { carryCauseText, carryDateTime, carryFailureCause } from './carryReportT
 import { refreshCarryLine } from './carryReportBannerLine';
 import { syncStore } from './syncStore';
 import './CarryReport.css';
+
+/** Revue S10 : l'échec de « J'ai vu » est journalisé en plus d'être affiché (nom de l'erreur seulement, jamais son message). */
+function logSeenFailure(event: string, error: unknown): void {
+  logFailure('sync', `${event} ${JSON.stringify({ name: error instanceof Error ? error.name : typeof error })}`);
+}
 
 interface Loaded {
   readonly reports: readonly EpochCarryReport[];
@@ -78,7 +84,8 @@ export function SyncDetailsCarryReport() {
       // Le bandeau disparaît tout de suite, sans attendre le cycle suivant ; ce compte rendu reste lisible dans l'historique.
       await refreshCarryLine(container);
       reload();
-    } catch {
+    } catch (error) {
+      logSeenFailure('carry-report-seen-failed', error);
       setSeenFailed(true);
     }
   };
@@ -89,7 +96,8 @@ export function SyncDetailsCarryReport() {
       setSeenFailed(false);
       await refreshCarryLine(container);
       reload();
-    } catch {
+    } catch (error) {
+      logSeenFailure('carry-report-failure-seen-failed', error);
       setSeenFailed(true);
     }
   };

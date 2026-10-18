@@ -2,7 +2,7 @@
 // « J'ai vu » (ce seul compte rendu), échec d'enregistrement visible. Base réelle (SQLite Wasm), faux service de synchro dont l'état porte
 // l'avertissement `carry-report` que le moteur lève (le moteur réel est exercé par `carryReportScenario.test.tsx`).
 import { act, cleanup, fireEvent, render, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import type { EpochCarryReportBody, EpochCarryReportHead } from '../../domain/sync/epochCarryReport';
 import { EPOCH_CARRY_REPORT_FAILED_META } from '../../domain/sync/epochCarryReportView';
@@ -36,6 +36,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   cleanup();
   integration?.dispose();
   integration = null;
@@ -226,6 +227,20 @@ describe('« J’ai vu » (critère 18)', () => {
     await waitForElementToBeRemoved(() => screen.queryByRole('dialog'));
     expect(screen.getAllByRole('button', { name: /^Époque du / })).toHaveLength(22);
     expect((await reports.get(ids[0] as number))?.acknowledgedAt).not.toBeNull();
+  });
+
+  // Revue S10 : l'échec de « J'ai vu » est affiché ET journalisé (code seulement), jamais l'un sans l'autre.
+  it('« J’ai vu » en échec : message affiché et échec journalisé (nom de l’erreur seulement)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seed('2-a', '2026-10-18T07:00:00.000Z', ['A']);
+    await start();
+    fireEvent.click(await screen.findByRole('button', { name: /^Époque du / }));
+    const dialog = screen.getByRole('dialog');
+    vi.spyOn(db.data, 'transaction').mockRejectedValue(new Error('ack-refused'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'J’ai vu' }));
+    expect(await within(dialog).findByText('Le compte rendu n’a pas pu être marqué comme vu : réessayez')).toBeTruthy();
+    expect(warn).toHaveBeenCalledWith('[desktop:sync] carry-report-seen-failed {"name":"Error"}');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('ack-refused');
   });
 
   it('sans compte rendu ni échec, la ligne est absente', async () => {
