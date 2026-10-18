@@ -122,11 +122,19 @@ pub(crate) const REASON_FUNCTION: u8 = 3;
 #[cfg(feature = "sqlite")]
 pub(crate) const REASON_VTABLE: u8 = 4;
 
+/// LISTE BLANCHE UNIQUE des pragmas (noms en minuscules) : lue aussi par `tests/unit/sqlPragmaScan.test.ts`, qui vérifie que le code du front
+/// (`src/**`) n'émet aucun autre pragma. Les arguments admis sont décidés dans [`pragma_allowed`].
+#[cfg(feature = "sqlite")]
+pub(crate) const PRAGMA_WHITELIST: &[&str] = &["foreign_keys", "journal_mode", "wal_checkpoint", "data_version", "quick_check"];
+
 /// Pragmas autorisés, avec leur argument : `data_version` (lecture seule, émis par fts5), `quick_check` (lecture seule, émis par `ALTER TABLE ADD COLUMN ... CHECK`), `foreign_keys` (lecture, `ON` ou `1`), `journal_mode` (lecture ou `WAL`), `wal_checkpoint`
 /// (tout argument). Tout autre pragma est refusé, y compris en lecture : un pragma futur reste refusé tant qu'il n'est pas listé ici.
 #[cfg(feature = "sqlite")]
 fn pragma_allowed(name: &str, arg: Option<&str>) -> bool {
     let name = name.to_ascii_lowercase();
+    if !PRAGMA_WHITELIST.contains(&name.as_str()) {
+        return false;
+    }
     let arg = arg.map(|a| a.trim().to_ascii_lowercase());
     match name.as_str() {
         "foreign_keys" => matches!(arg.as_deref(), None | Some("on" | "1")),

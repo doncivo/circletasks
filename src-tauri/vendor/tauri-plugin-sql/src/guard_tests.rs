@@ -477,3 +477,15 @@ async fn sec01_11_alter_table_forms_that_run_internal_pragmas_pass() {
         fx.exec(sql).await.unwrap_or_else(|e| panic!("{sql} : {e}"));
     }
 }
+
+/// Liste blanche unique (lue aussi par `tests/unit/sqlPragmaScan.test.ts`) : chaque nom listé est accepté par `pragma_allowed` pour au
+/// moins une forme, et un nom absent de la liste est refusé quelle que soit sa forme.
+#[test]
+fn sec01_8_the_single_white_list_matches_the_decisions() {
+    use crate::guard::{PRAGMA_WHITELIST, decide};
+    let pragma = |name: &str, arg: Option<&str>| decide(libsqlite3_sys::SQLITE_PRAGMA, Some(name), arg);
+    for name in PRAGMA_WHITELIST {
+        assert!(["", "ON", "1", "WAL", "TRUNCATE", "t"].iter().any(|a| pragma(name, Some(a)).is_none()) || pragma(name, None).is_none(), "{name}");
+    }
+    assert!(pragma("user_version", None).is_some() && pragma("user_version", Some("1")).is_some());
+}
