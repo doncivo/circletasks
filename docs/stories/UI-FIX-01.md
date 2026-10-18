@@ -97,22 +97,53 @@ Découpage : 2 + 1,5 + 0,5 + 0,5 = 4,5 h (1,5 h de correctif, 3 h de garde-fou).
 - Aucun fichier écrit hors du dépôt ; aucun secret ; interface en français, aucun texte en dur (cette story ne modifie aucun texte).
 - Clôture refusée si un critère manque : le product-owner vérifie les 21 critères avant « fait ».
 
-## Preuves (à remplir par l'agent)
+## Preuves
 
 | Élément | Valeur |
 |---|---|
-| Critère 1, rouge avant (commit, règles et ratios en échec) | |
-| Critère 5, vert après (commit) | |
-| Départ avant / après chaque commit (octets gzip, seuil 358 400) | |
-| Nombre de paires analysées, de relations, de jetons décoratifs, de règles non résolues | |
-| E2E sombre (critère 13), rouge puis vert | |
-| Captures sombres (critère 14) : noms des fichiers | |
-| Critères 20 et 21 : écarts de pistes mesurés (clair, sombre), signatures de style calculé, rouge puis vert | |
-| Commandes locales et résultats | |
+| Critère 1, rouge avant | Commit `b8fcf998` (test seul, `main` 81e3a0ac). Messages exacts, thème sombre : `ui/Toast.css :: .ct-toast (sombre) : #1c1630 sur #120e20 = 1,09:1 (minimum 17:1)` ; `features/spaces/SpacesScreen.css :: .ct-projects__button--primary (sombre) : #1c1630 sur #120e20 = 1,09:1 (minimum 17:1)` ; `interrupteur activé : piste sur la surface (sombre) : #120e20 sur #1c1630 = 1,09:1 (minimum 3,00:1)` ; `bandeau « Annuler » : anneau de focus sur le fond du bandeau (sombre) : #1c1630 sur #120e20 = 1,09:1 (minimum 3,00:1)` ; `interrupteur éteint : pouce sur la piste (sombre) : #ffffff sur #ddd9e4 = 1,39:1 (minimum 3,00:1)`. Les trois paires de l'audit sont vertes en clair (14,49:1). 28 tests rouges sur 56 au premier passage. |
+| Critère 5, vert après | Commit `0d59652f` : 443 tests verts (`src/ui/theme`, `Switch`, `Toast`, `spaces`, `routines`, `security`), lint et typage verts. |
+| Départ avant / après | `main` 81e3a0ac avec les tests seuls : **358 336** ; après `0d59652f` : **358 408** (+72), plafond 358 400 dépassé de 8. Mesure à l'octet par un script qui répète `startBundle.test.ts` (qui n'affiche que des Ko). **Aucun JS applicatif n'a changé** : seuls des fichiers CSS ont été modifiés, et le hachage d'un bloc incluant celui de ses dépendances, environ 85 des blocs de départ changent de nom ; le +72 est du bruit de gzip sur ces chaînes aléatoires. Résolution prévue : rebase sur Y-FIX-02 (fusion imminente, -54 octets de JS dans le départ), à remesurer après le rebase. Le problème de fond (bruit des hachages contre une marge de quelques dizaines d'octets) est remonté à Ali par le coordinateur ; aucun hachage, aucune configuration de build et aucun seuil n'ont été touchés par cette story. Les commits e2e, captures et documentation ne touchent aucun fichier du bundle. |
+| Paires, relations, jetons décoratifs, règles non résolues | 160 paires de règle par thème (108 feuilles lues) ; 24 relations par thème (7 par sélecteur, 17 par jetons) ; 23 jetons décoratifs avec raison ; 1 règle non résolue (`.ct-week-event[data-layout='pc']`, texte hérité, couvert par une relation) ; 0 règle exclue. |
+| E2E (critères 13 et 21) | `tests/e2e/UI-FIX-01.spec.ts` : 8 tests par projet (`pc`, `iphone`), soit 16, sombre puis clair. La lecture des styles calculés ne tourne pas en local (règle d'Ali) : verte ou rouge à renseigner après la CI ; le rouge avant est porté par le test de contraste statique (même défaut, mêmes valeurs 1,09:1). |
+| Captures sombres (critère 14) | `Annuler-Sombre`, `Espaces-Sombre`, `Reglages-Sombre`, `Onglets-Sombre` (`test-results/visual/`, générées par `npm run visual` en CI). Valeurs sombres de l'interrupteur à valider sur `Reglages-Sombre` et `Onglets-Sombre`. |
+| Critères 20 et 21 | Écarts de piste (opacité 0,5 composée sur la surface) : éteint 1,18:1 en clair, 1,85:1 en sombre ; activé 4,73:1 en clair, 2,88:1 en sombre (seuil 1,15:1). Rouge avant dans `b8fcf998` : `cursor` « default » au lieu de `not-allowed`, aucune règle `.ct-switch:disabled .ct-switch__thumb`, écart de piste activée 1,04:1 en sombre. Signatures de style calculé : lues par l'e2e (CI). |
+| Commandes locales | `CT_TEST_WORKERS=1 npx vitest run src/ui/theme src/ui/Switch src/ui/Toast src/features/spaces src/features/routines src/features/security --coverage.enabled=false` (32 fichiers, 443 tests verts) ; `npx eslint src/ui src/features/spaces tests` et `npx tsc --noEmit` sans sortie ; `npx playwright test --list tests/e2e/UI-FIX-01.spec.ts` (16 tests) ; `npx playwright test --config playwright.visual.config.ts --list` (4 captures nouvelles). |
+
+### Ratios avant / après
+
+| Élément | Clair avant | Clair après | Sombre avant | Sombre après |
+|---|---|---|---|---|
+| Bandeau « Annuler » (texte) | 14,49 | 14,49 | 1,09 | 18,93 |
+| Bouton principal des projets (texte) | 14,49 | 14,49 | 1,09 | 18,93 |
+| Anneau de focus du bandeau | 14,49 | 14,49 | 1,09 | 18,93 |
+| Interrupteur activé, piste sur la surface | 14,49 | 14,49 | 1,09 | 9,94 |
+| Interrupteur activé, pouce sur la piste | 14,49 | 14,49 | 18,93 (pouce blanc) | 9,94 |
+| Interrupteur éteint, piste sur la surface | 1,39 (exemptée) | 1,39 (exemptée) | au moins 3 | 3,18 |
+| Interrupteur éteint, pouce sur la piste | 1,39 (exemptée) | 1,39 (exemptée) | 1,39 | 4,78 |
+
+### Paires et exemptions (liste pour la relecture accessibility-i18n)
+
+- Paires de règle : 4,5:1, tous fichiers `src/**/*.css`, deux thèmes ; aucune exclusion.
+- Relations par sélecteur (3:1) : interrupteur (piste et pouce activés, piste et pouce éteints, anneau de focus), anneau de focus du bandeau ; texte hérité de l'événement de la semaine à 4,5:1.
+- Relations par jetons : textes de routines, de l'écran d'appairage, des onglets colorés, pastille « Tout », « Un jour » (4,5:1) ; pouce du commutateur d'édition et poignée (3:1).
+- **Exemptions fermées (2)** : en clair seulement, `interrupteur éteint : piste sur la surface` et `interrupteur éteint : pouce sur la piste` (1,39:1, maquette `Reglages.html`, décision d'Ali du 2026-10-18).
+- Jetons décoratifs (23, raison dans `contrastCss.test.ts`) : bordures, anneau de sélection, couleurs de base des pastilles d'espace (testées par `contrast.test.ts`), icônes Lucide colorées (contraste en sombre reporté avec le balayage après la 1.0), éléments de l'écran Focus et d'appairage, barres de statistiques, ombre des gestes.
+
+### Fichiers modifiés
+
+Tests : `src/ui/theme/cssContrastKit.ts` et `src/ui/theme/contrastCss.test.ts` (nouveaux), `src/ui/theme/contrast.test.ts`, `src/ui/theme/noHardCodedColors.test.ts`, `tests/e2e/UI-FIX-01.spec.ts` (nouveau), `tests/visual/capture.spec.ts`.
+Jetons et feuilles : `src/ui/theme/tokens.css`, `src/ui/Switch.css`, `src/ui/Toast.css`, `src/ui/WeekdayToggles.css`, `src/features/spaces/SpacesScreen.css`, `src/features/capture/scan/ScanDialog.css`, `src/features/security/security.css`, `src/features/week/WeekScreen.css`, `src/features/routines/routineTokens.css`. Aucun fichier TypeScript de l'application.
 
 ## Écarts
 
-(aucun à ce jour)
+- **Autres paires corrigées (décision 8)** : `.ct-scan__box` (texte et fond identiques, 1,00:1 dans les deux thèmes ; texte `--ct-color-text`, état coché `--ct-color-accent-on`) ; `.ct-lock__badge` et `.ct-week__dropHere` (violet 2,00:1 en sombre, passés à `--ct-color-someday`, identique en clair) ; `--ct-routine-heat-text` en sombre (1,03:1 sur la case manquée, valeur sombre `#f1eef8`).
+- **Bordure du pouce de l'interrupteur désactivé et activé** : jeton `--ct-color-switch-on-thumb` (et non `switch-off-thumb`), sinon contour presque invisible sur la piste activée. Aucun jeton nouveau.
+- **Nommage de la fiche** : les relations « piste désactivée / pouce désactivé » du critère 8 sont, dans le test, « interrupteur éteint » (jetons au repos, sans opacité) ; l'opacité du désactivé n'est composée que pour le critère 20.
+- **Pouce éteint en clair 1,39:1** (la fiche annonçait 1,37:1) ; pouce creux blanc sur `#ddd9e4` à l'opacité 0,5 très discret en clair : le curseur et l'opacité portent surtout la différence. À juger sur capture claire (non demandée).
+- **Bandeau et bouton principal en sombre** : `nav-bg` `#120e20` sur la page `#1c1630` = 1,09:1 pour la forme (texte 18,93:1). Pas d'exemption ni de bordure ajoutées ; à juger sur capture.
+- **Interrupteur désactivé sur capture** : Réglages n'en a aucun durablement ; `Onglets-Sombre` montre un désactivé-activé, un éteint et un activé. Le désactivé-éteint n'existe pas dans l'app : l'e2e en pose la copie dans le DOM (attribut `disabled`), sans page de démonstration.
+- **Départ de 358 408** : voir Preuves ; résolution prévue par le rebase sur Y-FIX-02.
 
 ## Questions à Ali (sans bloquer)
 
