@@ -1653,12 +1653,22 @@ cours » jusqu'à la relance de l'app, sans erreur : un échec silencieux.
    sortie est `cloud-pending` (aucun code nouveau) : phase `waiting-icloud`, « En attente d’iCloud », puis `errorStreak`, `retryAt` et
    `waitingSince` (§22 point 6 et Y-IOS-02), jamais un arrêt. 15 s < 20 s < 25 s (borne du cycle en arrière-plan) : Swift répond d'abord.
 2. **Issue d'une coordination gardée** : le résultat du corps s'il existe (une annulation ne défait pas un corps commencé) ; sinon
-   `cloud-pending` si la garde a tiré ; sinon `io`. La garde ne répond jamais à l'appel : la réponse reste unique, celle de `onFiles`.
-3. **Appel abandonné.** Le fil de `call_with_deadline` reste bloqué jusqu'à la réponse de Swift, qui est jetée. Au plus **un** appel abandonné
-   à la fois : tant qu'il n'a pas répondu, toute commande bornée répond `cloud-pending` aussitôt, sans être envoyée (la file série de Swift la
-   ferait attendre derrière lui), journal `bookmark-call-skipped` ; le compteur redescend à la réponse tardive (ou à la panique du fil).
-   L'échéance inscrit `bookmark-call-timeout` avec le seul nom de la commande. Le verrou `inner` de `SyncCore` n'est plus tenu au-delà de
-   l'échéance (`scan_inner` rend `cloud-pending` comme toute erreur) ; `service.rs` et `store.rs` ne changent pas.
+   `cloud-pending` si la garde a tiré et que `coordinate` a fini par l'annulation (`NSUserCancelledError` du domaine Cocoa, ou aucune
+   erreur ; revue S2) ; sinon `io`, y compris une autre erreur arrivée en même temps que la garde. La garde ne répond jamais à l'appel : la réponse reste unique, celle de `onFiles`.
+3. **Appel abandonné.** Le fil de `call_with_deadline` reste bloqué jusqu'à la réponse de Swift, qui est jetée. Une place par file de Swift
+   (file série des fichiers ; fil principal pour `appState`, `OFF_QUEUE_COMMANDS`, revue I1), réservée sous le verrou du contrôle avant
+   l'envoi et rendue à la réponse, même tardive (revue S1) : au plus **un** appel en vol, donc au plus un abandonné, par file. Une
+   commande sans place attend au plus son échéance ; si la place est tenue par un appel abandonné, elle répond `cloud-pending` aussitôt,
+   sans être envoyée (la file série de Swift la ferait attendre derrière lui), journal `bookmark-call-skipped`. `appState` n'est donc
+   jamais refusé derrière un appel de fichier abandonné (sinon `owner_ready` rendrait faux et toute action confirmée échouerait en
+   `not-foreground`), et un `appState` abandonné ne ferme pas la file des fichiers. L'échéance inscrit `bookmark-call-timeout` avec le seul
+   nom de la commande. **Effet d'une écriture tardive** (revue I2) : jeter la réponse ne défait rien ; un `append`, `writeAtomic`,
+   `rename` ou `remove` abandonné peut avoir écrit, et une réponse arrivée juste après l'échéance est rendue en échec alors que l'écriture
+   a eu lieu. Garantie : aucune double écriture silencieuse. Au cycle suivant, `append_journal` (`store.rs`) relit le segment, y voit plus
+   d'enregistrements que `expect_records` et rend `segment-mismatch` sans écrire ; le moteur passe au segment suivant, comme après un arrêt
+   brutal juste après l'écriture (enregistrement relu deux fois au plus, application idempotente par hlc). Test
+   `y_ios_05_12_late_append_effect_is_caught_by_segment_mismatch`. Le verrou `inner` de `SyncCore` n'est plus tenu au-delà de l'échéance
+   (`scan_inner` rend `cloud-pending` comme toute erreur) ; `service.rs` et `store.rs` ne changent pas.
 4. **État illisible traité comme `cloud`, lien conservé.** `availability()` rend `cloud` quand `resourceValues` échoue ; `readFrom` refuse
    tout état autre que `local` par `cloud-pending` avant la coordination ; `download` sur un état illisible rend `cloud-pending` (plus `[:]`).
    `"error"` n'est plus produit que pour un lien symbolique (état d'un élément, entrée listée), qui reste `unsafe-folder` côté Rust : une
