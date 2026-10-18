@@ -52,6 +52,8 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   sync: createSyncRepository(executor, stamper),
   // Y-TECH-05 : comptes rendus du report d'époque, implémentation chargée à la demande (hors du JavaScript de départ).
   carryReports: () => import('./epochCarryReports').then((m) => m.createEpochCarryReportRepository(executor)),
+  // T-TECH-01 : doublons d'occurrences de série, implémentation chargée à la demande.
+  occurrenceDedup: () => import('./occurrenceDedup').then((m) => m.createOccurrenceDedupRepository(executor)),
   // Y-07 (début)
   // Y-07 (fin)
 });

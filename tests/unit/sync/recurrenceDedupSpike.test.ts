@@ -87,13 +87,16 @@ describe('T-TECH-01 spike : technique du nettoyage (critère 14)', () => {
     const onA = await state(a);
     const onB = await state(b);
     // eslint-disable-next-line no-console -- relevé du spike, copié dans la fiche
+    // eslint-disable-next-line no-console -- relevé du spike, copié dans la fiche
     console.info('[spike JS] A', JSON.stringify(onA), 'B', JSON.stringify(onB), JSON.stringify(results));
     const conflicts = async (d: SimDevice) => d.driver.select('SELECT table_name, field, kept_value, discarded_value FROM conflict_log');
+    // eslint-disable-next-line no-console -- relevé du spike, copié dans la fiche
     console.info('[spike JS conflits] A', JSON.stringify(await conflicts(a)), 'B', JSON.stringify(await conflicts(b)));
     expect(onB).toEqual(onA);
     // Démarrage suivant : la vérification rétablit la ligne terminée écartée par erreur.
     const again = [await runRecurrenceDedupOnce({ data: a.data, taskEntities: createTaskEntities() }), await runRecurrenceDedupOnce({ data: b.data, taskEntities: createTaskEntities() })];
     await settle(a, b);
+    // eslint-disable-next-line no-console -- relevé du spike, copié dans la fiche
     console.info('[spike JS après vérification] A', JSON.stringify(await state(a)), 'B', JSON.stringify(await state(b)), JSON.stringify(again));
     expect(await state(b)).toEqual(await state(a));
   });

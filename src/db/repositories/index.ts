@@ -31,3 +31,4 @@ export type * from './syncUnknownRepository';
 // Y-TECH-05
 export type * from './epochCarryReportRepository';
 // (fin Y-TECH-05)
+export type * from './occurrenceDedupRepository';
