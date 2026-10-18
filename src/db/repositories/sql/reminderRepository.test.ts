@@ -17,6 +17,21 @@ describe('ReminderRepository (SQL)', () => {
     await db.close();
   });
 
+  it('M1 (T-TECH-01) : un identifiant supprimé est rétabli pour la même cible et la même avance, jamais capté pour une autre cible', async () => {
+    const r1 = asEntityId<ReminderId>('b0000000-0000-4000-8000-0000000000a1');
+    const input = { id: r1, targetType: 'task', targetId: taskId, offsetMin: 30, fireAt: '2026-10-05T08:30' as never } as const;
+    await db.data.repos.reminders.replaceForTarget(target, [input]);
+    await db.data.repos.reminders.softDeleteForTarget(target);
+    const back = await db.data.repos.reminders.replaceForTarget(target, [{ ...input, fireAt: '2026-10-06T08:30' as never }]);
+    expect(back.map((r) => [r.id, r.fireAt])).toEqual([[r1, '2026-10-06T08:30']]);
+    // Même identifiant demandé pour une autre cible ou une autre avance : erreur, la ligne existante n'est pas réécrite.
+    const other = asEntityId<TaskId>('a0000000-0000-4000-8000-000000000002');
+    await expect(db.data.repos.reminders.replaceForTarget({ type: 'task', id: other }, [{ ...input, targetId: other }])).rejects.toThrow();
+    expect((await db.data.repos.reminders.getById(r1))?.targetId).toBe(taskId);
+    await db.data.repos.reminders.softDeleteForTarget(target);
+    await expect(db.data.repos.reminders.replaceForTarget(target, [{ ...input, offsetMin: 60 as never }])).rejects.toThrow();
+  });
+
   it('replaceForTarget crée, conserve et retire des rappels (N-02)', async () => {
     const r1 = asEntityId<ReminderId>('b0000000-0000-4000-8000-000000000001');
     const r2 = asEntityId<ReminderId>('b0000000-0000-4000-8000-000000000002');
