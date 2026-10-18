@@ -116,3 +116,93 @@ Découpage de l'estimation : constitution 4 à 5 h, persistance 2 h, écran et b
 - Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de 27 h).
 - Aucun fichier écrit hors du dépôt ; aucun secret ; aucun libellé d'utilisateur hors de la base locale.
 - Clôture refusée si un critère manque : le product-owner vérifie les 29 critères (le 9 compte s'il est applicable) avant « fait ».
+
+## Phase 1 : constitution, persistance, banc (agent sync-icloud, 2026-10-18)
+
+Critères 1 à 15 et 23 à 25, sur la branche `y-tech-05-compte-rendu` (depuis `origin/main` 0e33dd22, Y-FIX-04 fusionnée). La phase 2 (critères 16 à 22 et 26, écran et bandeau) est faite par settings-personalization sur le contrat ci-dessous.
+
+### Numéro de migration retenu : **0019**
+
+T-TECH-01, qui réservait la 0019, n'a pas commencé et n'a pas encore de fiche : sa ligne de `docs/backlog.md` porte maintenant « migration de nettoyage **0020** ». Aucun trou de numérotation. Conséquences notées : la version de schéma publiée (`sv`) passe à 19 (un appareil encore en 18 voit l'autre comme « version plus récente », comportement habituel de toute migration) ; `APP_SCHEMA_VERSION` de `src-tauri/src/backup.rs` passe à 19 (sinon les sauvegardes faites après la migration seraient refusées comme « plus récentes ») et le test Rust de la sauvegarde « plus récente » passe de v19 à v20. Le texte du compte rendu de l'audit (ligne B8, « migration 0019 de nettoyage ») est à corriger en fin de story avec l'audit.
+
+### Ce qui est livré
+
+| Élément | Fichier |
+|---|---|
+| Règles pures : classement rétablie / recréée, correspondance table → colonne de libellé et clé du type (`CARRY_REPORT_TABLES`, repli « (sans titre) » + `shortRowId`), compteurs par auteur, borne de 500 et ordre, bandeau, cause, copie de la notice, effet de « J'ai vu » sur la notice | `src/domain/sync/epochCarryReport.ts` |
+| Table locale `epoch_carry_report` (jamais publiée : hors de `SYNC_TABLES`, aucun déclencheur) | `src/db/migrations/0019_epoch_carry_report.ts` |
+| Dépôt, chargé à la demande (`Repositories.carryReports()`, import dynamique) | `src/db/repositories/epochCarryReportRepository.ts`, `src/db/repositories/sql/epochCarryReports.ts` |
+| Constitution à l'étape (c) : état de chaque ligne juste avant l'application de son report (= juste après (b)) et juste après, compteurs, troisième liste ; écriture dans la transaction de la page | `src/sync/epochSwitch.ts` (`reapply`, `createCarryReport`, `recordCarryReport`, `reportFailed`) |
+| « J'ai vu » (pour la phase 2) | `src/sync/epochCarryReportAck.ts` |
+| Cause « reset » d'une réinitialisation même par remplacement : option `reset` passée par le moteur | `src/sync/engine.ts` (une ligne) |
+
+Règles de constitution retenues (précisions de la fiche) :
+- **Compteurs** : toute opération passée par (c) compte, appliquée ou non (« qu'il change ou non la valeur visible ») : `fields` = champs propres reportés par auteur (hlc du champ), `rows` = lignes distinctes par auteur, `tombs` = traces purgées par auteur de la trace, `late` = lignes reportées par `carryNewer` (marque `late: 1` dans l'opération parquée), jamais dans `fields` ni `rows`. Les lignes de l'**amorce** (espaces Pro et Perso, auteur `SEED_DEVICE_ID`, identiques partout) ne sont jamais comptées : sans cette règle, le banc montrait un auteur fantôme « 00000000… » avec 12 champs sur 2 lignes.
+- **Listes** : remplacement seulement ; « rétablie » et « recréée » selon les définitions de la fiche, auteur du rétablissement = horloge de `deleted_at` (sinon `*`, sinon la ligne) après application ; date et auteur de la suppression écartée = horloge de `deleted_at` (ou la trace) avant. Une ligne de nouveau supprimée plus loin dans le même report sort des listes. Fusion : aucune liste « rétablies » / « recréées » (la troisième liste reste tenue si une ligne est rattachée ou mise de côté).
+- **Borne** : 500 lignes nommées **toutes listes confondues**, ordre : rétablies, puis recréées, puis parent remplacé ; dans chaque liste, date de suppression écartée décroissante, table, identifiant. `overflow` = total au-delà, `overflowBy` = sa répartition exacte par liste (nombre exact d'éléments d'une liste = longueur + sa part).
+- **Création** : dans la transaction de la **première page** de (c), ou dans celle de l'étape (d) si rien n'est à reporter : aucune transaction de plus (les tests de reprise de Y-FIX-04, qui comptent les transactions de (c), passent sans changement). Le numéro du compte rendu est mémorisé dans `sync_meta.epochSwitch` dans la même transaction. Les 20 plus récents sont gardés à chaque création (acquittés au-delà supprimés, un non acquitté jamais).
+- **Échec d'écriture** : `SQLITE_FULL` / `SQLITE_IOERR` (`isStorageFailure`) : relancé, la page entière est annulée (reports gardés), reprise au cycle suivant. Autre erreur : le report se fait, événement `epoch-carry-report-failed { code }` (aucun libellé), marque persistante `sync_meta.epochCarryReportFailed = { epoch, at, code }`, et dès maintenant l'indicateur de Y-FIX-04 (`markEpochCarryNoticeFailure`) qui lève `carry-reattached`.
+- **Notice de Y-FIX-04** : lue et copiée (les items d'une page vont dans la troisième liste, avec `kind` `reattached` / `held` et `cause: 'parent-replaced'` ; une notice antérieure, écrite avant tout compte rendu, est copiée une fois dans le compte rendu suivant). **Elle n'est pas retirée au report** (écart, voir plus bas) : elle l'est par « J'ai vu ».
+
+## Contrat pour l'écran (phase 2, settings-personalization)
+
+**Accès** (jamais de SQL hors du dépôt ; ce dépôt et ces modules sont **à la demande**, à n'importer que par import dynamique depuis un bloc à la demande) :
+
+```ts
+const reports = await data.repos.carryReports();     // EpochCarryReportRepository (src/db/repositories/epochCarryReportRepository.ts)
+await reports.unacknowledged();                       // non acquittés, du plus récent au plus ancien : [0] = dernier non acquitté
+await reports.list(EPOCH_CARRY_REPORT_KEEP);          // historique de Détails (20 plus récents)
+await reports.get(id);
+// « J'ai vu » : toujours par ce cas d'usage (une transaction : acquitte ce seul compte rendu, puis retire de la notice de Y-FIX-04
+// ses lignes rattachées si plus aucun compte rendu non acquitté n'en nomme ; les mises de côté restent) :
+const { acknowledgeEpochCarryReport } = await import('../../sync/epochCarryReportAck');
+await acknowledgeEpochCarryReport(data, id, nowIso);  // vrai si acquitté par cet appel, faux si déjà acquitté ou absent
+```
+
+**Forme** (`EpochCarryReport`, `src/domain/sync/epochCarryReport.ts`) :
+
+```ts
+{ id: number; epoch: string; cause: 'restore' | 'concurrent' | 'reset'; reporter: DeviceId; opener: DeviceId; mode: 'replace' | 'merge';
+  createdAt: IsoDateTime; acknowledgedAt: IsoDateTime | null; banner: boolean; damaged: boolean;   // damaged : une colonne JSON illisible, lue vide
+  authors: { device: DeviceId; fields: number; rows: number; tombs: number; late: number }[];      // triés par appareil
+  restored:  { table; rowId; label: string | null; by: DeviceId; deletedAt: IsoDateTime; deletedBy: DeviceId }[];
+  recreated: { table; rowId; label: string | null; by: DeviceId; deletedAt: null; deletedBy: null }[];
+  parentReplaced: { table; rowId; column; parentId; space; label; hlc; kind: 'reattached' | 'held'; cause: 'parent-replaced' }[];
+  overflow: number; overflowBy: { restored: number; recreated: number; parentReplaced: number } }
+```
+
+- `label` null : afficher le repli « (sans titre) » suivi de `shortRowId(rowId)` (8 caractères).
+- Type d'élément : `carryReportKind(table)` donne la clé (`task`, `project`, `checklistItem`, `routineLog`… ou `other`) ; noms au singulier à créer dans le catalogue (Tâche, Projet, Objectif, Répétition, Routine, Jour de routine, Pause de routine, Rappel, Événement, Checklist, Élément de checklist, Session Focus, Compte d'agenda, Jour férié, Espace, Réglage, Autre élément).
+- Appareils : `reporter`, `opener`, `by`, `deletedBy`, `authors[].device` sont des identifiants : nom lisible par `deviceName` des états de synchro, « Cet appareil » pour soi, « (oublié) » pour une identité oubliée.
+- Nombre exact d'éléments d'une liste : `liste.length + overflowBy[liste]` ; « et N autres » en fin de liste avec `overflowBy[liste]` (ou `overflow` en un seul total).
+- Écritures reportées : `fields + tombs + late` par auteur ; tout à zéro : « Aucune écriture à reporter ».
+
+**Règle du bandeau** : levé tant qu'il existe un compte rendu avec `acknowledgedAt === null` et `banner === true`. `banner` vaut vrai si et seulement si mode `replace`, au moins une écriture reportée et au moins une ligne nommée (une des trois listes ou débordement) : un report sans écriture, une fusion ou un compte rendu sans élément nommé n'en lèvent jamais (critères 7, 8, 19). Un compte rendu acquitté ne ressort jamais en bandeau. La lecture du bandeau au démarrage doit rester minuscule dans le départ (par exemple un appel au dépôt après le premier cycle, depuis un bloc à la demande) : **marge du départ après la phase 1 : 234 octets**.
+
+**Échec d'écriture** : `sync_meta.epochCarryReportFailed` (`EPOCH_CARRY_REPORT_FAILED_META`) = `{ epoch, at, code }`, persistant, jamais effacé par le moteur : la phase 2 en dérive l'avertissement « Le compte rendu du changement d'époque n'a pas pu être enregistré : {cause} » (Détails et bandeau) et l'efface à l'acquittement. D'ici là, `carry-reattached` est levé (indicateur non persistant de Y-FIX-04).
+
+**Textes attendus** (clés à créer par la phase 2 **dans un catalogue chargé à la demande** `fr/en.syncCarryReport.ts`, jamais dans le départ ; formulations sans pluriel automatique) : titre « Compte rendu du changement d'époque » ; « Époque du {date} à {heure} » (24 h) ; causes « Restauration "Appliquer partout" » / « Époques concurrentes » / « Réinitialisation de la synchro » ; « Ouverte par : {appareil} » ; « Reporté par : {appareil} » ; « Écritures reportées par {appareil} : {n} » (avec champs, lignes, traces, écritures pendant le changement) ; « Rétablis alors que vous les aviez supprimés » ; « Supprimé le {date} à {heure} par {appareil} » ; « Rétabli par : {appareil} » ; « Recréés » ; « Rattachés à « Sans projet » » / « Mis de côté (parent remplacé) » ; « et {n} autres » ; « Éléments rétablis : {n} » ; « Aucun élément supprimé n'a été rétabli » ; « Aucune écriture à reporter » ; « (sans titre) » ; « J'ai vu » ; bandeau « Changement d'époque : éléments rétablis : {n}. Voir le compte rendu » ; échec « Le compte rendu du changement d'époque n'a pas pu être enregistré : {cause} » ; compte rendu endommagé « Une partie de ce compte rendu est illisible ».
+
+### Preuves
+
+| Élément | Valeur |
+|---|---|
+| Critère 23, rouge avant | Commit **a1dbad1b** (test seul, sur 717abb1e : table, dépôt et règles pures sans constitution) : `AssertionError: expected [] to deeply equal [ { id: Any<Number>, …(14) } ]` (`tests/unit/sync/epochCarryReport.test.ts`, assertion d'égalité ; les assertions de départ sont vertes) |
+| Critère 23, vert après | Commit **5c383301** (constitution) ; attente complétée du champ `overflowBy` (zéros) au commit **1ca270e6**, qui ajoute ce champ au schéma |
+| Critère 24 | Même fichier : C reporte à son tour, compte rendu identique (même contenu, reporteur C), aucun libellé contredit, les trois bases identiques, une seule « Test Pc », A (ouvreur) sans compte rendu |
+| Critère 25 | Même fichier : `setEpochSwitchTestHooks({ classify: () => null })` : l'assertion du critère 23 échoue (`rejects.toThrow`), listes vides ; sans l'injection, le critère 23 est vert |
+| Critères 1, 6 à 9, 11, 14 sur le banc | `tests/unit/sync/epochCarryReportRules.test.ts` : écriture tardive comptée à part ; arrêt brutal avant la première page, entre les deux pages, après la dernière (501 tâches) : un seul compte rendu identique à l'exécution de référence ; réinitialisation : `merge`, `reset`, listes vides, sans bandeau ; rien à reporter : compte rendu à zéro, sans bandeau ; troisième liste égale à la notice, notice antérieure copiée une fois ; 501 recréées : 500 nommées, `overflow` 502, `overflowBy` exact ; refus d'écriture : bases comme sans panne, événement, marque, `carry-reattached` ; `SQLITE_FULL` / `SQLITE_IOERR` : page annulée, reprise, compte rendu complet ; « J'ai vu » |
+| Critères 2 à 5, 11, 13, 15 en unitaire | `src/domain/sync/epochCarryReport.test.ts` (dont 501 et 5 000 lignes, correspondance de toutes les tables publiées), `src/db/repositories/sql/epochCarryReports.test.ts` (élagage : 25 dont 2 non acquittés, 30 non acquittés) |
+| Critères 10, 12 | `src/db/migrations/0019_epoch_carry_report.test.ts` (schéma exact, base neuve, base 18 peuplée intacte, rejouable, aucun déclencheur ni entrée de file) ; journal du scénario 23 sans aucun libellé |
+| Hors du départ | `tests/bundle/startBundle.test.ts` : `sql/epochCarryReports.ts` bloc à la demande ; marqueurs du compte rendu absents des blocs de départ |
+| Bundle de départ (octets gzip, seuil 358 400) | Avant (0e33dd22, mesuré dans ce worktree) : **357 967** ; après 1ca270e6 : **358 166**, marge **234** (+199 : texte de la migration 0019, toujours dans le départ avec le registre des migrations, et l'import dynamique du dépôt ; aucune règle ni écriture du compte rendu). `npm run test:bundle` : 19 verts |
+| Commandes (2026-10-18) | `CT_TEST_WORKERS=1 npx vitest run src/sync src/domain/sync src/db tests/unit/sync tests/sim tests/bundle --coverage.enabled=false` : 188 fichiers, 1 996 tests verts ; `src/features/sync src/features/app src/platform/backup` : 68 fichiers, 744 verts ; `npm run lint`, `npm run typecheck` propres. Tests Rust (`backup_versions.rs`) non lancés en local : CI |
+
+### Écarts de la phase 1
+
+- **Notice de Y-FIX-04 non retirée au report** (consigne : « lue, copiée, puis la notice retirée ») : la retirer au report change les attentes de `epochCarryReplacedParent*.test.ts` (notice nommant la tâche, reprise, échec de la notice) et la dérivation de `carry-reattached` dans `engine.ts` (départ). Retenu : copiée dans le compte rendu, retirée par « J'ai vu » (`acknowledgeEpochCarryReport`, `noticeAfterAcknowledge`). La phase 2 peut dériver `carry-reattached` du compte rendu et supprimer la notice : à décider avec elle.
+- **Tests figés sur la version 18** mis à jour pour la 0019 (inévitable avec une migration) : `0018_apple_reminders.test.ts` (registre limité à la 0018, attentes inchangées), `publishRead.test.ts` (19), `reset/resetHygiene.test.ts` (19 migrations), Rust `backup_versions.rs` (sauvegarde « plus récente » en v20).
+- **Rust touché** (une constante) alors que la fiche dit « ne touche pas Rust » : `APP_SCHEMA_VERSION` doit suivre la dernière migration (test `restore_hardening.rs`).
+- **Fiche T-TECH-01 absente** : la renumérotation est écrite dans sa ligne du backlog.
+- **Noms français des types** : la correspondance de `src/domain` porte la colonne de libellé et une **clé** de type, pas le texte (règle « textes dans src/i18n ») ; noms attendus listés au contrat.
+- **Libellés par parent** (jour de routine, pause, rappel, session Focus) : repli « (sans titre) » + identifiant, pas de lecture du parent (critère 5 respecté, amélioration possible en phase 2).
