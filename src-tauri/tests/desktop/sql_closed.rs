@@ -57,8 +57,9 @@ fn sec01_14_refusals_are_logged_with_a_stable_code_and_bursts_are_bounded() {
     let codes: Vec<&str> = refused.iter().map(|e| e.code.as_str()).collect();
     assert!(codes.contains(&"attach") && codes.contains(&"pragma") && codes.contains(&"vacuum"), "{codes:?}");
     let attach_lines = refused.iter().filter(|e| e.code == "attach").count();
-    assert!(attach_lines <= 10, "1 001 refus ATTACH ne doivent pas produire 1 001 lignes : {attach_lines}");
-    assert!(entries.iter().any(|e| e.scope == "log" && e.code == "suppressed" && e.detail == "sql-refused attach" || attach_lines == 10), "le reste est résumé à la minute suivante");
+    // Exactement 10 lignes par minute et par code (RATE_PER_MINUTE) ; le résumé `log` / `suppressed` du reste est écrit à la minute suivante
+    // (testé par `i04_a_burst_of_the_same_entry_is_limited_to_10_per_minute_then_summarized` dans applog.rs).
+    assert_eq!(attach_lines, 10, "1 001 refus ATTACH : 10 lignes, pas 1 001");
     // Ni texte SQL, ni chemin, ni alias dans le fichier du journal.
     let raw: String = std::fs::read_dir(&logs).unwrap().map(|f| std::fs::read_to_string(f.unwrap().path()).unwrap()).collect();
     for forbidden in ["ATTACH", "secret_alias", "secret-destination", "writable_schema", "VACUUM"] {
