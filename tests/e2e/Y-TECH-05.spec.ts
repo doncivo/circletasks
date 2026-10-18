@@ -108,26 +108,27 @@ for (const kind of ['pc', 'iphone'] as const) {
     await expect(page.locator('.ct-status-banner').filter({ hasText: BANNER })).toHaveCount(0);
   });
 
-  test(`Y-TECH-05 (${kind}) : 500 lignes nommées : pages de 50, « et 12 autres », défilement sans débordement`, async ({ browser }) => {
+  test(`Y-TECH-05 (${kind}) : 500 lignes nommées (499 rétablies + 1 recréée, borne de 500) : pages de 50, « Autres éléments : 12 », défilement sans débordement`, async ({ browser }) => {
     test.skip(test.info().project.name !== kind, `projet ${kind} seulement`);
     test.setTimeout(BUDGET_MS);
     const page = await start(browser, kind);
-    await seedReport(page, 500, 12);
+    // Borne de 500 lignes gardées, toutes listes : 499 rétablies + 1 recréée « Test Pc » ; 12 de plus au-delà de la borne.
+    await seedReport(page, 499, 12);
     await syncNow(page);
     await page.locator('.ct-status-banner').filter({ hasText: BANNER }).getByRole('button', { name: VIEW }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Compte rendu du changement d’époque' });
-    const list = dialog.getByRole('list', { name: `${RESTORED} : 512` });
+    const list = dialog.getByRole('list', { name: `${RESTORED} : 511` });
     await expect(list).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
     // Critère 22 : le premier rendu ne pose que la première page.
     await expect(list.getByRole('listitem')).toHaveCount(50);
-    await expect(dialog.getByText(/^et \d+ autres$/)).toHaveCount(0);
+    await expect(dialog.getByText(/^Autres éléments : \d+$/)).toHaveCount(0);
     for (let page50 = 2; page50 <= 10; page50 += 1) {
       await dialog.getByRole('button', { name: 'Afficher 50 de plus' }).click();
-      await expect(list.getByRole('listitem')).toHaveCount(page50 * 50);
+      await expect(list.getByRole('listitem')).toHaveCount(Math.min(page50 * 50, 499));
     }
     await expect(dialog.getByRole('button', { name: 'Afficher 50 de plus' })).toHaveCount(0);
-    await expect(dialog.getByText('et 12 autres')).toBeVisible();
+    await expect(dialog.getByText('Autres éléments : 12')).toBeVisible();
     await expectFitsViewport(page, 'Compte rendu de 500 lignes');
     // Critère 20 : la feuille défile (le bouton « J'ai vu » est atteint par le défilement).
     await dialog.getByRole('button', { name: 'J’ai vu' }).scrollIntoViewIfNeeded();
