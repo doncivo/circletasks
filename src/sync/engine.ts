@@ -567,7 +567,20 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // `opened` (`openedHere`, Y-IOS-02) : instantané orphelin ouvert ici. Y-FIX-02 (compensation du bundle de départ) : `orphanProof` est la
     // même preuve (mêmes entrées) dès que `currentEpoch === localEpoch` (l'ouverture, la reprise, l'abandon et le changement d'époque, seuls à
     // réécrire `localEpoch` ou `META.snapshot`, rendent cette égalité fausse) ; `unreadable` est vide (sinon attente plus haut, étape (iii)).
-    const facts = { opened: currentEpoch === localEpoch && folderE === null && orphanProof, state: ownScan?.stateStatus, files, ignored: listedFiles.ignoredSnapshots, acks: acksOnSelf.length, localSeq, currentEpoch, inflight, head: localHead, snapshot: storedSnapshot, ownEpochs: ownScan?.epochs ?? [], unreadable: unreadable.length };
+    const facts = {
+      opened: currentEpoch === localEpoch && folderE === null && orphanProof,
+      state: ownScan?.stateStatus,
+      files,
+      ignored: listedFiles.ignoredSnapshots,
+      acks: acksOnSelf.length,
+      localSeq,
+      currentEpoch,
+      inflight,
+      head: localHead,
+      snapshot: storedSnapshot,
+      ownEpochs: ownScan?.epochs ?? [],
+      unreadable: unreadable.length,
+    };
     /**
      * Y-FIX-02 (ADR 0011 §30) : première publication interrompue (segment écrit, `state.ctx` jamais écrit) : borne locale, demandée au bloc
      * à la demande seulement quand la règle actuelle refuse (la règle exige qu'aucun état n'ait été écrit). Rust juge la tête présentée.
