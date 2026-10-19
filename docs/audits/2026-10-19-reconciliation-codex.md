@@ -1,5 +1,15 @@
 # PASSATION — Réconciliation des statuts du 19 octobre 2026
 
+## Complément après les fusions #62, #60 et #61
+
+Product-owner : décisions d'Ali appliquées dans l'ordre #62, #60, #61, puis #63. La revue consignée dans la fiche remplace l'approbation GitHub impossible sur sa propre PR. Protection classique contrôlée : zéro approbation déjà exigée, PATCH à zéro confirmé ; PR, branche à jour et CI « suite verte » conservées.
+
+Documentation : B3 et B18 mis à jour après fusion et CI complète verte ; B8 reste ouvert jusqu'à la validation de #63. Inventaire présenté, puis 66 worktrees propres et fusionnés supprimés après recontrôle individuel. `.bt.sh` et `.bt/` expliqués et conservés ; autres worktrees intacts. Les deux rapports locaux non suivis et la modification locale initiale d'AGENTS.md restent préservés.
+
+QA documentaire : `git diff --check` vert ; aucune modification de source ni du PRD ; aucun marqueur de conflit ni caractère de remplacement dans les documents modifiés. Bundle sur le même arbre de sources que #63 : 51/51, 340 225 octets normalisés, 340 154 bruts, marge 18 175 ; couverture désactivée uniquement pour les tests ciblés. CI complète avec couverture requise avant fusion.
+
+Revue documentaire distincte : règles de protection conformes à la décision explicite, statuts fondés sur les runs et fusions réels, refus de clore B8 prématurément, I-06 toujours en attente de A1 à A10 ; IPA déjà installée utilisée comme N. Revue approuvée. Les sections suivantes conservent les constats historiques de la première passe.
+
 ## Passe product-owner
 
 Périmètre autorisé par Ali : vérifier l’état local et GitHub, corriger les statuts périmés, puis traiter Y-FIX-05 (#60). I-06 ne sera close qu’après A1 à A10. L’IPA installée sert de N pour l’essai SideStore ; une compilation fournit N+1. Les quatre rôles sont assurés successivement par Codex, sans délégation.
