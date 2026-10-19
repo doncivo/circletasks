@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { DEDUP_FAILURES_META } from '../../domain/occurrenceDedup';
@@ -21,20 +21,24 @@ afterEach(async () => {
   await db.close();
 });
 
-const show = () => {
+const show = async () => {
   const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data });
-  return render(<AppContainerProvider container={container}><SyncDetailsDedup /></AppContainerProvider>);
+  let view!: ReturnType<typeof render>;
+  await act(async () => {
+    view = render(<AppContainerProvider container={container}><SyncDetailsDedup /></AppContainerProvider>);
+    await db.data.repos.sync.getMeta(DEDUP_FAILURES_META);
+  });
+  return view;
 };
 
 describe('ligne « nettoyage en échec » des Détails de la synchro (T-TECH-01 I4)', () => {
   it('deux échecs : rien ; trois échecs : la ligne est visible', async () => {
     await db.data.repos.sync.setMeta(DEDUP_FAILURES_META, '2');
-    const two = show();
-    await db.data.repos.sync.getMeta(DEDUP_FAILURES_META);
+    const two = await show();
     expect(screen.queryByText(tCarry('dedupFailed'))).toBeNull();
     two.unmount();
     await db.data.repos.sync.setMeta(DEDUP_FAILURES_META, '3');
-    show();
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(tCarry('dedupFailed')));
+    await show();
+    expect(screen.getByRole('status').textContent).toBe(tCarry('dedupFailed'));
   });
 });
