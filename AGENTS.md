@@ -26,6 +26,7 @@ Lis d'abord `CLAUDE.md` (stack, commandes, règles d'architecture) puis `docs/re
 - Une PR par branche (`gh pr create --base main`). La ruleset de `main` impose la PR et le statut « suite verte » : aucun push direct sur `main`, même pour la documentation.
 - Fusion seulement quand `gh pr checks` montre « suite verte » vert et que la relecture est approuvée : `gh pr merge <n> --merge`. Jamais `--auto`, jamais `--force`.
 - En local, lance seulement les tests du module en cours ; la suite complète tourne dans GitHub Actions à chaque push (`.github/workflows/tests.yml`).
+- Pour un test ciblé, couper la couverture (`--coverage.enabled=false`) : le seuil de 80 % de `src/domain` s'applique à la suite complète. La validation d'une story exige la suite complète avec couverture active.
 - Aucun bloquant n'est clos sans un test qui échoue avant le correctif et passe après ; note les deux identifiants (commit ou run) dans la fiche de la story.
 - Aucune story n'est « fait » sans tests verts, lint, typecheck et relecture approuvée.
 - Une seule compilation iPhone (`build-ios.yml`, lancement manuel) par lot terminé, pas une par essai.
