@@ -1,10 +1,9 @@
 import { todayLocal } from '../../domain/clock';
-import { newEntityId } from '../../domain/id';
 import type { RecurrenceFields, Reminder, Task } from '../../domain/model';
-import { seriesAnchorDate, seriesSourceOf } from '../../domain/recurrenceEdit';
-import { buildNextOccurrence, decideNextOccurrence } from '../../domain/recurrenceNext';
+import { seriesAnchorDate } from '../../domain/recurrenceEdit';
+import { decideNextOccurrence } from '../../domain/recurrenceNext';
 import { nextOccurrenceDate } from '../../domain/recurrenceRules';
-import type { LocalDate, ReminderId, TaskId } from '../../domain/types';
+import type { LocalDate } from '../../domain/types';
 import type { Repositories } from '../../db/repositories';
 import type { TaskUseCaseDeps } from './taskUseCases';
 
@@ -42,7 +41,6 @@ function fieldsOf(rule: RecurrenceFields): RecurrenceFields {
  * `source` n'est ni terminée ni passée (suppression « cette occurrence »).
  */
 export async function createNextOccurrence(
-  deps: RecurrenceDeps,
   repos: Repositories,
   source: Task,
   today: LocalDate,
@@ -75,18 +73,8 @@ export async function createNextOccurrence(
     ({ date, seriesIndex } = again);
   }
 
-  const offsets = (await repos.reminders.listForTarget({ type: 'task', id: source.id })).map((r) => r.offsetMin);
-  const built = buildNextOccurrence(seriesSourceOf(source), {
-    taskId: newEntityId<TaskId>(deps.ids),
-    date,
-    seriesIndex,
-    reminderOffsets: offsets,
-    newReminderId: () => newEntityId<ReminderId>(deps.ids),
-  });
-  const task = await repos.tasks.create(built.task);
-  const reminders =
-    built.reminders.length === 0 ? [] : await repos.reminders.replaceForTarget({ type: 'task', id: task.id }, built.reminders);
-  return { task, reminders };
+  // T-TECH-01 : identifiants déterministes, création idempotente, résurrection d'une occurrence annulée (module à la demande).
+  return (await import('./occurrencePlacement')).placeOccurrence(repos, source, date, seriesIndex);
 }
 
 export interface RecurrenceUseCases {
@@ -107,7 +95,7 @@ export function createRecurrenceUseCases(deps: RecurrenceDeps): RecurrenceUseCas
         const out: Task[] = [];
         for (const task of undone) {
           if (task.recurrenceId === null) continue;
-          const next = await createNextOccurrence(deps, repos, task, today);
+          const next = await createNextOccurrence(repos, task, today);
           if (next) out.push(next.task);
         }
         return out;

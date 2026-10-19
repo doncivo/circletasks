@@ -3,6 +3,7 @@ import type { Hlc, IsoDateTime, LocalDateTime, ReminderId } from '../../../domai
 import { compareHlc, type WriteStamp, type WriteStamper } from '../../../domain/hlc';
 import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
 import type { ReminderDeletionMark, ReminderRepository } from '../reminderRepository';
+import { RepositoryError } from '../common';
 import { readSyncMeta, requireMapped, type SyncRow } from './sqlHelpers';
 
 interface ReminderRow extends SqlRow, SyncRow {
@@ -66,11 +67,16 @@ export function createReminderRepository(db: SqlExecutor, stamper: WriteStamper)
             [input.fireAt, stamp.at, stamp.deviceId, stamp.hlc, match.id],
           );
         } else {
-          await db.execute(
+          // T-TECH-01 : identifiant déterministe d'une occurrence ressuscitée (annulation T-09) : le rappel supprimé est rétabli, jamais réinséré.
+          const written = await db.execute(
             `INSERT INTO reminder (id, target_type, target_id, offset_min, fire_at, delivered, created_at, updated_at, deleted_at, device_id, hlc)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET fire_at = excluded.fire_at, delivered = 0, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id, hlc = excluded.hlc
+             WHERE reminder.target_type = excluded.target_type AND reminder.target_id = excluded.target_id AND reminder.offset_min = excluded.offset_min`,
             [input.id, target.type, target.id, input.offsetMin, input.fireAt, stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
           );
+          // Identifiant déjà pris par un autre rappel (autre cible ou autre avance) : jamais réécrit, erreur.
+          if (written.rowsAffected === 0) throw new RepositoryError('conflict', 'reminder', input.id);
         }
       }
       for (const row of existing) {

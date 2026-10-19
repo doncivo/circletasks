@@ -4,6 +4,7 @@
  * (`SyncDetailsCarryReport`, `carryReportBannerLine`), jamais au démarrage. Aucun pluriel automatique : formulations « Éléments rétablis : 3 ».
  */
 export const syncCarryReportFr = {
+  dedupFailed: 'Le nettoyage des occurrences en double a échoué plusieurs fois de suite ; nouvel essai à la prochaine synchro.',
   title: 'Compte rendu du changement d’époque',
   epochAt: 'Époque du {date} à {time}',
   causeRestore: 'Restauration « Appliquer partout »',

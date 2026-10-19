@@ -7,6 +7,7 @@ import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncDetailsCarryReportHost } from './SyncDetailsCarryReportHost';
+import { SyncDetailsDedup } from './SyncDetailsDedup';
 import { SyncDetailsConflicts } from './SyncDetailsConflicts';
 import { SyncDetailsForget, SyncDeviceForgetAction } from './SyncDetailsForget';
 import { SyncDetailsFolder } from './SyncDetailsFolder';
@@ -140,6 +141,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
       )}
       {/* Ligne du compte rendu : toujours à cette place, sous AVERTISSEMENTS quand `carry-report` est levé (même position dans l'arbre quand il
           retombe : la feuille ouverte ne se referme pas). */}
+      <SyncDetailsDedup />
       {slots.carryReport === undefined ? <SyncDetailsCarryReportHost /> : slots.carryReport}
       {status.pendingFiles.length > 0 && (
         <>

@@ -3,7 +3,7 @@ import { startCalendarScheduler, type CalendarScheduler, type SchedulerEnv } fro
 import type { BackupScheduler } from '../settings/backupScheduler';
 import { noteBackupSchedulerLoadFailed } from '../settings/backupSchedulerStatus';
 import { logFailure } from '../../platform/desktop/log';
-import { createDayRollover } from '../tasks/dayRollover';
+import { createDayRollover, type Timers } from '../tasks/dayRollover';
 import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
 import { useAppStore } from './appStore';
@@ -11,10 +11,16 @@ import type { AppContainer } from './container';
 import { getNotificationRunner } from '../reminders/notificationRunner';
 import { createTimeZoneWatcher } from './timeZoneWatcher';
 import { announcePendingRestore } from '../settings/restoreMemoPeek';
+import type { FirstCycleGate } from './syncGate';
 
 export interface AppStartup {
-  /** Premier contrôle de report terminé (avant le premier rendu d'Aujourd'hui). Ne rejette jamais. */
+  /**
+   * Premier rendu possible : sans synchro configurée, le premier contrôle de report est terminé (avant le premier rendu d'Aujourd'hui) ;
+   * avec une synchro configurée, il attend la porte de synchro et `ready` ne l'attend pas (T-TECH-01). Ne rejette jamais.
+   */
   readonly ready: Promise<void>;
+  /** T-TECH-01 : premier contrôle (génération, report) terminé, porte de synchro comprise. Ne rejette jamais. */
+  readonly firstCheck: Promise<void>;
   /** K-03 : rafraîchissement des agendas externes (ouverture, retour au premier plan, toutes les 15 min au premier plan). */
   readonly calendars: CalendarScheduler;
   /** Arrête minuterie et écouteurs ; sûr avant la fin de `ready` (aucun réarmement ensuite) et idempotent. */
@@ -31,6 +37,8 @@ export interface StartupEnv {
   readonly onTimeZoneChange?: (change: TimeZoneChange) => void | Promise<void>;
   /** Minuteur du rafraîchissement des agendas (tests : horloge simulée) ; défaut : minuteur du système. */
   readonly timers?: Pick<SchedulerEnv, 'setInterval' | 'clearInterval'>;
+  /** Minuterie de 12 s de la porte de synchro (tests : horloge simulée) ; défaut : minuteur du système. */
+  readonly gateTimers?: Timers;
 }
 
 /**
@@ -43,6 +51,8 @@ export interface StartupEnv {
  * T-08 : purge de la corbeille (tâches supprimées depuis plus de 30 jours) lancée au démarrage,
  * sans bloquer `ready` ; un échec est sans conséquence (nouvelle tentative au prochain démarrage).
  * K-03 : les agendas externes sont rafraîchis dès l'ouverture puis toutes les 15 min au premier plan (`startCalendarScheduler`), sans bloquer `ready`.
+ * T-TECH-01 (B8) : avec une synchro configurée, le premier contrôle attend le premier cycle conclu, ou 12 s (`syncGate.ts`), sans bloquer
+ * `ready` ; au premier cycle réussi, le nettoyage des doublons d'occurrences passe d'abord (`recurrenceDedup.ts`, une fois par appareil).
  */
 export function startAppStartup(
   container: AppContainer,
@@ -82,23 +92,67 @@ export function startAppStartup(
       logFailure('backup-daily', error);
     },
   );
+  // Les contrôles suivants ne repassent pas par la porte ; avant l'ouverture de la porte ils attendent (aucun report sur une base périmée).
+  let checking = false;
   const onCheck = (): void => {
     if (env.document.visibilityState !== 'hidden') {
-      void timeZone.check().then(() => rollover.check());
+      void timeZone.check().then(() => (checking ? rollover.check() : undefined));
       void calendars.resume();
     }
   };
   env.document.addEventListener('visibilitychange', onCheck);
   env.window.addEventListener('focus', onCheck);
   let disposed = false;
-  const ready = timeZone.check().then(() => (disposed ? undefined : rollover.start()));
+  // T-TECH-01 (B2, I3) : après chaque cycle de synchro réussi (phase idle, heure de synchro changée), nettoyage des doublons d'occurrences
+  // (module à la demande) ; un à la fois, un seul de plus s'il en arrive pendant ; un échec est journalisé, nouvel essai au cycle suivant.
+  let cleaning: Promise<void> = Promise.resolve();
+  let queued = false;
+  let lastSync = container.sync?.status().lastSyncAt ?? null;
+  const stopCleaning = container.sync?.subscribe(() => {
+    const status = container.sync?.status();
+    if (!status || status.phase !== 'idle' || status.lastSyncAt === lastSync) return;
+    lastSync = status.lastSyncAt;
+    if (queued) return;
+    queued = true;
+    cleaning = cleaning.then(() => {
+      queued = false;
+      return disposed ? undefined : import('../tasks/recurrenceDedup').then((module) => module.runRecurrenceDedupCounted(container)).then(() => undefined, (error: unknown) => logFailure('recurrence', error));
+    });
+  });
+  let gate: FirstCycleGate | null = null;
+  let first: Promise<void> = Promise.resolve();
+  const ready = timeZone
+    .check()
+    .then(async () => {
+      const { sync } = container;
+      if (disposed || !sync) return null;
+      // Module à la demande ; s'il ne charge pas, le journal le dit et le premier contrôle part tout de suite (comportement d'avant).
+      return import('./syncGate').then((module) => module.startFirstCycleGate(sync, container.data.repos.sync, env.gateTimers), (error: unknown) => (logFailure('sync', error), null));
+    })
+    .then((opened) => {
+      gate = opened;
+      first = (async () => {
+        // Premier cycle réussi : le nettoyage des doublons d'occurrences (lancé par l'écoute ci-dessus) passe avant le report.
+        if (opened?.waits) await opened.outcome;
+        await cleaning;
+        if (disposed) return;
+        await rollover.start();
+        checking = true;
+      })();
+      return opened?.waits ? undefined : first;
+    });
   void ready.then(() => createTrashUseCases(container).purgeExpired()).catch(() => undefined);
+  // M4 : le module d'écriture des occurrences est préchargé après le premier rendu (la première complétion d'une récurrente ne l'attend pas).
+  void ready.then(() => import('../tasks/occurrencePlacement')).catch(() => undefined);
   return {
     ready,
+    firstCheck: ready.then(() => first),
     calendars,
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      gate?.cancel();
+      stopCleaning?.();
       calendars.dispose();
       backups?.dispose();
       env.document.removeEventListener('visibilitychange', onCheck);

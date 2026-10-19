@@ -275,7 +275,7 @@ export function createSeriesUseCases(deps: TaskUseCaseDeps): SeriesUseCases {
           if (!first) return { ok: false, error: 'not-found' };
           const deleted = [first];
           if (scope === 'occurrence') {
-            const next = await createNextOccurrence(deps, repos, current, todayLocal(deps.clock), { ignoreDue: true });
+            const next = await createNextOccurrence(repos, current, todayLocal(deps.clock), { ignoreDue: true });
             return { ok: true, value: { deleted, next, rule: null } };
           }
           // « Toutes les suivantes » : la série s'arrête, les occurrences à venir déjà créées partent aussi.
