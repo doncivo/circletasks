@@ -135,4 +135,19 @@ describe('nettoyage sur deux appareils (T-TECH-01 critère 17)', () => {
     expect(await liveOf(b)).toEqual(await liveOf(a));
     expect(await liveOf(a)).toHaveLength(1);
   });
+
+  it('revue R1 : un cycle sans nouvelle donnée avant la complétion tardive ne perd pas le suivi', async () => {
+    const [a, b] = await legacyDuplicates();
+    a.clock.advance(1000);
+    await a.updateTask(X, { status: 'done', doneAt: new Date(a.clock.nowMs()).toISOString() as never });
+    a.clock.advance(1000);
+    await pass(b); // B ignore encore la complétion, garde Y et écarte X.
+    await pass(b); // Un cycle réussi sans donnée nouvelle ne doit pas abandonner le suivi.
+    await settle(a, b);
+    await pass(a);
+    await pass(b);
+    await settle(a, b);
+    expect(await liveOf(a)).toEqual([{ id: X, status: 'done' }]);
+    expect(await liveOf(b)).toEqual(await liveOf(a));
+  });
 });

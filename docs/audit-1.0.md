@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### B8 — constat complémentaire de revue du 2026-10-19
+
+T-TECH-01 reste ouverte à l'étape 4 ; PR #63 rebasée, revue refusée (R1 bloquant avant la 1.0). Le nettoyage retire sa clé de suivi dès un passage stable, avant réception des modifications distantes. **Ce qu'Ali voit : une tâche terminée sur l'autre appareil reste dans la Corbeille, tandis que son doublon « à faire » reste affiché.** Un cycle sans nouvelle donnée avant la complétion tardive suffit à reproduire ce résultat. Test rouge : `tests/unit/sync/recurrenceDedupTwoDevices.test.ts`, « revue R1 » (5 verts, 1 rouge, attendu X `done`, reçu Y `todo`). La correction doit garder un suivi sûr sans rétablir les suppressions volontaires ; aucune clôture ni fusion avant preuve verte et nouvelle revue.
+
 Date : 2026-10-16. Base auditée : `origin/main` 7737b3b2 (version 0.3.2). Onze auditeurs en lecture seule (sync-icloud, security-privacy, ios-mobile, notifications, domain-logic, data-model, ui-design-system, accessibility-i18n, qa-test, code-reviewer, architect), un rapport par domaine consolidé ici. Aucune correction n'a été appliquée hors priorité 1 et hors le correctif des aperçus iOS déjà écrit sur sa branche (non fusionné). Les rapports détaillés par domaine sont résumés en annexe.
 
 Règle de lecture : **bloquant** = perte de données, synchro ou rappel qui s'arrête sans issue, faille de sécurité, écran inutilisable ; **important** = défaut visible ou dette qui fera échouer la 1.0 dans un cas réel courant ; **mineur** = qualité, documentation, cas rare.

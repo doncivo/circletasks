@@ -143,6 +143,14 @@ Autres écarts :
 - **e2e.** La fiche ne prévoit aucun parcours Playwright (story technique) : aucun ajouté.
 - **Hors de cette fiche, non fait ici (à Ali, comme demandé).** `docs/decisions.md`, `docs/backlog.md`, `docs/audit-1.0.md` (ligne B8 : « migration 0020 réservée vide, nettoyage par passage JavaScript »), ligne de renvoi sous « Hors de cette story » de `docs/stories/T-06.md`.
 
+## Reprise Codex du 2026-10-19 — revue refusée
+
+- Product-owner : critères 1 à 22 relus ; B8 reste ouvert, aucune clôture autorisée sans validation complète.
+- Module : rebase sur `origin/main` (`5bd03d46`), conservation des entrées du journal et de toutes les assertions hors du départ. Le faux sondage de `SyncDetailsDedup.test.tsx` est remplacé par une attente du dépôt dans `act` (`faaa4181`).
+- QA : 13 fichiers, 279 tests existants verts sans couverture ; garde d'hygiène rouge sur `22c5bd6f` (183 verts, 1 rouge : `waitFor`), verte après le correctif. CI historique rouge : run 39228958271. La suite complète avec couverture reste nécessaire après correction des défauts de revue.
+- Revue distincte, **R1 bloquant, non approuvée** : `runRecurrenceDedup` retire la clé dès un passage stable, avant réception des modifications distantes. Un cycle sans nouvelle donnée suffit à oublier le groupe ; une complétion tardive reste alors dans la Corbeille, le doublon vivant reste `todo`. Test ajouté : `recurrenceDedupTwoDevices.test.ts`, « revue R1 ». Résultat : 5 verts, 1 rouge ; attendu X `done`, reçu Y `todo`. Aucun test désactivé ni délai ajouté. Défaut encore ouvert à l'étape 4, audit B8 complété ; pas de fusion de #63.
+- Contrôles de reprise : lint et typecheck verts ; `npm run test:bundle` : 31 tests verts, 2 fichiers, 109,58 s. Aucun candidat secret suivi détecté. R1 reste rouge ; ces contrôles ne valent pas validation de story.
+
 ## Questions à Ali (sans blocage ; recommandation du product-owner entre parenthèses)
 
 1. **Premier rendu et report (écart avec T-06 critère 2).** Avec une synchro configurée, le report n'a plus lieu « avant le premier affichage d'Aujourd'hui » : les tâches en retard apparaissent dans Aujourd'hui quelques secondes après l'ouverture (quand le premier cycle est conclu, ou après 12 s au plus). Alternative : retenir le premier rendu jusqu'à 12 s, ce qui bloquerait l'ouverture quand iCloud est lent. (Recommandation : ne pas bloquer le rendu, accepter l'apparition différée ; l'écart est écrit dans decisions.md.) **Appliquée (H1).**
