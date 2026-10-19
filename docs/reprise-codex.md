@@ -2,7 +2,17 @@
 
 Écrit à la passation de Claude Code vers Codex (décision d'Ali du 2026-10-19). Règles de travail : `AGENTS.md`. Plan de la 1.0 : `docs/backlog.md` section « Palier 1.0 », audit `docs/audit-1.0.md`, décisions `docs/decisions.md`.
 
-## 1. Point de départ
+## Mise à jour de reprise du 2026-10-19 — après #61
+
+La décision d'Ali remplace l'ordre initial ci-dessous : **#62 → #60 → #61 → #63**. #62 (`c76bc718`), #60 (`1838dbe5`) et #61 (`772d0f29`) sont fusionnées après QA, revue consignée et CI complète verte avec couverture. Le bundle a été vérifié sur `main` après #62 et #60 (27/27) ; la mesure après #61 est en cours. #63 est corrigée pour R1, rebasée sur `772d0f29`, relue et poussée (`0bdf6160`) ; sa CI finale reste requise avant fusion et clôture de B8.
+
+Protection classique de `main` : le nombre d'approbations GitHub était déjà zéro ; le PATCH à zéro l'a confirmé. PR, branche à jour et statut obligatoire « suite verte » conservés. La revue distincte reste obligatoire et son approbation est consignée dans la fiche de story : GitHub interdit l'auto-approbation. Règle inscrite dans `AGENTS.md`.
+
+Nettoyage autorisé : inventaire présenté avant suppression, puis **66 worktrees fusionnés et propres supprimés**, avec recontrôle de propreté et d'ascendance juste avant chaque suppression ; aucune branche supprimée. Tous les autres worktrees conservés. `.bt.sh` est un ancien lanceur local de mesure de bundle ; `.bt/` contient son cache Node (189 fichiers, 2 880 908 octets). Ils restent conservés en attendant la décision d'Ali.
+
+Les sections suivantes décrivent le point de départ historique ; leurs PR ouvertes et leur ordre initial ne décrivent plus l'état courant. I-06 reste « code fusionné, en attente de vérification appareil » jusqu'au succès de A1 à A10.
+
+## 1. Point de départ historique
 
 | Élément | Valeur |
 | --- | --- |
