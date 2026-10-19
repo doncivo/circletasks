@@ -6,7 +6,7 @@ const SCHEMA_VERSION = migrations.at(-1)?.version ?? 1;
 
 let room: string;
 let opened: SyncedPage | null = null;
-test.beforeEach((fixtures, info) => { void fixtures; room = `own-deletion-${info.project.name}-${info.testId}`; });
+test.beforeEach(({ browser }, info) => { void browser; room = `own-deletion-${info.project.name}-${info.testId}`; });
 test.afterEach(async () => { await opened?.context.close(); opened = null; await closeRoom(room); });
 
 test('Y-IOS-02-FIX-01 : échec visible sur iPhone, cause et dossier, nouvelle tentative manuelle puis résolution', async ({ browser, request }) => {

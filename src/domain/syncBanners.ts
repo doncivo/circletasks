@@ -253,6 +253,8 @@ export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice>
   readonly warnings?: readonly SyncStatusWarning[] | null | undefined;
   /** Y-TECH-02 : une lecture de l'état local par le service a échoué (§19 point 7), facultatif. */
   readonly stateUnreadable?: boolean | undefined;
+  /** Échec restauré au démarrage, y compris pendant le premier cycle encore en cours. */
+  readonly ownDelete?: readonly { readonly code: SyncErrorCode }[];
 }
 
 /** Arrivée d'un nouvel appareil arrêtée par un échec (`sync_meta.join`, Y-06) : gardée par le moteur jusqu'à la réussite. */
@@ -363,7 +365,8 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
   if (reset && reset.role !== 'required' && (reset.step !== 'superseded' || stoppedReset(reset)) && reset.step !== 'done') troubles.push({ code: 'reset-progress', reset });
   if (reset?.reminder) troubles.push({ code: 'reset-reminder', reset });
   // Y-TECH-02 : avertissements du scan (une valeur inconnue, d'une version plus récente, est ignorée : ce n'est qu'un avertissement).
-  for (const code of new Set(shown.warnings ?? [])) if (isSyncWarning(code)) troubles.push({ code });
+  const warnings = [...(shown.warnings ?? []), ...((status.ownDelete?.length ?? 0) > 0 ? ['own-delete-failed' as const] : [])];
+  for (const code of new Set(warnings)) if (isSyncWarning(code)) troubles.push({ code });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));
 
   return {
