@@ -1,6 +1,6 @@
 # T-TECH-01 — Plus de doublons de tâches récurrentes ni de report avant la première synchro (bloquant B8)
 
-Module : M1 Tâches / M2 Récurrences (technique, sans équivalent au PRD : écart à noter dans docs/decisions.md) · Ordre de construction : palier 1.0, **étape 4** (après l'étape 3, avant SEC-01) · Agents : **tasks-planning** (génération des occurrences, report, démarrage) + **data-model** (migration 0020, identifiants) · Relecture : code-reviewer · Estimation : **12 à 16 h** (alerte à Ali et arrêt si le réel dépasse **24 h**, soit +50 % sur le haut de la fourchette) · Statut : **R1 corrigé, QA et revue approuvées ; CI finale requise avant fusion** (2026-10-19)
+Module : M1 Tâches / M2 Récurrences (technique, sans équivalent au PRD : écart à noter dans docs/decisions.md) · Ordre de construction : palier 1.0, **étape 4** (après l'étape 3, avant SEC-01) · Agents : **tasks-planning** (génération des occurrences, report, démarrage) + **data-model** (migration 0020, identifiants) · Relecture : code-reviewer · Estimation : **12 à 16 h** (alerte à Ali et arrêt si le réel dépasse **24 h**, soit +50 % sur le haut de la fourchette) · Statut : fait, PR #63 fusionnée le 2026-10-19 ; QA, lint, typage et revue approuvés ; suite complète avec couverture verte (39262885779 / 39262896766)
 Origine : `docs/audit-1.0.md`, ligne B8 (bloquant, « Données + métier »). Règles d'Ali (docs/decisions.md, 2026-10-17) : test rouge avant et vert après, jamais de test désactivé ni allongé, aucun échec silencieux.
 Dépend de : rien d'ouvert. Numéro de migration : **0020** (la 0019 est prise par Y-TECH-05, déjà dans `main` : `src/db/migrations/0019_epoch_carry_report.ts`).
 Touche : `src/features/tasks` (génération, report), `src/features/app/startup.ts`, `src/App.tsx`, `src/features/sync/startSync.ts` (un signal), `src/domain` (identifiants, règle de survivant), `src/db/migrations` (0020), `tests/sim`. Ne touche ni le format publié ni Rust. **Touche le bundle de départ** (voir « Bundle »).
@@ -187,3 +187,8 @@ Revue distincte du complément : les paquets de retrait gardent la même transac
 5. **Technique de la migration (critère 14).** Le spike peut conclure qu'un passage JavaScript au premier cycle suivant la mise à jour est plus sûr qu'une migration SQL (+2 à 3 h, donc 14 à 19 h au total, sous l'alerte de 24 h). (Recommandation : laisser le spike trancher et prévenir Ali si le haut de la fourchette est dépassé.) **Tranchée par le spike : passage JavaScript (H5).**
 6. **Rust.** Si `APP_SCHEMA_VERSION` doit passer à 20 (D10), la story touche une constante Rust. (Recommandation : accepter, comme pour la 0019.) **Sans objet (H5).**
 7. **Nouvelle (H5).** Faut-il quand même une migration 0020 vide pour que les appareils restés en version antérieure affichent « Mettez à jour l'app » ? Coût : constante Rust, gels de version à 20, quelques octets dans le départ.
+
+
+## Clôture du 2026-10-19
+
+PR #63 fusionnée dans `main` par le commit `66bf7786`, après les passes QA et revue consignées ci-dessus et la CI complète avec couverture (39262885779 / 39262896766). Les mentions d’attente dans les sections précédentes sont historiques. Les preuves rouges restent conservées.

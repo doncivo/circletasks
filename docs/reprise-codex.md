@@ -2,9 +2,9 @@
 
 Écrit à la passation de Claude Code vers Codex (décision d'Ali du 2026-10-19). Règles de travail : `AGENTS.md`. Plan de la 1.0 : `docs/backlog.md` section « Palier 1.0 », audit `docs/audit-1.0.md`, décisions `docs/decisions.md`.
 
-## Mise à jour de reprise du 2026-10-19 — après #61
+## Mise à jour de reprise du 2026-10-19 — quatre PR fusionnées
 
-La décision d'Ali remplace l'ordre initial ci-dessous : **#62 → #60 → #61 → #63**. #62 (`c76bc718`), #60 (`1838dbe5`) et #61 (`772d0f29`) sont fusionnées après QA, revue consignée et CI complète verte avec couverture. Le bundle a été vérifié sur `main` après #62 et #60 (27/27), puis #61 (47/47, **340 810 octets normalisés**, marge **17 590**). #63 est corrigée pour R1, rebasée sur `772d0f29`, relue et poussée (`0bdf6160`) ; sa CI finale reste requise avant fusion et clôture de B8.
+La décision d'Ali remplace l'ordre initial ci-dessous : **#62 → #60 → #61 → #63**. Les quatre sont fusionnées après QA, revue consignée et CI complète verte avec couverture : #62 (`c76bc718`), #60 (`1838dbe5`), #61 (`772d0f29`), #63 (`66bf7786`, tête `2bfca264`). Le bundle a été vérifié sur `main` après #62 et #60 (27/27), puis #61 (47/47, **340 810 octets normalisés**, marge **17 590**). La mesure après #63 est en cours. R1 est corrigé ; CI finale de #63 : runs **39262885779 et 39262896766**, tous les contrôles verts. Le défaut de réactivité apparu en CI a aussi été corrigé avant fusion (`d947b186`) ; les deux jobs de performance sont verts sur le correctif. Les preuves rouges historiques restent dans les fiches.
 
 Protection classique de `main` : le nombre d'approbations GitHub était déjà zéro ; le PATCH à zéro l'a confirmé. PR, branche à jour et statut obligatoire « suite verte » conservés. La revue distincte reste obligatoire et son approbation est consignée dans la fiche de story : GitHub interdit l'auto-approbation. Règle inscrite dans `AGENTS.md`.
 

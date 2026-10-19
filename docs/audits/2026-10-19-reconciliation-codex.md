@@ -2,6 +2,8 @@
 
 ## Complément après les fusions #62, #60 et #61
 
+Clôture du lot : #63 est également fusionnée (`66bf7786`) après les deux suites complètes vertes 39262885779 / 39262896766 sur `2bfca264`, couverture active. La preuve rouge R1 `0bf4b029` est conservée ; le défaut de réactivité de publication découvert en CI a été traité et relu avant fusion (`d947b186`, 60 tests ciblés et 11 scénarios de performance verts, puis les deux CI). B3, B18 et B8 peuvent désormais être déclarés corrigés ; les quatre fiches et le backlog sont réconciliés avec leurs preuves. Les paragraphes d'attente ci-dessous décrivent les étapes historiques.
+
 Product-owner : décisions d'Ali appliquées dans l'ordre #62, #60, #61, puis #63. La revue consignée dans la fiche remplace l'approbation GitHub impossible sur sa propre PR. Protection classique contrôlée : zéro approbation déjà exigée, PATCH à zéro confirmé ; PR, branche à jour et CI « suite verte » conservées.
 
 Documentation : B3 et B18 mis à jour après fusion et CI complète verte ; B8 reste ouvert jusqu'à la validation de #63. Inventaire présenté, puis 66 worktrees propres et fusionnés supprimés après recontrôle individuel. `.bt.sh` et `.bt/` expliqués et conservés ; autres worktrees intacts. Les deux rapports locaux non suivis et la modification locale initiale d'AGENTS.md restent préservés.
