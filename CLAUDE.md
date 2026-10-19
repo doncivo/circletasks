@@ -28,6 +28,9 @@ npm run dev | npm run tauri dev | npm run test | npm run lint | npm run typechec
 - Bundle de départ : plafond 350 Ko gzip (tests/bundle/startBundle.test.ts), jamais relevé. Tout écran, fenêtre, bandeau ou catalogue de
   textes qui ne sert pas au premier affichage d'Aujourd'hui est en chargement à la demande dès sa création (import dynamique, catalogue
   i18n chargé avec lui, assertion « hors du départ »), jamais après coup (décision d'Ali du 2026-10-18, docs/audits/2026-10-18-bundle-depart.md).
+  Garde par liste blanche `tests/bundle/start-modules.json` (BUNDLE-01) : tout module nouveau dans le départ est refusé, la liste ne s'étend
+  que par un commit qui le justifie (`ajouts` : ID de story et raison) ; mesure normalisée insensible aux hachages (`tests/bundle/bundleMeasure.ts`,
+  relevé par `node tests/bundle/measureStart.ts <dossier>`) ; le plafond reste le dernier juge.
 
 ## Délégation
 Toujours passer par product-owner pour choisir la story, puis l'agent du module, puis qa-test et code-reviewer.

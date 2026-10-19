@@ -217,3 +217,33 @@ Filets déjà en place à étendre sans coût : `ON_DEMAND_PATTERN` (ESLint) et 
 - `capture.html` et `pairing.html` partagent le bloc `capture` (i18n, react) avec le départ ; les leviers 9 et 15 les touchent. `pairingBundle.test.ts` est à relancer après chacun.
 - Estimation des onze stories : par analogie, sans mesure sur du code non écrit.
 - Heures : mon estimation, sans mesure.
+
+## 9. Résultat (BUNDLE-01, 2026-10-18, builds réels sur `main` e43e408a)
+
+Mesures en octets gzip du JavaScript de départ, relevées à l'octet par `node tests/bundle/measureStart.ts <dossier>` (même calcul que
+`startBundle.test.ts`). « Normalisée » : noms hachés remplacés par un pseudo-hachage déterministe (phase 1) ; c'est la mesure jugée. « Brute » :
+fichiers tels quels. Plafond inchangé : 358 400.
+
+| Étape | Normalisée | Brute | Gain (normalisé) | Blocs | Marge |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `main` (référence, critère 6) | 358 323 | 358 273 | | 86 | 77 |
+| Palier 1 : `TaskDetail` à la demande | 356 525 | 356 488 | 1 798 | 93 | 1 875 |
+| Palier 2 : `OnboardingHost` | 349 145 | 349 099 | 7 380 | 91 | 9 255 |
+| Palier 2 : `SearchOverlay` | 343 028 | 342 996 | 6 117 | 91 | 15 372 |
+| Palier 2 : `FocusHost` | 342 278 | 342 241 | 750 | 91 | 16 122 |
+| Palier 2 : `ShortcutsHelp` | 341 735 | 341 704 | 543 | 91 | 16 665 |
+| Palier 2 : `UpdateBanner` | 341 350 | 341 305 | 385 | 91 | 17 050 |
+| Palier 2 : `HolidayDetailHost` | 340 726 | 340 694 | 624 | 91 | **17 674** |
+
+Total rendu : 17 597 octets (audit : 17 371 estimés). Aucun hôte annulé (chaque gain net est positif). Les six hôtes sont préchargés au repos
+comme les écrans (`fallback: 'none'`, aucun repli dans la mise en page) ; `EventEditorHost`, `DbFailureDetails` et `RestoreChoiceDialog` restent
+hors du lot comme prévu.
+
+Bruit de hachage : une règle CSS ajoutée à `tokens.css` renomme 299 fichiers et fait bouger la mesure brute de 358 273 à 358 304 (+31) ; la
+mesure normalisée reste à 358 323. Un commentaire CSS seul ne change rien (le minifieur le retire). Écart normalisée - brute sur le même build :
++50 (un pseudo-hachage uniforme donnait +137 : les hachages de Vite 8 commencent par B, C ou D dans 79 % des cas, d'où un modèle du premier
+caractère ; borne du critère 4 : 100).
+
+Garde : `tests/bundle/start-modules.json`, 476 fichiers `src` en 8 groupes et 7 paquets tiers par préfixe (contre 597 modules comptés un à un
+en section 7) ; lecture des `sources` des cartes des blocs de départ (le bloc d'aide `rolldown-runtime` n'a pas de carte). Section 7 proposait
+`startModules.txt` : la forme retenue est le JSON (raison obligatoire par groupe, `ajouts` avec ID de story et raison).
