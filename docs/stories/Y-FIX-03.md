@@ -125,6 +125,15 @@ Décisions du product-owner, à valider par Ali (questions en fin de fiche) ; el
 
 ## Écarts
 
+## Revue Codex du 2026-10-19 — approuvée
+
+- Product-owner : les 17 critères et les preuves rouge `a1964dee` / vert `d1baaf85` ont été relus. Aucun changement de format ni de texte requis.
+- Module : diff relu sans modification du code ; classification par famille dans le lecteur, première erreur passagère conservée par le moteur, publication et lectures saines poursuivies, entretien suspendu et heure gelée tant qu'une lecture échoue.
+- QA : 46 tests ciblés verts (`scenario3ReadIo` et `readFailure`). Suite complète avec couverture, lint et typage verts sur `39e1b79b`, runs 39228783679 et 39228790388. Les erreurs permanentes, la reprise, les trois échecs consécutifs et le retour au succès sont couverts.
+- Revue distincte : approuvée sur le diff et les tests. Les écarts historiques de fixture et de taille sont explicites ; aucun seuil ni délai modifié. La CI du nouveau commit documentaire doit rester verte avant fusion. La revue consignée ici est la trace requise ; aucune auto-approbation GitHub.
+
+### Écarts historiques
+
 1. **Hypothèses sur les questions à Ali** (recommandations appliquées, à confirmer) : question 1, cycle `failed` pour un code passager et appareil `corrupt` pour un code permanent ; question 2, un seul `bad-header` ou `decrypt-failed` suffit ; question 3, pas de nom d'appareil dans la ligne passagère ; question 4, règle « Synchro incomplète » avec un appareil `corrupt` faite (environ 0 octet), rien reporté dans `docs/dettes.md`.
 2. **Codes permanents hors du plan de pannes** : `bad-header` et `decrypt-failed` sont levés par la plateforme simulée (`readJournal` remplacé dans le test), pas par la fixture : le plan commun n'accepte que `io` et `cloud-pending` et il est lu aussi par MemFs et `fake_bookmark.rs` ; l'étendre toucherait `faultPlan.ts` et les faux de Rust, hors périmètre. Le critère 10 est vérifié au niveau de `readDevice` (table de tous les `SYNC_ERROR_CODES`), le moteur par des cas représentatifs.
 3. **Reprise réussie** : un code permanent dont la reprise depuis l'instantané récupère tout gèle quand même `lastSyncAt` pour ce cycle (décision 1) : la ligne dit « À jour · il y a N » avec l'heure ancienne, jamais « à l'instant », puis « À jour · à l'instant » au cycle suivant (testé).
