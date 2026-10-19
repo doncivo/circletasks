@@ -1,6 +1,6 @@
 # T-TECH-01 — Plus de doublons de tâches récurrentes ni de report avant la première synchro (bloquant B8)
 
-Module : M1 Tâches / M2 Récurrences (technique, sans équivalent au PRD : écart à noter dans docs/decisions.md) · Ordre de construction : palier 1.0, **étape 4** (après l'étape 3, avant SEC-01) · Agents : **tasks-planning** (génération des occurrences, report, démarrage) + **data-model** (migration 0020, identifiants) · Relecture : code-reviewer · Estimation : **12 à 16 h** (alerte à Ali et arrêt si le réel dépasse **24 h**, soit +50 % sur le haut de la fourchette) · Statut : **développée, en attente de revue et de la CI** (2026-10-18)
+Module : M1 Tâches / M2 Récurrences (technique, sans équivalent au PRD : écart à noter dans docs/decisions.md) · Ordre de construction : palier 1.0, **étape 4** (après l'étape 3, avant SEC-01) · Agents : **tasks-planning** (génération des occurrences, report, démarrage) + **data-model** (migration 0020, identifiants) · Relecture : code-reviewer · Estimation : **12 à 16 h** (alerte à Ali et arrêt si le réel dépasse **24 h**, soit +50 % sur le haut de la fourchette) · Statut : **R1 corrigé, QA et revue approuvées ; CI finale requise avant fusion** (2026-10-19)
 Origine : `docs/audit-1.0.md`, ligne B8 (bloquant, « Données + métier »). Règles d'Ali (docs/decisions.md, 2026-10-17) : test rouge avant et vert après, jamais de test désactivé ni allongé, aucun échec silencieux.
 Dépend de : rien d'ouvert. Numéro de migration : **0020** (la 0019 est prise par Y-TECH-05, déjà dans `main` : `src/db/migrations/0019_epoch_carry_report.ts`).
 Touche : `src/features/tasks` (génération, report), `src/features/app/startup.ts`, `src/App.tsx`, `src/features/sync/startSync.ts` (un signal), `src/domain` (identifiants, règle de survivant), `src/db/migrations` (0020), `tests/sim`. Ne touche ni le format publié ni Rust. **Touche le bundle de départ** (voir « Bundle »).
@@ -162,6 +162,15 @@ Complément de revue R1 : un JSON de suivi illisible ou un accusé corrompu ne p
 - Contrôles de reprise : lint et typecheck verts ; `npm run test:bundle` : 31 tests verts, 2 fichiers, 109,58 s. Aucun candidat secret suivi détecté. R1 reste rouge ; ces contrôles ne valent pas validation de story.
 
 ## Questions à Ali (sans blocage ; recommandation du product-owner entre parenthèses)
+
+## Revue finale R1 du 2026-10-19 — approuvée, CI requise
+
+- Rebase préparé sur BUNDLE-01 et Y-FIX-05 : journal combiné sans perte d'entrée ; assertions hors du départ de toutes les stories conservées. Aucun conflit de code produit. Le recalage sur `main` après fusion de #61 reste dû avant le push final.
+- QA : **293 tests verts sur 13 fichiers**, lint et typecheck verts ; **51 tests de bundle/garde verts**. Départ normalisé **340 225 octets**, brut **340 154**, écart **71**, marge **18 175** ; liste blanche inchangée, plafond et seuil de couverture inchangés.
+- Revue distincte à froid du diff final : le suivi est gardé jusqu'à une preuve d'accusés et de lecture complète. L'horloge du champ `deleted_at` distingue les suppressions du nettoyage des suppressions volontaires ; une écriture de nettoyage supplantée ne provoque pas une attente impossible. Le suivi et les erreurs illisibles restent persistants. Tests de complétion tardive, redémarrage, suppressions volontaires, accusés insuffisants et corruption relus. Aucun autre bloquant relevé dans le périmètre ; **revue approuvée**.
+- Preuve rouge historique R1 `0bf4b029`, extension `23d0c8da` ; correctifs `dbb8297b` et `97ddab43` avant rebase. La story et B8 ne sont clos qu'après suite complète CI verte avec couverture sur la branche à fusionner. Aucune auto-approbation GitHub.
+
+## Questions historiques de la fiche initiale
 
 1. **Premier rendu et report (écart avec T-06 critère 2).** Avec une synchro configurée, le report n'a plus lieu « avant le premier affichage d'Aujourd'hui » : les tâches en retard apparaissent dans Aujourd'hui quelques secondes après l'ouverture (quand le premier cycle est conclu, ou après 12 s au plus). Alternative : retenir le premier rendu jusqu'à 12 s, ce qui bloquerait l'ouverture quand iCloud est lent. (Recommandation : ne pas bloquer le rendu, accepter l'apparition différée ; l'écart est écrit dans decisions.md.) **Appliquée (H1).**
 2. **Forme de l'identifiant.** UUID v5 (retenu, seul compatible avec la validation actuelle des identifiants de `task` sans changer le format publié). Coût d'octets du SHA-1 à mesurer. (Recommandation : Web Crypto asynchrone, plus léger qu'une implémentation pure ; si la marge de 43 octets ne suffit pas, remontée à Ali avec la mesure, comme prévu.) **Appliquée (H2) : net −1 302 octets.**
