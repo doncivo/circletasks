@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dedupAcknowledged, duplicateGroups, reconcileGroup, type GroupRow, type OccurrenceRow } from './occurrenceDedup';
 import { asEntityId, type DeviceId, type Hlc, type RecurrenceId, type TaskId } from './types';
-import type { EpochId } from './sync/format';
+import type { DeviceAck, EpochId } from './sync/format';
 
 const R = asEntityId<RecurrenceId>('11111111-1111-4111-8111-111111111111');
 const id = (n: number): TaskId => asEntityId<TaskId>(`2000000${String(n)}-0000-4000-8000-000000000000`);
@@ -17,7 +17,7 @@ describe('R1 : preuve de convergence du nettoyage', () => {
   const reader = (patch: Partial<Reader> = {}): Reader => ({ deviceId: peer, status: 'active', lastSeenHlc: write, acks: new Map([[writer, { epoch, segment: 1, record: 2, hlc: write, stateSeq: 1 }]]), epoch, stateEpoch: epoch, cursor: { segment: 1, record: 2 }, head: { segment: 1, record: 2 }, ...patch });
 
   it('un accusé absent ou antérieur ne clôt pas le suivi ; un accusé couvrant la suppression le permet', () => {
-    expect(dedupAcknowledged(write, [reader({ acks: new Map() })])).toBe(false);
+    expect(dedupAcknowledged(write, [reader({ acks: new Map<DeviceId, DeviceAck>() })])).toBe(false);
     expect(dedupAcknowledged(write, [reader({ acks: new Map([[writer, { epoch, segment: 1, record: 1, hlc: `001792756801000-0000-${writer}` as Hlc, stateSeq: 1 }]]) })])).toBe(false);
     expect(dedupAcknowledged(write, [reader()])).toBe(true);
     expect(dedupAcknowledged(write, [])).toBe(true);

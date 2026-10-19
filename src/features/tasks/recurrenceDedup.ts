@@ -1,6 +1,6 @@
 import { DEDUP_FAILURES_META, dedupAcknowledged, duplicateGroups, groupKey, reconcileGroup, type GroupRow } from '../../domain/occurrenceDedup';
 import type { DeviceId, Hlc, IsoDateTime, RecurrenceId, TaskId } from '../../domain/types';
-import { parseStoredAcks } from '../../domain/sync/stored';
+import { parseStoredAcks, SyncStateUnreadableError } from '../../domain/sync/stored';
 import { isStrictHlc } from '../../domain/sync/format';
 import { syncTable, type SyncTable } from '../../domain/sync/syncTables';
 import type { Repositories } from '../../db/repositories';
@@ -38,17 +38,19 @@ export interface RecurrenceDedupDeps extends Pick<TaskUseCaseDeps, 'data' | 'tas
   readonly log?: (message: string) => void;
 }
 
-/** Clés suivies ; un état illisible (écrit par une autre version) est journalisé, jamais avalé, et repart de zéro. */
+/** Un suivi illisible échoue sans effacer sa preuve ; l'appel compté rend l'erreur durable visible. */
 function parseState(raw: string | null, log: (message: string) => void): { groups: string[]; deletions: Record<string, Hlc> } {
   if (raw === null) return { groups: [], deletions: {} };
   try {
     const value = JSON.parse(raw) as { groups?: unknown; deletions?: unknown };
-    const groups = Array.isArray(value.groups) ? value.groups.filter((key): key is string => typeof key === 'string') : [];
-    const deletions = value.deletions && typeof value.deletions === 'object' ? Object.fromEntries(Object.entries(value.deletions).filter((entry): entry is [string, Hlc] => isStrictHlc(entry[1]))) : {};
+    if (!Array.isArray(value.groups) || !value.groups.every((key): key is string => typeof key === 'string')) throw new SyncStateUnreadableError('recurrence-dedup.state');
+    if (value.deletions !== undefined && (!value.deletions || typeof value.deletions !== 'object' || Array.isArray(value.deletions) || !Object.values(value.deletions).every(isStrictHlc))) throw new SyncStateUnreadableError('recurrence-dedup.state');
+    const groups = value.groups;
+    const deletions = Object.fromEntries(Object.entries(value.deletions ?? {}).map(([id, hlc]) => [id, hlc as Hlc]));
     return { groups, deletions };
   } catch {
     log('recurrence-dedup-state-unreadable {"code":"parse"}');
-    return { groups: [], deletions: {} };
+    throw new SyncStateUnreadableError('recurrence-dedup.state');
   }
 }
 
@@ -79,7 +81,7 @@ export async function runRecurrenceDedup(deps: RecurrenceDedupDeps): Promise<Rec
     const deletions: Record<string, Hlc> = {};
     const readers = (await repos.sync.getStates()).filter((row) => !row.isSelf && row.status !== 'expired' && row.status !== 'forgotten').map((row) => ({
       deviceId: row.deviceId as DeviceId, status: row.status, lastSeenHlc: row.lastSeenHlc,
-      acks: parseStoredAcks(row.lastAcks, 'recurrence-dedup.acks', (event, detail) => log(`${event} ${JSON.stringify(detail)}`)),
+      acks: parseStoredAcks(row.lastAcks, 'recurrence-dedup.acks', { log: (event, detail) => log(`${event} ${JSON.stringify(detail)}`) }),
       epoch: row.epoch, stateEpoch: row.stateEpoch,
       cursor: { segment: row.cursorSegment, record: row.cursorRecord }, head: { segment: row.headSegment, record: row.headRecord },
     }));

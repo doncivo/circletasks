@@ -158,10 +158,25 @@ describe('nettoyage des doublons d’occurrences (T-TECH-01 critères 15, 16, 19
     expect(await db.data.repos.sync.getMeta(DEDUP_FAILURES_META)).toBeNull();
   });
 
-  it('I4 : un état suivi illisible est journalisé (jamais avalé) et le passage repart de zéro', async () => {
-    await db.data.repos.sync.setMeta(RECURRENCE_DEDUP_META, 'pas du JSON');
+  it.each(['pas du JSON', 'null', '{"groups":null}', '{"groups":[],"deletions":{"x":"horloge invalide"}}'])('R1 : un suivi illisible est conservé et son échec est compté : %s', async (raw) => {
+    await db.data.repos.sync.setMeta(RECURRENCE_DEDUP_META, raw);
     const log = vi.fn();
-    await runRecurrenceDedup({ data: db.data, taskEntities: entities, log });
+    await expect(runRecurrenceDedupCounted({ data: db.data, taskEntities: entities, log })).rejects.toMatchObject({ code: 'io' });
+    expect(await db.data.repos.sync.getMeta(RECURRENCE_DEDUP_META)).toBe(raw);
+    expect(await db.data.repos.sync.getMeta(DEDUP_FAILURES_META)).toBe('1');
     expect(log).toHaveBeenCalledWith('recurrence-dedup-state-unreadable {"code":"parse"}');
+  });
+
+  it('R1 : un accusé illisible ne clôt aucun suivi ; échec compté et état conservé', async () => {
+    await seed([task(1, 1), task(2, 1)]);
+    await runRecurrenceDedup({ data: db.data, taskEntities: entities });
+    const tracked = await db.data.repos.sync.getMeta(RECURRENCE_DEDUP_META);
+    const peer = asEntityId<DeviceId>('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    await db.data.repos.sync.saveState(peer, { isSelf: false, lastAcks: 'illisible', status: 'active' });
+    const log = vi.fn();
+    await expect(runRecurrenceDedupCounted({ data: db.data, taskEntities: entities, log })).rejects.toMatchObject({ code: 'io' });
+    expect(await db.data.repos.sync.getMeta(RECURRENCE_DEDUP_META)).toBe(tracked);
+    expect(await db.data.repos.sync.getMeta(DEDUP_FAILURES_META)).toBe('1');
+    expect(log).toHaveBeenCalledWith('state-unreadable {"where":"recurrence-dedup.acks"}');
   });
 });
