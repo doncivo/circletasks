@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { isSyncErrorCode } from '../../domain/sync/format';
+import { formatTime, toLocalTime } from '../../domain/timeFormat';
 import { tOwnDeletion } from '../../i18n/syncOwnDeletionText';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -20,7 +21,7 @@ export function SyncDetailsOwnDeletion() {
       {failures.map((f) => (
         <div key={`${f.epoch}/${String(f.orphan)}/${f.code}`}>
           <p>{tOwnDeletion(f.orphan ? 'orphan' : 'own', { cause: errorText(isSyncErrorCode(f.code) ? f.code : null, ownPlatform(status)) })}</p>
-          <p>{tOwnDeletion('lastTry', { time: new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(f.at)) })}</p>
+          <p>{tOwnDeletion('lastTry', { time: formatTime(toLocalTime(new Date(f.at).getHours(), new Date(f.at).getMinutes()) ?? '', '24h') })}</p>
           <p>{tOwnDeletion('folder', { device: String(container.hlc.deviceId).slice(0, 8), epoch: f.epoch })}</p>
         </div>
       ))}

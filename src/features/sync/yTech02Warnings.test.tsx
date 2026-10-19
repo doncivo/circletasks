@@ -46,7 +46,7 @@ const status = (patch: Partial<SyncStatus>): SyncStatus => ({ ...sync.status(), 
 
 describe('décision et texte du bandeau', () => {
   it('avertissements à la fin de SYNC_TROUBLE_ORDER, jamais avant un échec ; texte de chacun', () => {
-    expect(SYNC_TROUBLE_ORDER.slice(-7)).toEqual(['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete', 'publish-blocked', 'received-unapplied', 'awaiting-other-devices']);
+    expect(SYNC_TROUBLE_ORDER.slice(-8)).toEqual(['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete', 'own-delete-failed', 'publish-blocked', 'received-unapplied', 'awaiting-other-devices']);
     const s = status({ warnings: ['scan-incomplete', 'nonce-budget'], devices: [] });
     const banners = syncBannerFor<SyncDeviceStatus, SyncStatus>(s, NO_PERSISTED);
     expect(banners.troubles.map((x) => x.code)).toEqual(['nonce-budget', 'scan-incomplete']);
