@@ -9,7 +9,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use circletasks_lib::speech::{
-    listen_code_of, listen_with, open_settings_with, permission_state, request_permissions_with, status_with, stop_with, Limits, SpeechState, SpeechTransport, PLUGIN_COMMANDS,
+    listen_code_of, listen_with, listen_with_limit, open_settings_with, permission_state, request_permissions_with, status_with, stop_with, Limits, SpeechState, SpeechTransport, PLUGIN_COMMANDS,
     PLUGIN_REJECT_CODES,
 };
 use serde_json::{json, Value};
@@ -35,8 +35,8 @@ enum Listen {
     WaitForStop(&'static str),
     /// Rejette ce code.
     Reject(&'static str),
-    /// Ne répond qu'après ce temps (plugin muet).
-    Hang(Duration),
+    /// Plugin muet : ne répond qu'à `FakeSpeech::release` (garde-fou de 20 s pour ne jamais bloquer la suite si un test oublie de le libérer).
+    Hold,
 }
 
 struct FakeSpeech {
@@ -44,6 +44,8 @@ struct FakeSpeech {
     listening: AtomicBool,
     stop: Mutex<Option<String>>,
     wake: Condvar,
+    released: Mutex<bool>,
+    release_wake: Condvar,
     calls: Mutex<Vec<(String, Value)>>,
     status: Mutex<Result<Value, String>>,
     permissions: Mutex<Result<Value, String>>,
@@ -57,11 +59,18 @@ impl FakeSpeech {
             listening: AtomicBool::new(false),
             stop: Mutex::new(None),
             wake: Condvar::new(),
+            released: Mutex::new(false),
+            release_wake: Condvar::new(),
             calls: Mutex::new(Vec::new()),
             status: Mutex::new(Ok(json!({ "recognizer": true, "onDevice": true, "microphone": "granted", "speechRecognition": "granted" }))),
             permissions: Mutex::new(Ok(json!({ "microphone": "granted", "speechRecognition": "granted" }))),
             settings: Mutex::new(Ok(json!({ "opened": true }))),
         })
+    }
+
+    fn release(&self) {
+        *self.released.lock().unwrap() = true;
+        self.release_wake.notify_all();
     }
 
     fn calls_of(&self, command: &str) -> Vec<Value> {
@@ -109,8 +118,9 @@ impl SpeechTransport for Shared {
                 let result = match behaviour {
                     Listen::Immediate(text) => Ok(json!({ "text": text, "stoppedBy": "user" })),
                     Listen::Reject(code) => Err(code.to_owned()),
-                    Listen::Hang(duration) => {
-                        std::thread::sleep(duration);
+                    Listen::Hold => {
+                        let released = fake.released.lock().unwrap();
+                        let _ = fake.release_wake.wait_timeout_while(released, Duration::from_secs(20), |released| !*released).unwrap();
                         Ok(json!({ "text": "tard", "stoppedBy": "user" }))
                     }
                     Listen::WaitForStop(text) => {
@@ -196,11 +206,15 @@ fn cap_ios_01_10_only_one_listen_at_a_time_and_the_second_is_refused_busy() {
 fn cap_ios_01_10_the_sixty_second_limit_is_enforced_by_rust_and_returns_the_text() {
     let fake = FakeSpeech::new(Listen::WaitForStop("texte déjà reconnu"));
     let state = SpeechState::default();
-    // La limite est réduite pour le test (80 ms) : la logique est identique à celle de 60 s.
-    let limits = Limits { max_listen: Duration::from_millis(80), ..quick() };
-    let start = Instant::now();
-    let outcome = run(listen_with(transport(&fake), &state, "fr-FR", limits)).expect("écoute");
-    assert!(start.elapsed() < Duration::from_secs(5));
+    // L'instant de la limite est déclenché par le test une fois l'écoute commencée : la logique est celle de 60 s, sans attendre d'horloge.
+    let (limit, firing) = Trigger::pair();
+    let first = {
+        let (transport, state) = (transport(&fake), state.clone());
+        tauri::async_runtime::spawn(async move { listen_with_limit(transport, &state, "fr-FR", quick(), limit).await })
+    };
+    wait_until(|| state.is_listening() && fake.total_calls() > 0);
+    firing.fire();
+    let outcome = run(first).expect("tâche").expect("écoute");
     assert_eq!((outcome.text.as_str(), outcome.stopped_by), ("texte déjà reconnu", "time-limit"));
     assert_eq!(fake.calls_of("stop"), [json!({ "reason": "time-limit" })]);
     assert_eq!(Limits::default().max_listen, Duration::from_secs(60));
@@ -213,10 +227,64 @@ fn cap_ios_01_10_the_sixty_second_limit_is_enforced_by_rust_and_returns_the_text
 fn cap_ios_01_10_an_early_end_cancels_the_limit_timer() {
     let fake = FakeSpeech::new(Listen::Immediate("court"));
     let state = SpeechState::default();
-    let limits = Limits { max_listen: Duration::from_millis(150), ..quick() };
-    run(listen_with(transport(&fake), &state, "fr-FR", limits)).expect("écoute");
-    std::thread::sleep(Duration::from_millis(400));
+    // L'instant de la limite est un événement que le test ne déclenche jamais : aucune horloge, donc aucune dépendance à la charge.
+    let (limit, _never_fired) = Trigger::pair();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let watched = WatchDrop { inner: limit, dropped: cancelled.clone() };
+    run(listen_with_limit(transport(&fake), &state, "fr-FR", quick(), watched)).expect("écoute");
+    // Fin anticipée : le minuteur est abandonné (sa future détruite), il ne peut plus jamais demander l'arrêt.
+    wait_until(|| cancelled.load(Ordering::SeqCst));
     assert!(fake.calls_of("stop").is_empty(), "le minuteur ne réveille pas une écoute terminée");
+}
+
+/// Événement déclenché à la main : remplace l'attente d'une durée.
+#[derive(Clone)]
+struct Trigger(Arc<Mutex<(bool, Option<std::task::Waker>)>>);
+
+impl Trigger {
+    fn pair() -> (Self, Self) {
+        let trigger = Self(Arc::new(Mutex::new((false, None))));
+        (trigger.clone(), trigger)
+    }
+    fn fire(&self) {
+        let mut inner = self.0.lock().unwrap();
+        inner.0 = true;
+        if let Some(waker) = inner.1.take() {
+            waker.wake();
+        }
+    }
+}
+
+impl std::future::Future for Trigger {
+    type Output = ();
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
+        let mut inner = self.0.lock().unwrap();
+        if inner.0 {
+            std::task::Poll::Ready(())
+        } else {
+            inner.1 = Some(cx.waker().clone());
+            std::task::Poll::Pending
+        }
+    }
+}
+
+/// Enveloppe qui note sa destruction.
+struct WatchDrop {
+    inner: Trigger,
+    dropped: Arc<AtomicBool>,
+}
+
+impl std::future::Future for WatchDrop {
+    type Output = ();
+    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
+        std::pin::Pin::new(&mut self.inner).poll(cx)
+    }
+}
+
+impl Drop for WatchDrop {
+    fn drop(&mut self) {
+        self.dropped.store(true, Ordering::SeqCst);
+    }
 }
 
 #[test]
@@ -289,16 +357,18 @@ fn cap_ios_01_10_error_messages_never_carry_recognized_text_or_system_text() {
 
 #[test]
 fn cap_ios_01_17_a_silent_plugin_is_visible_not_frozen() {
-    let fake = FakeSpeech::new(Listen::Hang(Duration::from_millis(700)));
+    // Le plugin reste muet tant que le test ne le libère pas : le délai (60 ms) finit toujours par tomber, quelle que soit la charge, et
+    // « l'appelant n'attend que le délai » se prouve par l'état du plugin (encore muet quand l'erreur arrive), pas par une durée mesurée.
+    let fake = FakeSpeech::new(Listen::Hold);
     let state = SpeechState::default();
     let limits = Limits { listen_deadline: Duration::from_millis(60), ..quick() };
-    let start = Instant::now();
     let error = run(listen_with(transport(&fake), &state, "fr-FR", limits)).expect_err("délai");
-    assert!(start.elapsed() < Duration::from_millis(600), "l'appelant n'attend que le délai");
+    assert!(!*fake.released.lock().unwrap(), "l'appelant n'a pas attendu la fin de l'appel du plugin");
     assert_eq!(error.code, "speech-timeout");
     // Swift n'a pas fini : une seconde écoute est refusée `busy` (visible), puis le drapeau est rendu à la vraie fin de l'appel.
     assert!(state.is_listening());
     assert_eq!(run(listen_with(transport(&fake), &state, "fr-FR", quick())).expect_err("busy").code, "speech-busy");
+    fake.release();
     wait_until(|| !state.is_listening());
 }
 
@@ -319,17 +389,31 @@ fn cap_ios_01_17_status_of_an_absent_or_mute_plugin_is_unavailable_with_a_reason
     assert!(!status.available);
     assert_eq!(status.reason, Some("recognizer-unavailable"));
     // Délai dépassé : même résultat visible, jamais un blocage.
-    let hung = FakeSpeech::new(Listen::Immediate("x"));
-    struct Slow(Arc<FakeSpeech>);
-    impl SpeechTransport for Slow {
-        fn call(&self, command: &str, args: Value) -> Result<Value, String> {
-            std::thread::sleep(Duration::from_millis(400));
-            Shared(self.0.clone()).call(command, args)
-        }
-    }
-    let slow: Arc<dyn SpeechTransport> = Arc::new(Slow(hung));
+    let (release, slow) = Mute::pair(json!({ "recognizer": true, "onDevice": true, "microphone": "granted", "speechRecognition": "granted" }));
     let limits = Limits { status: Duration::from_millis(40), ..Limits::default() };
     assert_eq!(status_with(&slow, &limits).reason, Some("plugin-unavailable"));
+    drop(release);
+}
+
+/// Plugin muet jusqu'à ce que le test lâche `release` (garde-fou de 20 s) : le délai testé tombe toujours avant la réponse, quelle que soit
+/// la charge de la machine (un `sleep` plus long que le délai ne le garantit pas).
+struct Mute {
+    gate: Mutex<std::sync::mpsc::Receiver<()>>,
+    answer: Value,
+}
+
+impl Mute {
+    fn pair(answer: Value) -> (std::sync::mpsc::Sender<()>, Arc<dyn SpeechTransport>) {
+        let (release, gate) = std::sync::mpsc::channel();
+        (release, Arc::new(Self { gate: Mutex::new(gate), answer }))
+    }
+}
+
+impl SpeechTransport for Mute {
+    fn call(&self, _command: &str, _args: Value) -> Result<Value, String> {
+        let _ = self.gate.lock().unwrap().recv_timeout(Duration::from_secs(20));
+        Ok(self.answer.clone())
+    }
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -380,16 +464,10 @@ fn i_05_open_settings_reports_success_or_a_visible_failure() {
     *fake.settings.lock().unwrap() = Err("failed".to_owned());
     assert_eq!(open_settings_with(&transport(&fake), &Limits::default()).expect_err("rejet").code, "settings-open-failed");
     // Délai dépassé (le bouton ne reste jamais muet) : même code.
-    struct Silent;
-    impl SpeechTransport for Silent {
-        fn call(&self, _command: &str, _args: Value) -> Result<Value, String> {
-            std::thread::sleep(Duration::from_millis(300));
-            Ok(json!({ "opened": true }))
-        }
-    }
-    let silent: Arc<dyn SpeechTransport> = Arc::new(Silent);
+    let (release, silent) = Mute::pair(json!({ "opened": true }));
     let limits = Limits { settings: Duration::from_millis(30), ..Limits::default() };
     assert_eq!(open_settings_with(&silent, &limits).expect_err("délai").code, "settings-open-failed");
+    drop(release);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

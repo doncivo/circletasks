@@ -217,6 +217,20 @@ pub fn listen_code_of(code: &str) -> &'static str {
 /// `speech_listen` : une seule écoute à la fois (la seconde est refusée `speech-busy`), limite de 60 s tenue ici (le plugin reçoit `stop`
 /// avec la cause `time-limit` et rend le texte déjà reconnu), délai global puis `speech-timeout`.
 pub async fn listen_with(transport: Arc<dyn SpeechTransport>, state: &SpeechState, locale: &str, limits: Limits) -> Result<ListenOutcome, SpeechCommandError> {
+    let limit_reached = tokio::time::sleep(limits.max_listen);
+    listen_with_limit(transport, state, locale, limits, limit_reached).await
+}
+
+/// Comme `listen_with`, mais l'instant de la limite d'écoute est donné par `limit_reached` (en production : une attente de `max_listen`).
+/// Les tests y mettent un événement qu'ils déclenchent eux-mêmes : la limite ne dépend plus de l'horloge ni de la charge de la machine.
+/// Le minuteur est abandonné (la future est détruite) dès que l'appel de Swift est terminé.
+pub async fn listen_with_limit(
+    transport: Arc<dyn SpeechTransport>,
+    state: &SpeechState,
+    locale: &str,
+    limits: Limits,
+    limit_reached: impl std::future::Future<Output = ()> + Send + 'static,
+) -> Result<ListenOutcome, SpeechCommandError> {
     if locale != LOCALE {
         return Err(SpeechCommandError::new("speech-failed", "invalid-argument"));
     }
@@ -225,7 +239,7 @@ pub async fn listen_with(transport: Arc<dyn SpeechTransport>, state: &SpeechStat
     // Minuteur de la limite : demande l'arrêt, ne rend rien lui-même (le texte arrive par la réponse de `listen`).
     let timer_transport = transport.clone();
     let timer = tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(limits.max_listen).await;
+        limit_reached.await;
         let _ = tauri::async_runtime::spawn_blocking(move || call_with_deadline(move || timer_transport.call("stop", json!({ "reason": "time-limit" })), limits.stop)).await;
     });
 
