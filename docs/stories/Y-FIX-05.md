@@ -9,7 +9,7 @@
 | Agents | sync-icloud (lecteur, faux `memory.ts`, banc), desktop-tauri (`read_journal`, tests Rust) ; relecture code-reviewer ; qa-test |
 | Constat | `docs/audit-1.0.md`, B18 (ajouté le 2026-10-18) |
 | Estimation | 3 à 4 h ; alerte à 6 h (règle d'Ali : arrêt et prévenir si l'estimation dérape de plus de 50 %) |
-| Statut | développée le 2026-10-18 (rouge 89d5ef7d, vert 528bb5f2), en attente de qa-test, revue et CI |
+| Statut | QA et revue approuvées le 2026-10-19 ; en attente de la suite complète CI sur le commit final avant fusion et clôture (rouge 89d5ef7d, vert 528bb5f2 ; C13 rouge b1253508, vert 15b8cab1) |
 | Branche | `y-fix-05-segment-tronque` ; à rebaser sur `main` une fois Y-FIX-02 fusionnée (dépendance : `tests/unit/sync/firstPublicationCrashPoints.test.ts`) |
 | Règle d'Ali (2026-10-18) | un défaut qui fait perdre des données ou affiche un état faux sans le dire passe avant la 1.0 d'office |
 
@@ -176,3 +176,11 @@ Aucune bloquante. Un seul point d'information : la règle retenue ne publie rien
 - Module : diff Rust et faux TypeScript relus ; hydratation, tête authentifiée et entrées `closed` restent les gardes du saut. Aucun code modifié.
 - QA : `npx vitest run --coverage.enabled=false tests/unit/sync/closedSegments.test.ts tests/unit/sync/firstPublicationCrashPoints.test.ts src/features/sync/waitingLong.test.tsx` : 47 tests verts, 3 fichiers, 39,82 s. CI complète avec couverture : runs 39139398906 et 39139403003 verts sur `a0b725d8`. Ces résultats ne lèvent pas les écarts C13/C14 consignés ci-dessus.
 - Revue distincte : non approuvée pour clôture ; C13 ne prouve pas le compte exact affiché et C14 garde des écarts historiques. Mentions prématurées « fait » retirées de B18 et du backlog. Aucun test désactivé, délai allongé ni seuil abaissé.
+
+## Complément de QA et revue du 2026-10-19
+
+- C13 : preuve rouge `b1253508`, l'écran Détails affiche deux fichiers pour un segment et son marqueur appareil/époque. Correctif `15b8cab1` : les marqueurs sont remplacés dans le compte par leurs fichiers détaillés. Le scénario moteur C5 après 24 h vérifie aussi le compte exact ; le test d'écran vérifie le texte `pendingOne`. Les attentes distinctes, les doublons et les préfixes proches sont couverts : 55 tests ciblés verts, 5 fichiers. Aucun nouveau texte ni module de départ.
+- Rust : 6 tests `sync_closed_segments` et 2 tests C9/C10 verts. Clippy vérifié avec `-- -D warnings` : vert après retrait des avertissements préexistants (documentation, conversions identiques, alias de types de tests et formes équivalentes d'assertions). Aucune attente modifiée, aucun test désactivé.
+- Non-régression des fichiers Rust touchés par le nettoyage Clippy : 125 tests verts (sauvegarde, journal, export, OCR et synchro). Aucun avertissement Clippy ne subsiste ; les messages de création de bibliothèques du lieur ne sont pas des diagnostics Clippy.
+- Lint et typecheck verts ; bundle : 27 tests verts, plafond inchangé. La suite complète avec couverture reste exigée en CI sur le commit à fusionner.
+- Revue distincte : diff du lecteur, faux, fixture et tests relu ; les gardes de tête authentifiée, hydratation et `closed` empêchent un saut hors des conditions prévues. Le double compte C13 est corrigé dans l'écran à la demande, sans modifier le moteur ni la publication. Les corrections Clippy n'affectent pas les décisions métier. Revue approuvée, sous réserve de la suite verte du commit final ; B18 n'est pas clos avant celle-ci.

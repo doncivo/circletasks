@@ -164,11 +164,14 @@ impl World for BookmarkWorld {
 /// listings), les pannes `error`, `accept-not-propagated` et `overwrite-before-read` du plan sont rejouées par rang d'appel avant ou à la
 /// place de l'appel réel. Un disque local n'a ni fichier évincé, ni substitut, ni téléchargement : ces effets sont refusés à l'armement.
 #[cfg(windows)]
+type DeferredDeletes = Vec<(Vec<String>, Vec<u8>, u64)>;
+
+#[cfg(windows)]
 struct FaultyStd {
     inner: circletasks_lib::sync::files::StdFs,
     armed: Mutex<Option<fault_plan::Armed>>,
     /// Suppressions acceptées mais non propagées : (chemin, contenu, cycles restants).
-    back: Mutex<Vec<(Vec<String>, Vec<u8>, u64)>>,
+    back: Mutex<DeferredDeletes>,
 }
 
 #[cfg(windows)]

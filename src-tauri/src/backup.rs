@@ -1263,9 +1263,9 @@ fn swap_database(db_path: &Path, staged: &Path, hook: &dyn Fn(RestoreStep) -> io
 /// Restaure la sauvegarde `name` de `backups_dir` (P-04 critères 5 à 8). La connexion à la base doit être fermée par l'appelant.
 ///
 /// 1. `name` doit être une sauvegarde connue du dossier (aucun chemin) ; 2. le fichier est vérifié ; 3. l'état actuel est copié sous
-/// `circletasks-pre-restore-<stamp>.db` ; 4. le fichier choisi est copié à côté de la base (`.restoring`) et revérifié ; 5. les fichiers
-/// de la base sont renommés vers `.restore-old`, puis le fichier préparé prend la place : au moindre échec, l'ancienne base revient et
-/// rien n'a changé. `hook` ne sert qu'aux tests (échec simulé).
+///    `circletasks-pre-restore-<stamp>.db` ; 4. le fichier choisi est copié à côté de la base (`.restoring`) et revérifié ; 5. les fichiers
+///    de la base sont renommés vers `.restore-old`, puis le fichier préparé prend la place : au moindre échec, l'ancienne base revient et
+///    rien n'a changé. `hook` ne sert qu'aux tests (échec simulé).
 pub fn restore_backup_file(
     db_path: &Path,
     backups_dir: &Path,
@@ -1443,7 +1443,7 @@ pub async fn daily_backup(app: AppHandle, day: String, replace: bool) -> Result<
     let dir = data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || create_daily_backup(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &day, replace, KEEP_DAILY_BACKUPS))
         .await
-        .map_err(|e| join_error(e.into()))?
+        .map_err(join_error)?
 }
 
 /// Liste des sauvegardes et dossier qui les contient (affiché dans l'aide).
@@ -1470,7 +1470,7 @@ pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> 
         Ok(BackupListing { directory: label, entries })
     })
     .await
-    .map_err(|e| join_error(e.into()))?
+    .map_err(join_error)?
 }
 
 /// Vérifie une sauvegarde avant que l'app ne ferme sa base (un fichier refusé ne coûte rien).
@@ -1482,7 +1482,7 @@ pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupErr
         check_named_backup(&dir, &name)
     })
     .await
-    .map_err(|e| join_error(e.into()))?
+    .map_err(join_error)?
 }
 
 /// Refus de la restauration tant qu'un pool du plugin SQL est ouvert : jamais une 2e connexion pendant l'échange (P-04-iOS, pool à une
@@ -1529,7 +1529,7 @@ pub async fn restore_backup(app: AppHandle, name: String, stamp: String, local: 
         }
     })
     .await
-    .map_err(|e| join_error(e.into()))??;
+    .map_err(join_error)??;
     if let Some(marker) = outcome.1 {
         if let Some(pending) = app.try_state::<crate::startup_gate::PendingRestoreMarker>() {
             if let Ok(mut slot) = pending.0.lock() {

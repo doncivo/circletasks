@@ -226,7 +226,7 @@ fn s9_usage_is_kept_when_the_same_key_comes_back() {
 fn s10_proposed_folder_is_created_only_after_validation() {
     let drive = Path::new(r"C:\Users\Ali\iCloudDrive");
     assert_eq!(chosen_target(drive, Some(drive)), (drive.join("CircleTasks"), true));
-    assert_eq!(chosen_target(Path::new(r"c:\users\ali\iclouddrive\"), Some(drive)).1, true);
+    assert!(chosen_target(Path::new(r"c:\users\ali\iclouddrive\"), Some(drive)).1);
     assert_eq!(chosen_target(&drive.join("CircleTasks"), Some(drive)), (drive.join("CircleTasks"), false));
     assert_eq!(chosen_target(Path::new(r"C:\Temp\ct"), None), (Path::new(r"C:\Temp\ct").to_path_buf(), false));
     let source = include_str!("../../src/sync/commands.rs");
@@ -409,7 +409,7 @@ fn r19_unsafe_path_components_are_refused() {
 #[test]
 fn r20_aad_fields_are_never_truncated() {
     let long = "x".repeat(70_000);
-    assert!(aad_bytes(&[long.clone()]).is_none());
+    assert!(aad_bytes(std::slice::from_ref(&long)).is_none());
     assert_eq!(aad_bytes(&["ct/1".into()]).unwrap(), b"\x00\x04ct/1");
     let key = MasterKey::generate().unwrap();
     let place = Place::Journal { dev: &long, epoch: "e0001-3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60", segment: 1, index: 0 };

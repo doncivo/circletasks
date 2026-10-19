@@ -245,7 +245,7 @@ fn i04_qa_batches_of_maximal_lines_never_exceed_two_files_of_256_kib() {
         append_in(&logs, &mut rates, &entries, NOW + u64::from(round) * 120).unwrap();
         assert!(size(&logs.join(CURRENT_FILE)) <= MAX_FILE_BYTES, "tour {round} : fichier courant {}", size(&logs.join(CURRENT_FILE)));
         assert!(size(&logs.join(PREVIOUS_FILE)) <= MAX_FILE_BYTES, "tour {round} : fichier .1 {}", size(&logs.join(PREVIOUS_FILE)));
-        assert_eq!(fs::read_dir(&logs).unwrap().count() <= 2, true, "aucun autre fichier (ni .tmp)");
+        assert!(fs::read_dir(&logs).unwrap().count() <= 2, "aucun autre fichier (ni .tmp)");
     }
     // Le journal reste lisible de bout en bout (aucune ligne coupée par la rotation).
     let entries = read_entries(&logs, 500).unwrap();

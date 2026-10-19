@@ -216,9 +216,8 @@ pub fn fail<T>(code: SyncCode) -> SyncResult<T> {
     Err(SyncError::new(code))
 }
 
-/// Journal technique de la synchro : un événement et des compteurs, jamais de contenu (section 2.3). Écrit sur la sortie d'erreur
-/// (par `applog::echo`) en développement ou sous `test-hooks` ; en production, l'événement seul va au journal persistant (ADR 0014).
 pub mod log {
+    //! Journal technique de la synchro : un événement et des compteurs, jamais de contenu (section 2.3).
     //! En production (ADR 0014, « Conséquences ») : le seul identifiant `event` est inscrit au journal technique persistant
     //! (`applog::write("sync-rust", event)`), jamais `detail` ; aucun tampon propre (revue B5). En
     //! développement et dans les tests (`debug_assertions`, ou fonctionnalité `test-hooks` y compris en release), il est écrit sur la sortie d'erreur et remis aux captures ouvertes par

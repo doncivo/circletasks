@@ -134,7 +134,7 @@ fn y08_2_plaintext_size_boundaries_seal_and_open() {
     for len in [0usize, 1, 4092, 4093, MAX_RECORD_PLAINTEXT_BYTES] {
         let json = vec![b'a'; len];
         let line = key.seal(&journal(), &json, 1, 14).unwrap();
-        assert!(line.len() + 1 <= MAX_RECORD_LINE_BYTES, "{len}");
+        assert!(line.len() < MAX_RECORD_LINE_BYTES, "{len}");
         let opened = key.open(&journal(), &line).unwrap();
         assert_eq!(opened.json.len(), len);
     }
