@@ -27,6 +27,8 @@ Les dix statuts de correctifs/livraison explicitement périmés dans la passatio
 
 Contrôle du diff et des liens de preuve ; aucun changement au PRD, au code, aux données réelles ou aux seuils. I-06 corrigée dans le backlog et sa fiche ; contradiction de la passation corrigée. Mesure du bundle requise avant push, résultat à consigner.
 
+Validation avant publication : `npm run test:bundle` vert, 27/27 (19 octobre, départ à 11:38:46, durée 298,52 s). Recherche locale de signatures de clés privées et jetons GitHub/AWS dans les 2 653 fichiers suivis : aucun fichier suspect ; aucun nom de fichier de secret suivi détecté. Ce contrôle n’est pas un audit exhaustif de secrets.
+
 ## Passe revue documentation
 
 Diff relu séparément après la passe documentaire : les changements portent uniquement sur les règles et les statuts. Les stories iPhone retrouvées ne sont pas déclarées closes ; leurs essais physiques restent à faire. Les dix clôtures reprises de la passation sont des états historiques, pas de nouvelles validations effectuées par Codex. `git diff --check` propre. Revue documentaire approuvée ; publication conditionnée à la mesure du bundle et au contrôle des secrets. Aucune fusion revendiquée.
