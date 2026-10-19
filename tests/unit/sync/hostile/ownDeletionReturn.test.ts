@@ -41,8 +41,11 @@ describe('Y-IOS-02-FIX-01 : défauts 2 et 3 connus du banc', () => {
     // Suppression acceptée, absence temporaire, puis retour contrôlé par le banc : aucune attente réelle.
     expect(a.folder.fileNames(a.id).some((f) => f.endsWith('/s-00000001.cts'))).toBe(false);
     await a.restart();
+    a.folder.advanceCycle();
     await a.cycle();
     const before = a.folder.faultLog().filter((f) => f.id === 'revient').length;
+    expect(a.folder.advanceCycle()).toBe(1);
+    expect(a.folder.fileNames(a.id).some((f) => f.endsWith('/s-00000001.cts'))).toBe(true);
     await a.cycle();
     expect(a.folder.faultLog().filter((f) => f.id === 'revient').length).toBeGreaterThan(before);
     expect(statusLine(a.service.status(), a.clock.nowMs())).not.toContain('À jour');
