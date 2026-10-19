@@ -88,6 +88,14 @@ Avenant du 2026-10-19 au périmètre autorisé : `orphanDeleteFailure` garde ce 
 
 ## Vérifications manuelles d'Ali (iPhone, ordre 5)
 
+### Passes de QA et de revue du 2026-10-19
+
+- Preuves rouges : `4d1d9bfd` (scénario 4 historique, deux échecs), `69e8a188` (substitut persistant et retour d'instantané, cycles du banc explicitement avancés), `429921e6` (bandeau absent pendant le premier cycle après restauration).
+- Preuves vertes : `6ef9ac6a` pour le moteur, la persistance et l'interface ; `0f838da6` pour le bandeau au démarrage. QA ciblée sans couverture : 142 tests verts sur 15 fichiers, puis 32 tests verts sur les deux fichiers de persistance et de bandeaux après le dernier correctif. E2e `iphone` sur `0f838da6` : 1/1 vert, 11,1 s, cause, dossier, bouton occupé et résolution.
+- Revue distincte : diff complet relu depuis `origin/main`, puis seconde lecture des chemins de stockage, de restauration et d'entretien. Les exceptions du stockage remontent ; l'interruption ne crée pas d'échec ; un reçu ne donne aucun droit de suppression supplémentaire ; les critères d'éligibilité restent ceux du moteur. Aucun changement de format, de migration, de Rust ni de `canPublish`. Le signal restauré est présent même pendant le premier cycle. Composant et catalogues dédiés à la demande, assertion hors départ ajoutée. **Revue du code approuvée**, sous réserve des contrôles finaux et de la CI complète obligatoire.
+- Le critère 18 reste ouvert jusqu'à l'essai physique du lot IPA ; aucune clôture « fait » revendiquée.
+- Contrôles finaux avant push : lint et typage verts ; bundle **55/55**, **342 977 octets normalisés**, 342 917 bruts, marge 15 423 sur 358 400, garde d'écart 60/100. Aucun seuil modifié, aucun module ajouté à la liste du départ. CI complète avec couverture encore requise avant fusion.
+
 1. Cas réel de la séance 0.3.0 : provoquer ou retrouver un iPhone dont l'ancienne époque (`s-00000001.cts`) n'a pas pu être supprimée ; ouvrir Réglages > Synchronisation > Détails : l'avertissement rouge nomme la cause traduite, l'heure du dernier essai et le dossier `devices` à vérifier ; le bandeau est visible sur les écrans principaux.
 2. Vérifier dans l'app Fichiers que le chemin indiqué est bien celui du fichier resté ; le supprimer à la main : « Réessayer maintenant » ou le cycle suivant fait disparaître l'avertissement et l'iPhone publie (« Cet appareil n'a pas encore publié son état » disparaît).
 3. Redémarrer l'app avec l'échec présent : l'avertissement est affiché dès le démarrage.

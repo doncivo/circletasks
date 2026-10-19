@@ -8,7 +8,9 @@ Passe module : preuves rouges `4d1d9bfd` (deux cas B5) et `69e8a188` (substitut 
 
 Interface : ligne de Détails à la demande avec ses catalogues fr/en, cause du tableau existant, heure 24 h, dossier par identifiants, bouton manuel occupé. Le scénario e2e iPhone est vert : suppression simulée refusée, cause visible, nouvelle tentative retenue par une promesse pour vérifier le bouton, puis résolution. Aucun délai ajouté. L'ancien test du mode historique attend désormais un seul réarmement (mémo conservé) et un échec visible à chaque cycle ; aucune attente métier n'a été supprimée.
 
-Contrôle de bundle : première mesure 343 327 octets normalisés contre 343 226 bruts, garde d'écart rouge à 101 pour une limite de 100. Limite inchangée. Points de chargement mutualisés ; le suivi conserve son bloc indépendant pour enregistrer une panne du bloc d'entretien. Mesure finale requise avant push. La revue et la CI complète restent dues ; aucune story déclarée faite.
+Contrôle de bundle : première mesure 343 327 octets normalisés contre 343 226 bruts, garde d'écart rouge à 101 pour une limite de 100. Limite inchangée. Points de chargement mutualisés ; le suivi conserve son bloc indépendant pour enregistrer une panne du bloc d'entretien et évite d'extraire les utilitaires du départ dans un bloc partagé. Mesure finale : **342 977 octets normalisés, 342 917 bruts, marge 15 423**, écart 60 pour une limite de 100. Lint et typage verts ; l'inférence trop étroite du dernier test de bandeau a été corrigée par une annotation, sans changement d'attente.
+
+Passe QA puis revue distincte : 142 tests ciblés verts, puis 32 tests de persistance/bandeaux verts ; e2e iPhone final 1/1 vert en 11,1 s. Preuve rouge supplémentaire `429921e6` : signal absent pendant le premier cycle après restauration ; correctif vert `0f838da6`. Diff complet relu à froid, revue du code approuvée et consignée dans la fiche. Scan des fichiers suivis sans secret détecté. La CI complète reste obligatoire avant fusion ; essai physique réservé au lot IPA, aucune story déclarée faite.
 
 ## 2026-10-19 — T-TECH-01, garde de réactivité de publication
 
