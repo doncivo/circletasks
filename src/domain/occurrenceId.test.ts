@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { occurrenceReminderId, occurrenceTaskId, uuidV5 } from './occurrenceId';
 import { asEntityId, isId, type RecurrenceId, type TaskId } from './types';
 
@@ -29,5 +29,14 @@ describe('UUID v5 des occurrences (T-TECH-01 critère 1)', () => {
     expect(await occurrenceReminderId(task, 60)).toBe('2f9fd5e6-3e7c-56b7-8b33-b6c1a6149d72');
     expect(await occurrenceReminderId(task, 5)).toBe('0e484a06-17a9-5c3e-887f-8803ca2dd28f');
     expect(isId(await occurrenceReminderId(asEntityId<TaskId>(task), 0))).toBe(true);
+  });
+
+  it('M6 : Web Crypto absent : erreur explicite, jamais un identifiant faux', async () => {
+    vi.stubGlobal('crypto', {});
+    try {
+      await expect(occurrenceTaskId(R, 1)).rejects.toThrow('crypto.subtle indisponible');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

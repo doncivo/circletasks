@@ -65,7 +65,8 @@ async function restore(repos: Repositories, id: TaskId, deletedAt: IsoDateTime |
  * les écarts sont de vraies écritures (hlc de l'appareil, entrées d'envoi), donc publiées aux autres appareils.
  */
 export async function runRecurrenceDedup(deps: RecurrenceDedupDeps): Promise<RecurrenceDedupResult> {
-  const log = deps.log ?? ((message: string) => logFailure('recurrence', message));
+  // Compte rendu normal (pas un échec) : scope « sync-… », classé dans la catégorie Synchro de l'écran Logs et non parmi les Erreurs (M5).
+  const log = deps.log ?? ((message: string) => logFailure('sync-recurrence', message));
   const outcome = await deps.data.transaction(async (repos) => {
     const raw = await repos.sync.getMeta(RECURRENCE_DEDUP_META);
     const removed: TaskId[] = [];

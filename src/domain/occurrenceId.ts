@@ -16,7 +16,10 @@ export const OCCURRENCE_ID_NAMESPACE = '6f1b7c34-5a2d-4e8f-9c61-3d0a4b7e2f15';
  */
 export async function uuidV5(namespace: string, name: string): Promise<Id> {
   const space = (namespace.replaceAll('-', '').match(/../g) ?? []).map((hex) => parseInt(hex, 16));
-  const b = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-1', new Uint8Array([...space, ...new TextEncoder().encode(name)])), 0, 16);
+  const subtle = (globalThis.crypto as Crypto | undefined)?.subtle as SubtleCrypto | undefined;
+  // M6 : Web Crypto n'était utilisé en production par aucun autre module (seuls les faux de test) ; absent, erreur explicite plutôt qu'un identifiant faux.
+  if (!subtle) throw new Error('crypto.subtle indisponible : identifiant impossible');
+  const b = new Uint8Array(await subtle.digest('SHA-1', new Uint8Array([...space, ...new TextEncoder().encode(name)])), 0, 16);
   b[6] = ((b[6] ?? 0) & 0x0f) | 0x50; // version 5
   b[8] = ((b[8] ?? 0) & 0x3f) | 0x80; // variante RFC
   const hex = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
