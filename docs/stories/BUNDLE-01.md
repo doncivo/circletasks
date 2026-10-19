@@ -39,6 +39,15 @@ Conséquence directe : la garde (phase 3) n'est pas conditionnée par la marge. 
 
 ## Critères testables
 
+## Reprise Codex du 2026-10-19 — passes séparées
+
+- Product-owner : les 30 critères sont relus. Ordre de fusion d'Ali du 2026-10-19 : après #60 et avant #63 ; les mesures remplacent les anciens repères, sans modifier le plafond.
+- Module : rebase préparé sur le code vérifié de #60, incluant #62 fusionnée. Conflit limité au journal, avec conservation de toutes les entrées ; aucun conflit de code. Le recalage sur le commit de fusion de #60 reste dû avant le push final.
+- QA : 20 tests de rendu/chargement sur 4 fichiers verts ; bundle et fonctions de mesure/garde : 47 tests verts sur 4 fichiers. Départ normalisé **340 810 octets**, brut **340 758**, écart **52**, marge **17 590** sous le plafond inchangé de 358 400. Garde exacte sans extension de la liste. Les tests de frontières d'erreur vérifient les rejets et leurs messages.
+- Revue distincte : les imports statiques retirés, les sept blocs à la demande, les reprises de chargement, la normalisation bornée et la garde dans les deux sens sont relus avec leurs tests. Aucun seuil, délai ou attente e2e modifié. Lint, typage et CI finale doivent être verts avant fusion ; aucune auto-approbation GitHub.
+
+## Critères de la fiche initiale
+
 Toutes les mesures sont des builds réels par `npm run test:bundle` (même méthode que `startBundle.test.ts`, gzip de `node:zlib`). Les octets sont relevés **avant et après chaque commit** et inscrits dans « Preuves ».
 
 ### Phase 1 : mesure sans bruit de hachage
