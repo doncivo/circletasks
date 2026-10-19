@@ -10,7 +10,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { doneTasksStore, resolveDoneTasks } from './doneTasksStore';
-import { TaskDetail } from './TaskDetail';
+import { TaskDetail } from '../app/lazyScreens';
 import './DoneTasksScreen.css';
 
 function doneSubtitle(task: Task, spaces: readonly Space[]) {

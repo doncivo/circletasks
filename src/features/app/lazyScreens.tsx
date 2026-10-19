@@ -64,6 +64,11 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
  */
 interface LazyOptions {
   readonly onDemand?: boolean;
+  /**
+   * BUNDLE-01 : `'none'` : préchargé comme les écrans, mais sans repli d'écran : hôte monté en permanence qui ne rend rien tant que son
+   * état ne l'appelle pas (fiche de tâche, hôtes de la coquille) ; un repli occuperait sa place dans la mise en page à chaque démarrage.
+   */
+  readonly fallback?: 'screen' | 'none';
 }
 
 /**
@@ -88,7 +93,7 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName,
     const [direct] = useState(() => loaded);
     const [Lazy, setLazy] = useState(() => lazy<ComponentType<P>>(remember));
     const [attempt, setAttempt] = useState(0);
-    const body = direct ? createElement(direct, props) : <Suspense fallback={options.onDemand === true ? null : <Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
+    const body = direct ? createElement(direct, props) : <Suspense fallback={options.onDemand === true || options.fallback === 'none' ? null : <Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
     return (
       <ScreenErrorBoundary
         key={attempt}
@@ -109,7 +114,8 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName,
 export const ReportScreen = lazyScreen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })), 'reportscreen');
 export const DoneTasksScreen = lazyScreen<object>(() => import('../tasks/DoneTasksScreen').then((m) => ({ default: m.DoneTasksScreen })), 'donetasksscreen');
 export const TrashScreen = lazyScreen<object>(() => import('../tasks/TrashScreen').then((m) => ({ default: m.TrashScreen })), 'trashscreen');
-export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })), 'taskdetail');
+/** BUNDLE-01 palier 1 : fiche de tâche, montée en permanence par Aujourd'hui, la Semaine, Objectif, Un jour, Terminées et la coquille : sans repli. */
+export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })), 'taskdetail', { fallback: 'none' });
 export const SomedayScreen = lazyScreen<object>(() => import('../someday/SomedayScreen').then((m) => ({ default: m.SomedayScreen })), 'somedayscreen');
 export const GoalsScreen = lazyScreen<object>(() => import('../goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })), 'goalsscreen');
 export const WeekScreen = lazyScreen<object>(() => import('../week/WeekScreen').then((m) => ({ default: m.WeekScreen })), 'weekscreen');
@@ -132,6 +138,22 @@ export const SpacesScreen = lazyScreen<object>(() => import('../spaces/SpacesScr
 export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/CalendarsScreen').then((m) => ({ default: m.CalendarsScreen })), 'calendarsscreen');
 export const SyncDetailsScreen = lazyScreen<object>(() => import('../sync/SyncDetailsScreen').then((m) => ({ default: m.SyncDetailsScreen })), 'syncdetailsscreen');
 export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })), 'quiethoursroute');
+
+// BUNDLE-01 palier 2 : hôtes de la coquille (App.tsx), montés en permanence, qui ne rendent rien tant que leur état ne l'appelle pas. Chacun est
+// un bloc à part, préchargé au repos comme les écrans (`fallback: 'none'` : aucun repli dans la mise en page) ; un échec de chargement montre le
+// message et « Réessayer » de la frontière d'erreur. Les magasins d'état et les raccourcis (Ctrl+K, Ctrl+/) restent dans le départ.
+/** Assistant de premier lancement (P-05) : ouverture pilotée par l'état ; préchargé (l'assistant n'attend que le repos qui suit le premier rendu). */
+export const OnboardingHost = lazyScreen<object>(() => import('../settings/OnboardingHost').then((m) => ({ default: m.OnboardingHost })), 'onboardinghost', { fallback: 'none' });
+/** Recherche (M14) : ouverte sur un geste (Ctrl+K, bouton) ; préchargée, le raccourci existe avant le bloc et son premier usage le charge si besoin. */
+export const SearchOverlay = lazyScreen<object>(() => import('../search/SearchOverlay').then((m) => ({ default: m.SearchOverlay })), 'searchoverlay', { fallback: 'none' });
+/** Focus (M10) : reprise d'une session au démarrage et affichage sur un geste ; préchargé (la reprise attend le repos qui suit le premier rendu). */
+export const FocusHost = lazyScreen<object>(() => import('../focus/FocusHost').then((m) => ({ default: m.FocusHost })), 'focushost', { fallback: 'none' });
+/** Liste des raccourcis (P-08, PC) : ouverte sur Ctrl+/ ; préchargée, le raccourci (registerShellShortcuts) reste dans le départ. */
+export const ShortcutsHelp = lazyScreen<object>(() => import('../shortcuts/ShortcutsHelp').then((m) => ({ default: m.ShortcutsHelp })), 'shortcutshelp', { fallback: 'none' });
+/** Bandeau de mise à jour (D-03) : apparition pilotée par updaterStore (vérification lancée après le premier rendu) ; préchargé. */
+export const UpdateBanner = lazyScreen<object>(() => import('../updater/UpdateBanner').then((m) => ({ default: m.UpdateBanner })), 'updatebanner', { fallback: 'none' });
+/** Fiche d'un jour férié (E-03) : ouverte sur un geste (DetailTarget holiday) ; préchargée. */
+export const HolidayDetailHost = lazyScreen<object>(() => import('../events/HolidayDetailHost').then((m) => ({ default: m.HolidayDetailHost })), 'holidaydetailhost', { fallback: 'none' });
 
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {

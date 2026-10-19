@@ -20,7 +20,7 @@ import { useRowGestureFeedback } from '../app/rowGestureFeedback';
 import { SearchButton } from '../search';
 import { SomedayButton, useSomedayTasks } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
-import { TaskDetail } from '../tasks';
+import { TaskDetail } from '../app/lazyScreens';
 import { TodayAddRow } from './TodayCreate';
 import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';

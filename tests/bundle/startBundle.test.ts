@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { measureStart, readBuildFiles, startChunks as startChunksOf, type BuildFiles, type Manifest, type ManifestChunk } from './bundleMeasure';
+import { compareStartModules, describeComparison, initialList, normalizeSource, START_MODULES_FILE, updatedList, validateList, type StartModulesList } from './startModules';
 
 /**
  * Taille du bundle de départ (PRD 8, démarrage rapide) : `npm run build` vers un dossier temporaire avec le manifeste de Vite, puis somme
@@ -12,20 +13,21 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * par exemple « tokens », et ces noms peuvent changer). Les imports dynamiques (Recharts du rapport, tesseract.js, etc.) et les
  * ressources copiées telles quelles (/ocr/) n'en font pas partie. Seuil : 350 Ko gzip.
  *
+ * BUNDLE-01 : la mesure jugée est la mesure NORMALISÉE (`bundleMeasure.ts`) : les noms hachés des blocs, qui changent à chaque retouche CSS
+ * et faisaient bouger le gzip de quelques dizaines d'octets sans aucune ligne de code changée, sont remplacés dans le contenu mesuré par un
+ * pseudo-hachage déterministe de même longueur et de même alphabet. L'écart avec la mesure brute est borné (critère 4), le plafond ne bouge
+ * pas, le build livré n'est pas touché. Relevé entre deux commits : `node tests/bundle/measureStart.ts <dossier de sortie>`.
+ *
  * Hors de `npm run test` : lancé par `npm run test:bundle` (configuration vitest.bundle.config.ts).
  */
 const LIMIT_BYTES = 350 * 1024;
-
-interface ManifestChunk {
-  readonly file: string;
-  readonly isEntry?: boolean;
-  readonly imports?: readonly string[];
-  readonly dynamicImports?: readonly string[];
-}
+/** BUNDLE-01 critère 4 : écart absolu admis entre mesure normalisée et mesure brute du même build (au-delà : relèvement de fait, ou modèle des hachages périmé). */
+const NORMALIZATION_GAP_BYTES = 100;
 
 describe('bundle de départ (index.html)', () => {
   let outDir = '';
-  let manifest: Record<string, ManifestChunk> = {};
+  let manifest: Manifest = {};
+  let files: BuildFiles = new Map();
 
   beforeAll(() => {
     outDir = mkdtempSync(join(tmpdir(), 'ct-bundle-'));
@@ -35,7 +37,8 @@ describe('bundle de départ (index.html)', () => {
     const env = { ...process.env, NODE_ENV: 'production', TAURI_ENV_DEBUG: '', VITE_CT_E2E_HOOKS: '' };
     const build = spawnSync('npm', ['run', 'build', '--', '--outDir', outDir, '--emptyOutDir', '--manifest'], { encoding: 'utf8', shell: true, env });
     if (build.status !== 0) throw new Error(`npm run build a échoué (code ${String(build.status)}) :\n${build.stdout}\n${build.stderr}`);
-    manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Record<string, ManifestChunk>;
+    manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Manifest;
+    files = readBuildFiles(outDir);
   });
 
   afterAll(() => {
@@ -44,39 +47,71 @@ describe('bundle de départ (index.html)', () => {
 
   /** Blocs statiques atteints depuis l'entrée de `index.html`, entrée comprise. */
   function startChunks(): ManifestChunk[] {
-    if (manifest['index.html']?.isEntry !== true) throw new Error('entrée index.html absente du manifeste');
-    const seen = new Set<string>();
-    const queue: string[] = ['index.html'];
-    const result: ManifestChunk[] = [];
-    while (queue.length > 0) {
-      const key = queue.shift() as string;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const chunk = manifest[key];
-      if (!chunk) throw new Error(`bloc ${key} absent du manifeste`);
-      result.push(chunk);
-      queue.push(...(chunk.imports ?? []));
-    }
-    return result;
+    return startChunksOf(manifest);
   }
 
-  it('le JavaScript de départ pèse moins de 350 Ko en gzip, bloc par bloc affiché', () => {
-    const chunks = startChunks().filter((chunk) => chunk.file.endsWith('.js'));
-    const sizes = chunks.map((chunk) => ({ file: chunk.file, gzip: gzipSync(readFileSync(join(outDir, chunk.file))).length }));
-    const total = sizes.reduce((sum, item) => sum + item.gzip, 0);
-    const detail = sizes
+  it('le JavaScript de départ pèse moins de 350 Ko en gzip (mesure normalisée), bloc par bloc affiché', () => {
+    const chunks = startChunks()
+      .map((chunk) => chunk.file)
+      .filter((file) => file.endsWith('.js'));
+    const normalized = measureStart(files, chunks, { normalizeHashes: true });
+    const raw = measureStart(files, chunks);
+    const detail = [...normalized.chunks]
       .sort((a, b) => b.gzip - a.gzip)
       .map((item) => `  ${(item.gzip / 1024).toFixed(1).padStart(7)} Ko  ${item.file}`)
       .join('\n');
-    // eslint-disable-next-line no-console -- détail relevé à la main : taille gzip de chaque bloc du bundle de départ
-    console.info(`[bundle] ${String(sizes.length)} blocs de départ, total ${(total / 1024).toFixed(1)} Ko gzip (seuil ${String(LIMIT_BYTES / 1024)} Ko)\n${detail}`);
-    expect(sizes.length).toBeGreaterThan(0);
-    expect(total).toBeLessThan(LIMIT_BYTES);
+    // eslint-disable-next-line no-console -- détail relevé à la main : taille gzip de chaque bloc du bundle de départ, octets exacts des deux mesures
+    console.info(
+      `[bundle] ${String(normalized.chunks.length)} blocs de départ, total ${(normalized.total / 1024).toFixed(1)} Ko gzip (seuil ${String(LIMIT_BYTES / 1024)} Ko) ; normalisé ${String(normalized.total)} octets, brut ${String(raw.total)} octets, marge ${String(LIMIT_BYTES - normalized.total)}\n${detail}`,
+    );
+    expect(normalized.chunks.length).toBeGreaterThan(0);
+    expect(normalized.total).toBeLessThan(LIMIT_BYTES);
+    // Critère 4 : la normalisation ne relève pas le plafond de fait (et le modèle des hachages de Vite n'est pas périmé).
+    expect(Math.abs(normalized.total - raw.total), `normalisé ${String(normalized.total)}, brut ${String(raw.total)}`).toBeLessThanOrEqual(NORMALIZATION_GAP_BYTES);
+  });
+
+  // BUNDLE-01 (critères 19 à 25) : garde par liste blanche des modules du départ, mécanisme principal ; le plafond reste le dernier juge. Les
+  // cartes de source des blocs de départ (`sourcemap` actif sans TAURI_ENV_PLATFORM) donnent l'ensemble exact des modules ; il est comparé à
+  // tests/bundle/start-modules.json, dans les deux sens. `UPDATE_START_MODULES=1` réécrit la liste (jamais en CI) ; un module entré y arrive
+  // dans `ajouts` avec une story et une raison vides, donc le test reste rouge jusqu'à leur saisie.
+  it('aucun module nouveau dans le départ : liste blanche tests/bundle/start-modules.json exacte dans les deux sens', () => {
+    const root = join(import.meta.dirname, '..', '..');
+    const actual = new Set<string>();
+    let maps = 0;
+    for (const chunk of startChunks()) {
+      if (!chunk.file.endsWith('.js')) continue;
+      const mapPath = join(outDir, `${chunk.file}.map`);
+      // Le bloc d'aide de Rolldown (`rolldown-runtime`) est émis sans carte : aucun module source.
+      if (!existsSync(mapPath)) continue;
+      maps += 1;
+      const map = JSON.parse(readFileSync(mapPath, 'utf8')) as { readonly sources: readonly string[] };
+      for (const source of map.sources) actual.add(normalizeSource(mapPath, source, root));
+    }
+    expect(maps).toBeGreaterThan(0);
+    expect(actual.size).toBeGreaterThan(100);
+    const listPath = join(root, START_MODULES_FILE);
+    const readList = (): StartModulesList => JSON.parse(readFileSync(listPath, 'utf8')) as StartModulesList;
+    if (process.env['UPDATE_START_MODULES'] === '1') {
+      if (process.env['CI']) throw new Error(`UPDATE_START_MODULES=1 est refusée en CI : ${START_MODULES_FILE} se met à jour en local, dans un commit qui justifie chaque ajout.`);
+      writeFileSync(listPath, `${JSON.stringify(existsSync(listPath) ? updatedList(readList(), actual) : initialList(actual), null, 2)}\n`);
+    }
+    const list = readList();
+    const problems = validateList(list, (file) => existsSync(join(root, file)));
+    expect(problems, problems.join('\n')).toEqual([]);
+    const sizeOf = (file: string): number | null => (existsSync(join(root, file)) ? statSync(join(root, file)).size : null);
+    const messages = describeComparison(compareStartModules(actual, list), sizeOf);
+    expect(messages, messages.join('\n')).toEqual([]);
+    // Critère 23 : aucun des modules sortis par les paliers 1 et 2 (ni leurs feuilles) n'est dans le départ ni dans la liste.
+    for (const gone of ['src/features/tasks/TaskDetail.tsx', 'src/features/tasks/TaskDetail.css', 'src/features/settings/OnboardingHost.tsx', 'src/features/settings/OnboardingHost.css', 'src/features/search/SearchOverlay.tsx', 'src/features/focus/FocusHost.tsx', 'src/features/shortcuts/ShortcutsHelp.tsx', 'src/features/shortcuts/ShortcutsHelp.css', 'src/features/updater/UpdateBanner.tsx', 'src/features/updater/UpdateBanner.css', 'src/features/events/HolidayDetailHost.tsx', 'src/features/events/HolidayDetail.css']) {
+      expect(actual.has(gone), gone).toBe(false);
+      expect(list.groupes.some((group) => group.fichiers?.includes(gone)) || list.ajouts.some((addition) => addition.fichier === gone), gone).toBe(false);
+    }
   });
 
   // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un
   // import statique oublié, un barrel ou un effet de bord ajouté (retrait de « sideEffects » dans package.json compris).
-  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts', 'src/features/sync/SyncDetailsCarryReport.tsx', 'src/features/sync/carryReportBannerLine.ts', 'src/sync/epochCarryReportBanner.ts', 'src/sync/epochCarryReportAck.ts', 'src/sync/orphanEpoch.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
+  // BUNDLE-01 : fiche de tâche (palier 1) et les six hôtes de la coquille (palier 2), blocs à la demande importés dynamiquement par lazyScreens.tsx.
+  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/tasks/TaskDetail.tsx', 'src/features/settings/OnboardingHost.tsx', 'src/features/search/SearchOverlay.tsx', 'src/features/focus/FocusHost.tsx', 'src/features/shortcuts/ShortcutsHelp.tsx', 'src/features/updater/UpdateBanner.tsx', 'src/features/events/HolidayDetailHost.tsx', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts', 'src/features/sync/SyncDetailsCarryReport.tsx', 'src/features/sync/carryReportBannerLine.ts', 'src/sync/epochCarryReportBanner.ts', 'src/sync/epochCarryReportAck.ts', 'src/sync/orphanEpoch.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
     const start = new Set(startChunks().map((chunk) => chunk.file));
     const chunk = manifest[source];
     if (!chunk) throw new Error(`bloc ${source} absent du manifeste`);

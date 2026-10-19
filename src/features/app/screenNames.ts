@@ -28,4 +28,10 @@ export type ScreenName =
   | 'calendarsscreen'
   | 'syncdetailsscreen'
   | 'quiethoursroute'
-  | 'restorechoicedialog';
+  | 'restorechoicedialog'
+  | 'onboardinghost'
+  | 'searchoverlay'
+  | 'focushost'
+  | 'shortcutshelp'
+  | 'updatebanner'
+  | 'holidaydetailhost';

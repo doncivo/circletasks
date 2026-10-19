@@ -22,38 +22,42 @@ import {
   ChecklistsScreen,
   DoneTasksScreen,
   EventsScreen,
+  FocusHost,
   GoalsScreen,
+  HolidayDetailHost,
   HolidaySettingsScreen,
   ImportScreen,
   LogsScreen,
+  OnboardingHost,
   RecoveryFailureLazy,
   preloadScreens,
   QuietHoursRoute,
   RecapSettingsScreen,
   ReportScreen,
   RoutinesScreen,
+  SearchOverlay,
   SettingsScreen,
+  ShortcutsHelp,
   SomedayScreen,
   SpacesScreen,
   SyncDetailsScreen,
   TabsScreen,
   TaskDetail,
   TrashScreen,
+  UpdateBanner,
   WeekScreen,
 } from './features/app/lazyScreens';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
 import { registerExternalEventsSource } from './features/calendars';
 import { registerChecklistsSource } from './features/checklists';
-import { EventEditorHost, HolidayDetailHost, registerEventsSource } from './features/events';
-import { FocusHost } from './features/focus';
+import { EventEditorHost, registerEventsSource } from './features/events';
 import { registerGoalsSource } from './features/goals';
 import { registerRoutinesSource } from './features/routines';
-import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { OnboardingHost, restoreAppearance, startThemeSync } from './features/settings';
-import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
+import { registerSearchShortcut } from './features/search';
+import { restoreAppearance, startThemeSync } from './features/settings';
+import { registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
-import { UpdateBanner } from './features/updater';
 import { RestoreChoiceHost } from './features/sync/RestoreChoiceHost';
 import { startSyncIntegration } from './features/sync/startSync';
 import { startRemindersLazily } from './features/calendars/appleReminders/loadIntegration';

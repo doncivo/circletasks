@@ -20,7 +20,7 @@ import { isModalOpen } from '../app/tabShortcuts';
 import { WeekGoalBanners } from '../goals/WeekGoalBanners';
 import { SomedayButton, SomedayPanel } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
-import { TaskDetail } from '../tasks';
+import { TaskDetail } from '../app/lazyScreens';
 import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';

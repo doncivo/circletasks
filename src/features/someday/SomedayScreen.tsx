@@ -7,7 +7,7 @@ import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { SpaceFilterBar } from '../spaces';
-import { TaskDetail } from '../tasks';
+import { TaskDetail } from '../app/lazyScreens';
 import { TaskCreateSheet } from '../tasks/TaskCreateSheet';
 import { useDefaultReminderOffsets } from '../reminders';
 import { SomedayAddField } from './SomedayAddField';
