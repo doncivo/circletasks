@@ -1,6 +1,7 @@
 import { Undo2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { t } from '../../i18n';
+import { pendingFileCount } from '../../domain/sync/pendingFiles';
 import { isPublishBlockedCause, publishCauseText } from '../../i18n/syncPublishCauseText';
 import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -50,6 +51,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
   const navigate = useNavigationStore((s) => s.navigate);
   const status = useFeatureStore(syncStore, (s) => s.status);
   const nowMs = container.clock.nowMs();
+  const pendingCount = pendingFileCount(status.pendingFiles);
   const key = useKeyInfo();
   // `carry-report` est montré par sa propre ligne (compte rendu du changement d'époque), pas dans cette liste ; il lève pourtant le titre
   // AVERTISSEMENTS, vers lequel renvoie la ligne d'état « Synchro incomplète : voir les avertissements » (contre-revue, point 3).
@@ -143,7 +145,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         <>
           <h2 className="ct-settings__section">{t('sync.status.sectionPending')}</h2>
           <div className="ct-settings__row">
-            <span>{status.pendingFiles.length === 1 ? t('sync.status.pendingOne', { count: 1 }) : t('sync.status.pendingMany', { count: status.pendingFiles.length })}</span>
+            <span>{pendingCount === 1 ? t('sync.status.pendingOne', { count: 1 }) : t('sync.status.pendingMany', { count: pendingCount })}</span>
           </div>
         </>
       )}
