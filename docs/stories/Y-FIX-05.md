@@ -169,3 +169,10 @@ Commits : ADR 0011 §33 `0a4a75c6` (avant le code) ; **rouge seul `89d5ef7d`** ;
 ## Questions à Ali
 
 Aucune bloquante. Un seul point d'information : la règle retenue ne publie rien de nouveau (pas d'état, pas de format) ; si vous préférez que Rust nomme les segments abandonnés, il faut une story de format (§7.2) qui rendrait les anciennes versions `corrupt` jusqu'à leur mise à jour.
+
+## Reprise Codex du 2026-10-19 — passes séparées
+
+- Product-owner : critères C1 à C14 relus ; lecteur seul, format inchangé. B18 reste ouvert tant que les écarts de validation ne sont pas levés.
+- Module : diff Rust et faux TypeScript relus ; hydratation, tête authentifiée et entrées `closed` restent les gardes du saut. Aucun code modifié.
+- QA : `npx vitest run --coverage.enabled=false tests/unit/sync/closedSegments.test.ts tests/unit/sync/firstPublicationCrashPoints.test.ts src/features/sync/waitingLong.test.tsx` : 47 tests verts, 3 fichiers, 39,82 s. CI complète avec couverture : runs 39139398906 et 39139403003 verts sur `a0b725d8`. Ces résultats ne lèvent pas les écarts C13/C14 consignés ci-dessus.
+- Revue distincte : non approuvée pour clôture ; C13 ne prouve pas le compte exact affiché et C14 garde des écarts historiques. Mentions prématurées « fait » retirées de B18 et du backlog. Aucun test désactivé, délai allongé ni seuil abaissé.
