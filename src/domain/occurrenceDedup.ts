@@ -1,5 +1,11 @@
 import { compareCodeUnits } from './compareCodeUnits';
 import type { Hlc, RecurrenceId, TaskId } from './types';
+import { publishedAllRead, readByAll, type DeviceReadState, type KnownDevice } from './sync/retention';
+
+/** Un nettoyage n'est stabilisé qu'après accusé de ses écritures et lecture complète des journaux des lecteurs. */
+export function dedupAcknowledged(write: Hlc, readers: readonly (KnownDevice & DeviceReadState)[]): boolean {
+  return readers.every(publishedAllRead) && readByAll(write, { kind: 'limited', readers });
+}
 
 /**
  * T-TECH-01 (B8, décision D7) : nettoyage des occurrences dédoublées par les versions d'avant les identifiants déterministes
@@ -79,10 +85,9 @@ export interface Reconciliation {
  * corbeille (complétion arrivée après coup) : la terminée revient, les vivantes sont écartées. Les deux appareils, sur les mêmes lignes,
  * font la même écriture. Autrement : rien (le hlc d'une ligne écartée est celui de son écart, il ne sert pas à défaire un nettoyage).
  */
-export function reconcileGroup(rows: readonly GroupRow[]): Reconciliation {
+export function reconcileGroup(rows: readonly GroupRow[], recoverable?: ReadonlySet<TaskId>): Reconciliation {
   const live = rows.filter((r) => r.live);
-  if (live.length === 0) return { restore: [...rows].sort(byRank)[0]?.id ?? null, discard: [] };
-  if (live.some((r) => r.done)) return { restore: null, discard: [] };
-  const done = rows.filter((r) => r.done).sort(byRank)[0];
-  return done ? { restore: done.id, discard: live.map((r) => r.id).sort(compareCodeUnits) } : { restore: null, discard: [] };
+  const chosen = live.length === 0 ? [...rows].sort(byRank)[0] : live.some((r) => r.done) ? undefined : rows.filter((r) => r.done).sort(byRank)[0];
+  if (!chosen || (recoverable && !recoverable.has(chosen.id))) return { restore: null, discard: [] };
+  return { restore: chosen.id, discard: live.map((r) => r.id).sort(compareCodeUnits) };
 }

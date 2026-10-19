@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RecurrenceId, TaskId } from '../../../src/domain/types';
 import { createTaskEntities } from '../../../src/features/app/taskEntities';
-import { runRecurrenceDedup } from '../../../src/features/tasks/recurrenceDedup';
+import { RECURRENCE_DEDUP_META, runRecurrenceDedup } from '../../../src/features/tasks/recurrenceDedup';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -173,8 +173,25 @@ describe('nettoyage sur deux appareils (T-TECH-01 critère 17)', () => {
     await settle(a, b);
     await pass(a);
     await pass(b);
+    expect(JSON.parse((await a.data.repos.sync.getMeta(RECURRENCE_DEDUP_META)) ?? '{}').groups, JSON.stringify(await a.data.repos.sync.getStates())).toEqual([]);
+    expect(JSON.parse((await b.data.repos.sync.getMeta(RECURRENCE_DEDUP_META)) ?? '{}').groups, JSON.stringify(await b.data.repos.sync.getStates())).toEqual([]);
     a.clock.advance(1000);
     await a.data.repos.tasks.softDelete([Y]);
+    await settle(a, b);
+    await pass(a);
+    await pass(b);
+    await settle(a, b);
+    expect(await liveOf(a)).toEqual([]);
+    expect(await liveOf(b)).toEqual([]);
+  });
+
+  it('R1 : une suppression volontaire pendant le suivi reste supprimée, avant les accusés aussi', async () => {
+    const [a, b] = await legacyDuplicates();
+    await pass(a);
+    a.clock.advance(1000);
+    await a.data.repos.tasks.softDelete([Y]);
+    await pass(a);
+    expect(await liveOf(a)).toEqual([]);
     await settle(a, b);
     await pass(a);
     await pass(b);

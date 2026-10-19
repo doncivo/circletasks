@@ -1,5 +1,8 @@
-import { DEDUP_FAILURES_META, duplicateGroups, groupKey, reconcileGroup, type GroupRow } from '../../domain/occurrenceDedup';
-import type { Hlc, IsoDateTime, RecurrenceId, TaskId } from '../../domain/types';
+import { DEDUP_FAILURES_META, dedupAcknowledged, duplicateGroups, groupKey, reconcileGroup, type GroupRow } from '../../domain/occurrenceDedup';
+import type { DeviceId, Hlc, IsoDateTime, RecurrenceId, TaskId } from '../../domain/types';
+import { parseStoredAcks } from '../../domain/sync/stored';
+import { isStrictHlc } from '../../domain/sync/format';
+import { syncTable, type SyncTable } from '../../domain/sync/syncTables';
 import type { Repositories } from '../../db/repositories';
 import { logFailure } from '../../platform/desktop/log';
 import type { TaskUseCaseDeps } from './taskUseCases';
@@ -16,7 +19,8 @@ import type { TaskUseCaseDeps } from './taskUseCases';
  * Deux appareils aux données différentes (une modification ou une complétion pas encore lue par l'un) peuvent écarter chacun la ligne que
  * l'autre garde : les bases convergent, mais sans survivante, ou avec la terminée à la Corbeille. Le passage garde donc les clés des
  * groupes qu'il a nettoyés (`sync_meta`) et, après chaque cycle réussi, applique `reconcileGroup` à chacune (règle déterministe : les deux
- * appareils font la même écriture) ; une clé n'est retirée qu'une fois son groupe stable. Il est réexécutable : un doublon créé ensuite par
+ * appareils font la même écriture) ; une clé n'est retirée qu'une fois son groupe stable ET le nettoyage accusé par les autres appareils,
+ * dont les journaux sont entièrement lus ici (R1). Il est réexécutable : un doublon créé ensuite par
  * un appareil resté en version antérieure est repris au cycle suivant.
  */
 
@@ -35,14 +39,16 @@ export interface RecurrenceDedupDeps extends Pick<TaskUseCaseDeps, 'data' | 'tas
 }
 
 /** Clés suivies ; un état illisible (écrit par une autre version) est journalisé, jamais avalé, et repart de zéro. */
-function parseKeys(raw: string | null, log: (message: string) => void): string[] {
-  if (raw === null) return [];
+function parseState(raw: string | null, log: (message: string) => void): { groups: string[]; deletions: Record<string, Hlc> } {
+  if (raw === null) return { groups: [], deletions: {} };
   try {
-    const value = JSON.parse(raw) as { groups?: unknown };
-    return Array.isArray(value.groups) ? value.groups.filter((key): key is string => typeof key === 'string') : [];
+    const value = JSON.parse(raw) as { groups?: unknown; deletions?: unknown };
+    const groups = Array.isArray(value.groups) ? value.groups.filter((key): key is string => typeof key === 'string') : [];
+    const deletions = value.deletions && typeof value.deletions === 'object' ? Object.fromEntries(Object.entries(value.deletions).filter((entry): entry is [string, Hlc] => isStrictHlc(entry[1]))) : {};
+    return { groups, deletions };
   } catch {
     log('recurrence-dedup-state-unreadable {"code":"parse"}');
-    return [];
+    return { groups: [], deletions: {} };
   }
 }
 
@@ -69,32 +75,68 @@ export async function runRecurrenceDedup(deps: RecurrenceDedupDeps): Promise<Rec
   const log = deps.log ?? ((message: string) => logFailure('sync-recurrence', message));
   const outcome = await deps.data.transaction(async (repos) => {
     const raw = await repos.sync.getMeta(RECURRENCE_DEDUP_META);
+    const previous = parseState(raw, log);
+    const deletions: Record<string, Hlc> = {};
+    const readers = (await repos.sync.getStates()).filter((row) => !row.isSelf && row.status !== 'expired' && row.status !== 'forgotten').map((row) => ({
+      deviceId: row.deviceId as DeviceId, status: row.status, lastSeenHlc: row.lastSeenHlc,
+      acks: parseStoredAcks(row.lastAcks, 'recurrence-dedup.acks', (event, detail) => log(`${event} ${JSON.stringify(detail)}`)),
+      epoch: row.epoch, stateEpoch: row.stateEpoch,
+      cursor: { segment: row.cursorSegment, record: row.cursorRecord }, head: { segment: row.headSegment, record: row.headRecord },
+    }));
+    const rememberDeletes = async (ids: readonly TaskId[]): Promise<void> => {
+      for (const id of ids) {
+        const task = await repos.tasks.getById(id, { includeDeleted: true });
+        if (task?.deletedAt) deletions[id] = task.hlc;
+      }
+    };
     const removed: TaskId[] = [];
     const restored: TaskId[] = [];
     const tracked = new Set<string>();
-    for (const key of parseKeys(raw, log)) {
+    for (const key of previous.groups) {
       const cut = key.lastIndexOf('|');
       const seriesIndex = Number(key.slice(cut + 1));
       const tasks = (await repos.tasks.listByRecurrence(key.slice(0, cut) as RecurrenceId, { includeDeleted: true })).filter((t) => t.seriesIndex === seriesIndex);
       const rows: GroupRow[] = tasks.map((t) => ({ id: t.id, recurrenceId: t.recurrenceId as RecurrenceId, seriesIndex, done: t.status === 'done', hlc: t.hlc, live: t.deletedAt === null }));
-      const plan = reconcileGroup(rows);
-      if (plan.restore === null && plan.discard.length === 0) continue; // groupe stable : plus suivi
-      tracked.add(key);
+      const clocks = await repos.sync.readClocks(syncTable('task') as SyncTable, tasks.map((t) => t.id));
+      const deletionClock = (id: TaskId) => clocks.get(id)?.get('deleted_at')?.hlc ?? clocks.get(id)?.get('*')?.hlc;
+      // Seul l'auteur du nettoyage peut annuler sa propre suppression, tant que l'horloge de deleted_at est identique.
+      // Une restauration puis suppression volontaire change cette horloge, même à la même milliseconde.
+      const recoverable = new Set(tasks.filter((t) => t.deletedAt !== null && previous.deletions[t.id] !== undefined && previous.deletions[t.id] === deletionClock(t.id)).map((t) => t.id));
+      const keep = () => {
+        tracked.add(key);
+        for (const id of recoverable) {
+          const hlc = previous.deletions[id];
+          if (hlc) deletions[id] = hlc;
+        }
+      };
+      const plan = reconcileGroup(rows, recoverable);
+      if (plan.restore === null && plan.discard.length === 0) {
+        // Un nettoyage concurrent peut avoir remplacé notre écriture avant publication : juger les suppressions actuelles,
+        // jamais attendre un accusé d'une écriture locale supplantée qui ne sera donc jamais publiée.
+        if (tasks.some((t) => t.deletedAt !== null && (!deletionClock(t.id) || !dedupAcknowledged(deletionClock(t.id) as Hlc, readers)))) keep();
+        continue;
+      }
+      keep();
       await discard(repos, plan.discard);
       removed.push(...plan.discard);
       if (plan.restore !== null) {
         await restore(repos, plan.restore, tasks.find((t) => t.id === plan.restore)?.deletedAt ?? null);
         restored.push(plan.restore);
+        Reflect.deleteProperty(deletions, plan.restore);
       }
+      await rememberDeletes(plan.discard);
     }
     const groups = duplicateGroups(await (await repos.occurrenceDedup()).listLiveDuplicates());
     for (const group of groups) {
       await discard(repos, group.discarded);
       removed.push(...group.discarded);
-      tracked.add(groupKey(group.recurrenceId, group.seriesIndex));
+      const key = groupKey(group.recurrenceId, group.seriesIndex);
+      tracked.add(key);
+      await rememberDeletes(group.discarded);
     }
-    const next = JSON.stringify({ groups: [...tracked].sort() });
-    if (next !== (raw ?? JSON.stringify({ groups: [] }))) await repos.sync.setMeta(RECURRENCE_DEDUP_META, next);
+    const keys = [...tracked].sort();
+    const next = JSON.stringify({ groups: keys, deletions: Object.fromEntries(Object.entries(deletions).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) });
+    if (next !== (raw ?? JSON.stringify({ groups: [], deletions: {} }))) await repos.sync.setMeta(RECURRENCE_DEDUP_META, next);
     return { groups: groups.length, removed, restored };
   });
   deps.taskEntities.remove(outcome.removed);
