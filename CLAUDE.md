@@ -33,7 +33,7 @@ npm run dev | npm run tauri dev | npm run test | npm run lint | npm run typechec
   relevé par `node tests/bundle/measureStart.ts <dossier>`) ; le plafond reste le dernier juge.
 
 ## Délégation
-Toujours passer par product-owner pour choisir la story, puis l'agent du module, puis qa-test et code-reviewer.
+Codex assure lui-même product-owner, agent du module, qa-test puis code-reviewer en passes distinctes, dans cet ordre, et consigne chaque résultat (décision d’Ali du 2026-10-19 ; détails dans AGENTS.md).
 
 ## Méthode (depuis le 2026-10-08)
 - Suite complète dans la CI, plus en local : unitaires, Rust, e2e pc et iphone, perf et bundle sur des runners parallèles

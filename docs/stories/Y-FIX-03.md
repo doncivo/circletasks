@@ -1,6 +1,6 @@
 # Y-FIX-03 — Une lecture de journal en échec n'est plus muette : « À jour » interdit, entretien sauté dit, appareil signalé
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-02) · Agent : **sync-icloud** (`src/sync/engine.ts`, `src/sync/reader.ts` si besoin, `src/features/sync/syncText.ts`, tests de synchro) · Relecture : code-reviewer · Statut : **fait sur la branche** (2026-10-18 ; rouge a1964dee, vert d1baaf85 ; à fusionner après CI « suite verte » et relecture)
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-02) · Agent : **sync-icloud** (`src/sync/engine.ts`, `src/sync/reader.ts` si besoin, `src/features/sync/syncText.ts`, tests de synchro) · Relecture : code-reviewer · Statut : fait, PR #62 fusionnée le 2026-10-19 ; QA, lint, typage et revue approuvés ; suite complète avec couverture verte (39250092435 / 39250101460)
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md). Bloquant **B3** de `docs/audit-1.0.md` (plan d'Ali, étape 3). Aucun écart au PRD ; la règle appliquée est celle de l'ADR 0011 section 24 point 5 (« À jour » interdit sans preuve).
 Dépend de : Y-TECH-03 (fait : banc, plan de pannes, plan `scenario-3-lecture-io` déjà dans `tests/fixtures/sync/fault-plan.json` ligne 94), **Y-FIX-02 fusionnée** (même fichier `engine.ts`, voir « Ordre et dossiers partagés »).
 Estimation : 3 h. Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de 4 h 30).
@@ -145,3 +145,8 @@ Décisions du product-owner, à valider par Ali (questions en fin de fiche) ; el
 2. **Seuil pour l'échec permanent.** Un seul `bad-header` ou `decrypt-failed` suffit-il à tenter la reprise puis à marquer l'appareil `corrupt` ? Recommandation : oui (Rust répond déjà `truncated` pour un fichier partiel d'iCloud, donc ces codes sont de vraies corruptions ; la reprise est une fusion qui n'efface rien). Alternative : trois cycles de suite avant d'agir, au prix d'un compteur persistant par appareil.
 3. **Nommer l'appareil dans la ligne d'erreur passagère** (« PC 56d4 : fichier occupé par iCloud ») : non retenu, texte nouveau. À reprendre après la 1.0 si le journal montre des échecs fréquents.
 4. **Marge du bundle.** 43 octets : la règle du critère 9 (ligne « Synchro incomplète » avec un appareil `corrupt`) est la seule addition prévisible. Si elle ne tient pas sans compensation, faut-il la reporter (le défaut existe déjà pour `truncated`) plutôt que de toucher aux paliers de BUNDLE-01 ? Recommandation : la reporter et le consigner dans `docs/dettes.md`.
+
+
+## Clôture du 2026-10-19
+
+PR #62 fusionnée dans `main` par le commit `c76bc718`, après les passes QA et revue consignées ci-dessus et la CI complète avec couverture (39250092435 / 39250101460). Les mentions d’attente dans les sections précédentes sont historiques. Les preuves rouges restent conservées.

@@ -9,7 +9,7 @@
 | Agents | sync-icloud (lecteur, faux `memory.ts`, banc), desktop-tauri (`read_journal`, tests Rust) ; relecture code-reviewer ; qa-test |
 | Constat | `docs/audit-1.0.md`, B18 (ajouté le 2026-10-18) |
 | Estimation | 3 à 4 h ; alerte à 6 h (règle d'Ali : arrêt et prévenir si l'estimation dérape de plus de 50 %) |
-| Statut | QA et revue approuvées le 2026-10-19 ; en attente de la suite complète CI sur le commit final avant fusion et clôture (rouge 89d5ef7d, vert 528bb5f2 ; C13 rouge b1253508, vert 15b8cab1) |
+| Statut | fait, PR #60 fusionnée le 2026-10-19 ; QA, lint, typage et revue approuvés ; suite complète avec couverture verte (39253744800 / 39253748866) |
 | Branche | `y-fix-05-segment-tronque`, rebasée sur `main` c76bc718 après fusion de #62 |
 | Règle d'Ali (2026-10-18) | un défaut qui fait perdre des données ou affiche un état faux sans le dire passe avant la 1.0 d'office |
 
@@ -185,3 +185,8 @@ Aucune bloquante. Un seul point d'information : la règle retenue ne publie rien
 - Lint et typecheck verts ; bundle : 27 tests verts, plafond inchangé. La suite complète avec couverture reste exigée en CI sur le commit à fusionner.
 - Revue distincte : diff du lecteur, faux, fixture et tests relu ; les gardes de tête authentifiée, hydratation et `closed` empêchent un saut hors des conditions prévues. Le double compte C13 est corrigé dans l'écran à la demande, sans modifier le moteur ni la publication. Les corrections Clippy n'affectent pas les décisions métier. Revue approuvée, sous réserve de la suite verte du commit final ; B18 n'est pas clos avant celle-ci.
 - Après rebase sur #62 fusionnée : 101 tests ciblés verts sur 7 fichiers (scénarios de #62 inclus), bundle 27/27 vert. Conflits limités au journal, résolus en gardant les deux stories et les bons identifiants de preuve ; diff final relu, aucun conflit de code. Revue maintenue approuvée ; suite CI finale requise.
+
+
+## Clôture du 2026-10-19
+
+PR #60 fusionnée dans `main` par le commit `1838dbe5`, après les passes QA et revue consignées ci-dessus et la CI complète avec couverture (39253744800 / 39253748866). Les mentions d’attente dans les sections précédentes sont historiques. Les preuves rouges restent conservées.
