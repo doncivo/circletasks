@@ -1,5 +1,13 @@
 # Journal de développement CircleTasks
 
+## 2026-10-19 — T-TECH-01, garde de réactivité de publication
+
+La CI du commit `0bdf6160` (run 39259550252, job 118083324710) détecte une tâche navigateur de 408 ms pendant le scénario J10 de 5 000 opérations, au-dessus de 250 ms ; ses 51 tests de bundle passent. Aucun nouvel essai CI lancé. Le scénario passe localement sans reproduire les 408 ms ; deux profils CPU montrent du travail synchrone SQLite dans les lectures de 400 lignes. Le diagnostic à CPU ralenti ×4 reproduit des tâches de 251 à 348 ms dans ces lectures et autour de l'ajout au journal et du retrait SQL. La trace CI ne permet pas d'attribuer précisément ses 408 ms à une instruction unique.
+
+Correctif : lectures de publication de 100 lignes ; points de découpage temporel existant autour de l'ajout et entre les paquets de retrait de la file. Le retrait, la tête et l'intention restent dans une transaction unique. Aucun seuil ni délai modifié, aucun test désactivé. Les 60 tests ciblés de découpage, règles, publication différée et points d'arrêt passent. Le diagnostic ×4 après modification dépasse le budget global de 40 s, pendant une concurrence locale avec les tests ciblés ; ce résultat ne vaut pas preuve de performance. Instrumentation retirée ; vérification des scénarios de performance normaux et nouvelle CI complète requises avant fusion.
+
+## Historique des stories et décisions
+
 Ce journal compte une ligne par story livrée ou par décision notable : date, story concernée, fichiers touchés et décisions prises.
 
 | Date | Story | Fichiers touchés | Décisions |

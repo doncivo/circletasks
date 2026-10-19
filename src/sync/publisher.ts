@@ -33,8 +33,8 @@ export const ROW_REPUBLISH_FIELD = '+';
 
 /** Durée de travail continu avant de rendre la main (ms). */
 export const SLICE_MS = 50;
-/** Lignes lues par instruction pendant la mise en forme (même découpage que le repository). */
-const READ_CHUNK = 400;
+/** Une lecture Wasm doit rester courte même sur un CPU occupé ; le repository accepte des paquets plus petits. */
+const READ_CHUNK = 100;
 /** Entrées de file lues par instruction (la file entière d'une grosse file hors ligne ne tient pas dans une tâche courte). */
 const OUTBOX_PAGE = 500;
 
@@ -431,10 +431,16 @@ export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: Device
       const inflight: Inflight = { epoch, segment, expect, count: batch.length, maxHlc, entries: done };
       await writeJson(data.repos, META.inflight, inflight);
       try {
+        await slicer.pause();
         const result = await platform.appendJournal({ epoch, segment, expectRecords: expect, sv, maxHlc, records: batch.map((r) => r.text) });
         current = { epoch, segment: result.head.segment, record: result.head.record, hlc: maxHlc, stateSeq: current.stateSeq };
+        await slicer.pause();
         await data.transaction(async (repos) => {
-          await repos.sync.clearPublished(done);
+          // Garder une seule transaction (file + tête + intention), mais rendre la main entre les paquets SQL.
+          for (let i = 0; i < done.length; i += READ_CHUNK) {
+            await repos.sync.clearPublished(done.slice(i, i + READ_CHUNK));
+            await slicer.pause();
+          }
           await writeJson(repos, META.head, current);
           await writeJson(repos, META.inflight, null);
           const times = (await readJson<Record<string, number>>(repos, META.segments)) ?? {};
