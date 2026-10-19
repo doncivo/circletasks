@@ -1,3 +1,4 @@
+import { clearOrphanDeleteFailure, deleteOwnTracked } from './ownDeletion';
 import type { DeviceAck, EpochId } from '../domain/sync/format';
 import { hlcDevice } from '../domain/sync/parse';
 import { isCycleInterrupted } from './deadline';
@@ -48,6 +49,7 @@ export async function abandonOrphan(deps: SyncDeps, orphan: EpochId): Promise<Ab
     logger.log('orphan-epoch-abandon-failed', { code });
     if (code !== 'state-mismatch') return { kind: 'failed', code };
     await writeJson(repos, META.orphanEpoch, null);
+    await clearOrphanDeleteFailure(deps, orphan);
     return { kind: 'refused' };
   }
   await data.transaction(async (tx) => {
@@ -68,26 +70,26 @@ export async function abandonOrphan(deps: SyncDeps, orphan: EpochId): Promise<Ab
  * suppression, aussi pour une orpheline dont le mémo perdu a été réarmé par le moteur (`orphan-epoch-relisted`, Y-IOS-02-FIX-02, §24 point 10).
  */
 export async function retryOrphanDeletion(deps: SyncDeps, ownScan: DeviceScan | null, currentEpoch: EpochId): Promise<void> {
-  const { data, platform, logger } = deps;
+  const { data, logger } = deps;
   const repos = data.repos;
   const left = await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch);
   if (left === null || left.epoch === currentEpoch || (await readJson<EpochId>(repos, META.epoch)) === left.epoch) return;
   if (!ownScan?.epochs.some((e) => e.epoch === left.epoch)) {
     await writeJson(repos, META.orphanEpoch, null);
+    await clearOrphanDeleteFailure(deps, left.epoch);
     logger.log('orphan-epoch-cleared', { epoch: left.epoch });
     return;
   }
   deps.deadline?.check('delete-own');
-  try {
-    const deleted = await platform.deleteOwn([{ epoch: left.epoch, kind: 'epoch' }]);
-    await writeJson(repos, META.orphanEpoch, null);
-    // Revue Y-IOS-02-FIX-02, point 4 : `orphan-epoch-deleted` seulement si un fichier a été effacé ; sinon l'époque listée n'existait déjà
-    // plus sur le disque (suppression locale pas encore propagée par iCloud) : `orphan-epoch-already-gone`, jamais un faux succès.
+  const { deleted, code } = await deleteOwnTracked(deps, [{ epoch: left.epoch, kind: 'epoch' }], true);
+  if (code === null) {
+    if (deleted > 0) await writeJson(repos, META.orphanEpoch, null);
+    // `orphan-epoch-deleted` seulement si un fichier a été retiré. Zéro ne prouve pas l'absence iCloud : le mémo reste et l'échec est visible,
+    // même si l'événement historique `orphan-epoch-already-gone` indique qu'aucun fichier local n'a été retiré.
     if (deleted > 0) logger.log('orphan-epoch-deleted', { epoch: left.epoch });
     else logger.log('orphan-epoch-already-gone', { epoch: left.epoch.slice(0, 14) });
-  } catch (error) {
-    if (isCycleInterrupted(error)) throw error;
-    logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
+  } else {
+    logger.log('orphan-epoch-delete-failed', { code });
   }
 }
 

@@ -55,6 +55,8 @@ const randomDeviceId = (): DeviceId => crypto.randomUUID().toLowerCase() as Devi
 
 const WEEK_MS = 7 * 86_400_000;
 
+const ownDeletionModule = () => import('./ownDeletion');
+
 export function createSyncService(options: SyncServiceOptions): SyncEngineService {
   const deps: SyncDeps = {
     data: options.data,
@@ -70,6 +72,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
   const setTimer = options.setTimeout ?? ((handler, ms) => setTimeout(handler, ms));
   const clearTimer = options.clearTimeout ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   let status: SyncStatus = INITIAL_STATUS;
+  let finishedOnce = false;
   const listeners = new Set<() => void>();
   const changeListeners = new Set<(c: RemoteChanges) => void>();
   let current: Promise<void> | null = null;
@@ -140,6 +143,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
   };
 
   const finish = async (result: CycleResult): Promise<void> => {
+    finishedOnce = true;
     let unreadable = false;
     const read = async <T>(what: string, run: () => Promise<T>): Promise<T | undefined> => {
       try {
@@ -157,6 +161,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     const forget: SyncForgetStatus | null | undefined = await read('forget', () => readForgetStatus(options.data.repos));
     // Y-11 (exigence d'Ali) : réinitialisation en cours, en échec, à réassocier ou terminée, gardée dans sync_meta.
     const reset: SyncResetStatus | null | undefined = await read('reset', () => readResetStatus(options.data.repos, options.clock.nowMs()));
+    const ownDelete = await read('own-deletion', async () => (await options.data.repos.sync.getMeta(META.ownDeletionReceipts)) === null ? [] : (await ownDeletionModule()).readOwnDeleteFailures(options.data.repos));
     // Seconde revue, point 6 : début de l'attente d'iCloud (sync_meta, survit au redémarrage) ; référence de l'attente prolongée quand
     // aucune synchro n'a jamais été complète.
     const waiting = phaseOf(result) === 'waiting-icloud';
@@ -191,6 +196,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         ...(reintegrationFailure === undefined ? {} : { reintegrationFailure }),
         ...(forget === undefined ? {} : { forget }),
         ...(reset === undefined ? {} : { reset }),
+        ...(ownDelete === undefined ? {} : { ownDelete }),
         stateUnreadable: unreadable || result.stateUnreadable === true,
         nowMs: options.clock.nowMs(),
       }),
@@ -526,5 +532,11 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     return { kind: 'started', switched: after?.step === 'done' };
   };
 
+  // Restaurer le signal sans scan iCloud, même si le premier cycle a déjà commencé. Une fin de cycle fait ensuite foi.
+  void (async () => {
+    if ((await options.data.repos.sync.getMeta(META.ownDeletionReceipts)) === null) return;
+    const ownDelete = await (await ownDeletionModule()).readOwnDeleteFailures(options.data.repos);
+    if (!finishedOnce && ownDelete.length > 0) publish({ ...status, ownDelete, warnings: [...new Set([...(status.warnings ?? []), 'own-delete-failed' as const])] });
+  })().catch((error: unknown) => { readFailed('own-deletion', error); if (!finishedOnce) publish({ ...status, stateUnreadable: true }); });
   return service;
 }

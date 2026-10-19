@@ -1,4 +1,5 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
+import type { OwnDeleteFailure } from '../domain/sync/ownDeletion';
 import { omitKey } from '../domain/omitKey';
 import { isSlowedSyncError, SLOW_RETRY_MS } from '../domain/sync/errorFamily';
 import type { SyncStatusWarning } from '../domain/syncBanners';
@@ -88,6 +89,7 @@ export function statusFromFacts(
     readonly forget?: SyncForgetStatus | null;
     /** Y-11 (exigence d'Ali) : réinitialisation lue dans `sync_meta.resetState` ; undefined : lecture impossible, valeur gardée. */
     readonly reset?: SyncResetStatus | null;
+    readonly ownDelete?: readonly OwnDeleteFailure[];
     /** Y-TECH-02 : une lecture de fin de cycle (conflits, réintégration, oubli, réinitialisation) a échoué. */
     readonly stateUnreadable?: boolean;
     /** Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours ; null : aucune. */
@@ -99,9 +101,10 @@ export function statusFromFacts(
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(omitKey(omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince'), 'errorStreak'), 'retryAt');
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, ownDelete: keptDelete, warnings: keptWarnings, ...rest } = omitKey(omitKey(omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince'), 'errorStreak'), 'retryAt');
   const repeat = facts.outcome === 'failed' && extra.nowMs !== undefined ? errorRepeat(previous, facts.errorCode, extra.nowMs) : {};
-  const warnings = facts.warnings ?? keptWarnings ?? [];
+  const ownDelete = extra.ownDelete ?? keptDelete ?? [];
+  const warnings: readonly SyncStatusWarning[] = [...(facts.warnings ?? keptWarnings ?? []).filter((w) => w !== 'own-delete-failed'), ...(ownDelete.length > 0 ? ['own-delete-failed' as const] : [])];
   const unreadable = facts.stateUnreadable === true || extra.stateUnreadable === true;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
   const forget = extra.forget === undefined ? (keptForget ?? null) : extra.forget;
@@ -111,6 +114,7 @@ export function statusFromFacts(
     ...(failure ? { reintegrationFailure: failure } : {}),
     ...(forget ? { forget } : {}),
     ...(reset ? { reset } : {}),
+    ...(ownDelete.length > 0 ? { ownDelete } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
     ...(unreadable ? { stateUnreadable: true } : {}),
     ...(extra.waitingSince ? { waitingSince: extra.waitingSince } : {}),

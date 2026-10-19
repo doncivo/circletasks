@@ -8,6 +8,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncDetailsCarryReportHost } from './SyncDetailsCarryReportHost';
 import { SyncDetailsDedup } from './SyncDetailsDedup';
+import { SyncDetailsOwnDeletionHost } from './SyncDetailsOwnDeletionHost';
 import { SyncDetailsConflicts } from './SyncDetailsConflicts';
 import { SyncDetailsForget, SyncDeviceForgetAction } from './SyncDetailsForget';
 import { SyncDetailsFolder } from './SyncDetailsFolder';
@@ -57,7 +58,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
   // `carry-report` est montré par sa propre ligne (compte rendu du changement d'époque), pas dans cette liste ; il lève pourtant le titre
   // AVERTISSEMENTS, vers lequel renvoie la ligne d'état « Synchro incomplète : voir les avertissements » (contre-revue, point 3).
   const carryRaised = (status.warnings ?? []).includes('carry-report');
-  const shownWarnings = (status.warnings ?? []).filter((code) => code !== 'carry-report');
+  const shownWarnings = (status.warnings ?? []).filter((code) => code !== 'carry-report' && code !== 'own-delete-failed');
   return (
     <div className="ct-settings ct-sync">
       <div className="ct-sync__topRow">
@@ -84,6 +85,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
       )}
       {/* QA D2 : dossier à choisir de nouveau : « Choisir le dossier » aussi dans Détails (où mène le bandeau). */}
       <SyncDetailsFolder />
+      {(status.ownDelete?.length ?? 0) > 0 && <SyncDetailsOwnDeletionHost />}
       {slots.pairing ?? <SyncDetailsPairing />}
       {slots.version ?? <SyncDetailsVersion />}
       <h2 className="ct-settings__section">{t('sync.status.sectionDevices')}</h2>

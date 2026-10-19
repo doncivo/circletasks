@@ -1,0 +1,9 @@
+.ct-sync__ownDeletion {
+  color: var(--ct-color-icon-red);
+  font-size: 13px;
+}
+
+.ct-sync__ownDeletion p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}

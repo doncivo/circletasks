@@ -549,6 +549,10 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
      * préchargement au départ) : borne, journal `publish-deferred`, reprise d'`inflight`, réarmement et suppression de l'orpheline.
      */
     const firstModule = () => import('./orphanEpoch');
+    const ownDeletionModule = () => import('./ownDeletion');
+    if ((await repos.sync.getMeta(META.ownDeletionReceipts)) !== null) {
+      await (await ownDeletionModule()).observeOwnDeletions(deps, ownScan, scan.incomplete);
+    }
     const deferPublish = async (refused: boolean): Promise<void> => {
       const warnings = (seen.warnings = [...(seen.warnings ?? []), 'publish-blocked']);
       (await firstModule()).deferred(logger, refused, first, facts, warnings);
@@ -1026,11 +1030,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         snapshotMeta = { seq, endHlc };
         await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment, covers: Object.fromEntries(covers) });
         await writeState(await nextState(head), true);
-        const old = [...listedSnapshots, seq].sort((a, b) => b - a).slice(SNAPSHOTS_KEPT_PER_EPOCH);
-        // Échec journalisé (aucun échec silencieux) ; retentée au prochain instantané, les fichiers restants ne gênent aucune lecture.
-        if (old.length > 0) deps.deadline?.check('delete-own');
-        if (old.length > 0) await platform.deleteOwn(old.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n }))).catch((error: unknown) => logger.log('delete-own-failed', { kind: 's', code: syncErrorCodeOf(error) }));
         logger.log('snapshot-written', { epoch: currentEpoch, seq });
+      }
+      // Y-IOS-02-FIX-01 : retenter aussi les anciens instantanés revenus sans attendre un nouvel instantané.
+      const oldSnapshots = [...new Set([...(listed?.snapshots ?? []), ...(snapshotMeta ? [snapshotMeta.seq] : [])])].sort((a, b) => b - a).slice(SNAPSHOTS_KEPT_PER_EPOCH);
+      if (oldSnapshots.length > 0) {
+        deps.deadline?.check('delete-own');
+        const { code } = await (await ownDeletionModule()).deleteOwnTracked(deps, oldSnapshots.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n })));
+        if (code !== null) logger.log('delete-own-failed', { kind: 's', code });
       }
       // Y-11 : anciennes époques gardées pendant une réinitialisation (supprimées par la bascule, ou relues si elle perd).
       await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId), keepOldEpochs: resetActive(directive) });
@@ -1048,14 +1055,19 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     }
     // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
     if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) {
+      let orphanModule: Awaited<ReturnType<typeof firstModule>> | null = null;
       try {
-        await (await firstModule()).retryOrphanDeletion(deps, ownScan, currentEpoch);
+        orphanModule = await firstModule();
       } catch (error) {
-        // Comme les autres suppressions de l'étape 7 : journalisé, retenté au cycle suivant ; ni la lecture, ni la publication, ni la suppression
-        // des fichiers d'un appareil oublié ne sont sautées.
         if (isCycleInterrupted(error)) throw error;
-        logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
+        const left = await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch);
+        const code = syncErrorCodeOf(error);
+        // Voie indépendante : ce mémo doit pouvoir s'écrire même quand le bloc orphanEpoch n'a pas chargé.
+        if (left) await (await ownDeletionModule()).recordOwnDeleteFailure(deps, { epoch: left.epoch, kind: 'epoch' }, code, true);
+        logger.log('orphan-epoch-delete-failed', { code });
       }
+      // Les erreurs de stockage ne sont pas absorbées par le catch du chargement.
+      if (orphanModule) await orphanModule.retryOrphanDeletion(deps, ownScan, currentEpoch);
     }
 
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte) ; jamais pendant une

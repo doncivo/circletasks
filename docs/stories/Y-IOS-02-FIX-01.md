@@ -1,6 +1,6 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
-Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : à faire (décision d'Ali du 2026-10-10)
+Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : en cours (2026-10-19) ; preuves rouges consignées, QA locale et revue finale en cours ; CI et essai appareil requis avant clôture
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD ; ajoute un avertissement de plus à l'écran de Détails et aux bandeaux A-09.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 (bandeaux), Y-10-FIX-01 (aucune dépendance de code, mais même écran : fusionner dans l'ordre de la phase). Ne bloque aucune autre story.
 
@@ -72,6 +72,8 @@ Tests : Vitest (moteur sur faux `SyncFs` et horloge injectée, écran avec Testi
 
 - D1 — **Point ouvert tranché** : pas de « Supprimer moi-même » ni de bouton de suppression côté PC. Le texte donne le **chemin exact** du dossier à vérifier dans l'app Fichiers (recommandation d'Ali), sans lien ni suppression par l'app : cohérent avec la règle d'écrivain unique, sans surface de suppression nouvelle, et la suppression manuelle dans Fichiers reste une action de l'utilisateur. Le chemin affiché reste fait d'identifiants, jamais d'un chemin système ni du nom d'un fichier. À valider par Ali avec la story.
 - D2 — Une seule clé de `sync_meta` (`orphanDeleteFailure`), effacée à la résolution, comme `forgetFailure` : même schéma que Y-10, aucune table nouvelle.
+
+Avenant du 2026-10-19 au périmètre autorisé : `orphanDeleteFailure` garde ce rôle pour l'orpheline ; `ownDeleteFailure` couvre les autres suppressions et `ownDeletionReceipts` conserve les références demandées, y compris après une absence temporaire. Ces trois valeurs restent locales dans la table existante, sans migration ni format publié nouveau. Aucun changement de décision produit.
 
 ## Fichiers
 
