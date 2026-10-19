@@ -145,6 +145,10 @@ Autres écarts :
 
 ## Reprise Codex du 2026-10-19 — revue refusée
 
+### Extension R1 autorisée par Ali le 2026-10-19
+
+Passe product-owner : R1 est un état faux muet, donc inclus avant la 1.0. Le test rouge `0bf4b029` est conservé. Estimation du correctif et de ses vérifications : 2 à 3 h (alerte à 4 h 30). Le suivi d'un groupe ne peut être retiré sur la seule stabilité locale : il faut la preuve que les autres appareils ont lu le nettoyage et que leurs journaux annoncés sont entièrement lus ici. Le suivi doit survivre à un redémarrage. Une suppression volontaire après convergence ne doit jamais être annulée par ce suivi. Aucun délai ni changement de format publié.
+
 - Product-owner : critères 1 à 22 relus ; B8 reste ouvert, aucune clôture autorisée sans validation complète.
 - Module : rebase sur `origin/main` (`5bd03d46`), conservation des entrées du journal et de toutes les assertions hors du départ. Le faux sondage de `SyncDetailsDedup.test.tsx` est remplacé par une attente du dépôt dans `act` (`faaa4181`).
 - QA : 13 fichiers, 279 tests existants verts sans couverture ; garde d'hygiène rouge sur `22c5bd6f` (183 verts, 1 rouge : `waitFor`), verte après le correctif. CI historique rouge : run 39228958271. La suite complète avec couverture reste nécessaire après correction des défauts de revue.

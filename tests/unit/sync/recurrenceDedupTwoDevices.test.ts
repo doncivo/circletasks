@@ -150,4 +150,36 @@ describe('nettoyage sur deux appareils (T-TECH-01 critère 17)', () => {
     expect(await liveOf(a)).toEqual([{ id: X, status: 'done' }]);
     expect(await liveOf(b)).toEqual(await liveOf(a));
   });
+
+  it('R1 : le suivi survit à plusieurs passages et au redémarrage avant la lecture distante', async () => {
+    const [a, b] = await legacyDuplicates();
+    a.clock.advance(1000);
+    await a.updateTask(X, { status: 'done', doneAt: new Date(a.clock.nowMs()).toISOString() as never });
+    await pass(b);
+    for (let n = 0; n < 4; n += 1) await pass(b);
+    await b.restart();
+    await pass(b);
+    await settle(a, b);
+    await pass(b);
+    await settle(a, b);
+    expect(await liveOf(a)).toEqual([{ id: X, status: 'done' }]);
+    expect(await liveOf(b)).toEqual(await liveOf(a));
+  });
+
+  it('R1 : après convergence et accusés, supprimer la survivante ne la rétablit pas', async () => {
+    const [a, b] = await legacyDuplicates();
+    await pass(a);
+    await pass(b);
+    await settle(a, b);
+    await pass(a);
+    await pass(b);
+    a.clock.advance(1000);
+    await a.data.repos.tasks.softDelete([Y]);
+    await settle(a, b);
+    await pass(a);
+    await pass(b);
+    await settle(a, b);
+    expect(await liveOf(a)).toEqual([]);
+    expect(await liveOf(b)).toEqual([]);
+  });
 });
