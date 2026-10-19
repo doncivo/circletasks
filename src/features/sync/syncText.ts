@@ -212,8 +212,9 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'reset-required':
       return resetRequiredLine(status.reset, status.devices);
     case 'idle':
-      // Jamais « À jour » tant que cet appareil n'a pas publié son état ou que des modifications reçues restent inappliquées.
-      if (status.warnings?.some((code) => code === 'publish-blocked' || code === 'received-unapplied' || code === 'awaiting-other-devices' || code === 'carry-held' || code === 'carry-report')) return t('sync.status.incomplete');
+      // Jamais « À jour » tant que cet appareil n'a pas publié son état, que des modifications reçues restent inappliquées ou qu'un autre
+      // appareil a des fichiers illisibles (Y-FIX-03, ADR 0011 §31).
+      if (status.warnings?.some((code) => code === 'publish-blocked' || code === 'received-unapplied' || code === 'awaiting-other-devices' || code === 'carry-held' || code === 'carry-report') || status.devices.some((d) => !d.self && d.status === 'corrupt')) return t('sync.status.incomplete');
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
 }

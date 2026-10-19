@@ -96,6 +96,11 @@
       "faults": [{ "id": "read-journal-io", "op": "read", "file": "devices/56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa/*/j-*.ctj", "nth": 1, "effect": "error", "code": "io" }]
     },
     {
+      "name": "scenario-3-lecture-io-durable",
+      "about": "Y-FIX-03 critère 7 (B3) : lecture du journal de l'autre appareil en échec io à chaque rang (verrou d'iCloud qui dure).",
+      "faults": [{ "id": "read-journal-io-always", "op": "read", "file": "devices/56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa/*/j-*.ctj", "nth": 1, "times": "all", "effect": "error", "code": "io" }]
+    },
+    {
       "name": "scenario-4-orphelin-durable",
       "about": "Scénario 4 (B5) : suppression de l'instantané orphelin en échec à chaque rang.",
       "faults": [{ "id": "orphan-remove-always", "op": "remove", "file": "devices/ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/*/s-00000001.cts", "nth": 1, "times": "all", "effect": "error", "code": "io" }]

@@ -1689,6 +1689,34 @@ segment `max + 1` avec la tête de Rust ; c'est l'autre appareil qui attend. Tes
 (`tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, rouge puis vert), `firstPublicationCrashPoints.test.ts` (rouge puis vert),
 `src/domain/sync/firstPublication.test.ts` (table `tests/fixtures/sync/first-publication-bound.json`),
 `src/features/sync/publishBlockedCause.test.tsx` ; Rust : `y01_15_write_state_compares_head_paired_by_and_reserved_fields`.
+### 31. Avenant Y-FIX-03 : une lecture de journal en échec n'est jamais muette (bloquant B3, 2026-10-18)
+
+Constat (audit B3) : quand `readJournal` échouait avec un code autre que `newer-format`, `key-mismatch` ou `cloud-pending`, `readDevice`
+répondait `'error'` et le moteur ne faisait que `allRead = false` : `lastSyncAt` avançait, la ligne disait « À jour · à l'instant » et
+l'entretien était sauté sans que personne le sache. Fréquent sous Windows (verrou d'iCloud, code `io`). Règle, application de la section 24
+point 5 (« À jour » interdit sans preuve) :
+
+1. **Classement par famille** (`syncErrorFamily`, `src/domain/sync/errorFamily.ts`), dans le `catch` de `readDevice` (`reader.ts`) :
+   `newer-format`, `key-mismatch`, `cloud-pending` gardent leur statut propre ; un code `transient` (`io` surtout) donne `'error'` ; tout
+   autre code (`bad-header`, `decrypt-failed`, famille `details`…) donne `'truncated'` avec ce code : fichier illisible, chemin existant de
+   la troncature (reprise depuis l'instantané, une par cycle, sinon appareil `corrupt`). Un seul échec permanent suffit (la reprise est une
+   fusion qui n'efface rien ; Rust répond déjà `truncated` pour un fichier partiel d'iCloud).
+2. **Code passager** : le cycle se termine `failed` avec ce code, par le même chemin que l'échec de publication (`publishError`, premier
+   code rencontré, `??=` des deux côtés) : `lastSyncAt` gelé (ni état ni base), `errorStreak`, `retryAt` après `SLOW_AFTER` (3) échecs de
+   suite (« Synchronisation ralentie : nouvel essai à HH:MM (code io) »), jamais d'arrêt du planificateur (`isPermanentSyncError('io')`
+   faux).
+3. **Code permanent** : le cycle reste `done` (une erreur permanente en `failed` arrêterait les cycles périodiques) mais `lastSyncAt` n'avance
+   pas ce cycle (`readFailed`). En phase `idle`, un autre appareil `corrupt` interdit « À jour » : la ligne dit `sync.status.incomplete`
+   (« Synchro incomplète : voir les avertissements ») ; bandeau `device-corrupt` et APPAREILS « Fichiers illisibles » existants.
+4. **Dans les deux cas** : publication, état publié et lecture des autres appareils ont lieu ; curseur et accusé de l'appareil en échec
+   n'avancent pas ; l'entretien (instantané, purges, plafonds) est sauté (`allRead` faux, inchangé) et reprend au premier cycle qui lit
+   tout ; aucune relance dans le cycle, aucun délai ; journal `read-failed { device, code }` inchangé ; aucun code ni texte nouveau.
+5. **Retour à « À jour »** : dès qu'un cycle lit tout sans erreur (`statusFromFacts` retire `errorStreak` et `retryAt`).
+
+Tests : scénario 3 du banc (`tests/unit/sync/hostile/scenario3ReadIo.test.ts`, rouge puis vert), `tests/unit/sync/hostile/readFailure.test.ts`
+(plan `scenario-3-lecture-io-durable` de `tests/fixtures/sync/fault-plan.json`, `bad-header` et `decrypt-failed` levés par la plateforme
+simulée, table de tous les `SYNC_ERROR_CODES`). Bundle de départ : +75 octets gzip (358 273 → 358 348 / 358 400), accepté.
+
 ### 32. Avenant Y-IOS-05 : échéance du transport iOS, garde de coordination et état illisible (bloquant B6, 2026-10-18)
 
 Numéro : §27 reste réservé à Y-IOS-07, §30 à Y-FIX-02 et §31 à Y-FIX-03 (pas encore écrits à la date de cet avenant) ; §32 est écrit
