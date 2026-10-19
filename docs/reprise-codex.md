@@ -4,7 +4,7 @@
 
 ## Mise à jour de reprise du 2026-10-19 — après #61
 
-La décision d'Ali remplace l'ordre initial ci-dessous : **#62 → #60 → #61 → #63**. #62 (`c76bc718`), #60 (`1838dbe5`) et #61 (`772d0f29`) sont fusionnées après QA, revue consignée et CI complète verte avec couverture. Le bundle a été vérifié sur `main` après #62 et #60 (27/27) ; la mesure après #61 est en cours. #63 est corrigée pour R1, rebasée sur `772d0f29`, relue et poussée (`0bdf6160`) ; sa CI finale reste requise avant fusion et clôture de B8.
+La décision d'Ali remplace l'ordre initial ci-dessous : **#62 → #60 → #61 → #63**. #62 (`c76bc718`), #60 (`1838dbe5`) et #61 (`772d0f29`) sont fusionnées après QA, revue consignée et CI complète verte avec couverture. Le bundle a été vérifié sur `main` après #62 et #60 (27/27), puis #61 (47/47, **340 810 octets normalisés**, marge **17 590**). #63 est corrigée pour R1, rebasée sur `772d0f29`, relue et poussée (`0bdf6160`) ; sa CI finale reste requise avant fusion et clôture de B8.
 
 Protection classique de `main` : le nombre d'approbations GitHub était déjà zéro ; le PATCH à zéro l'a confirmé. PR, branche à jour et statut obligatoire « suite verte » conservés. La revue distincte reste obligatoire et son approbation est consignée dans la fiche de story : GitHub interdit l'auto-approbation. Règle inscrite dans `AGENTS.md`.
 
