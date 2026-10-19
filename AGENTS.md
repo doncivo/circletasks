@@ -43,3 +43,9 @@ Lis d'abord `CLAUDE.md` (stack, commandes, règles d'architecture) puis `docs/re
 - Tout écran, fenêtre, bandeau ou catalogue de textes qui ne sert pas au premier affichage d'« Aujourd'hui » est en chargement à la demande dès sa création : `import()` dynamique au moment où l'état apparaît, catalogue i18n chargé avec lui, assertion « hors du départ » dans `startBundle.test.ts`. Jamais après coup quand le plafond saute.
 - Un module nouveau dans le départ est refusé par la garde `tests/bundle/start-modules.json` (après la fusion de BUNDLE-01, PR #61) ; la liste ne s'étend que par un commit qui le justifie (ID de story et raison).
 - Piège connu : un bloc à la demande qui importe un module du départ sort ce module du bloc principal et coûte des kilo-octets de compression. Donne aux écrans à la demande leur propre hôte et un module de vue séparé.
+
+## Passes de travail (décision d’Ali du 2026-10-19)
+
+Codex assure lui-même product-owner → agent du module → qa-test → code-reviewer en passes séparées, dans cet ordre, et consigne chaque résultat. La revue relit le diff à froid et s’appuie sur les tests, sans se fier au souvenir de l’écriture. Une story non vérifiée ne porte jamais le statut « fait ». I-06 reste « code fusionné, en attente de vérification appareil » jusqu’au succès de A1 à A10.
+
+Exception explicite à la compilation iPhone unique par lot : l’essai SideStore N → N+1 utilise l’IPA déjà installée comme N ; une seule nouvelle compilation fournit N+1.
