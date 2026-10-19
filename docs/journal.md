@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-19 — ouverture Y-IOS-02-FIX-01 étendue
+
+Passe product-owner : B5 réduit et défauts 2/3 connus du banc repris ensemble, après fusion de #62 et #63. Échecs de suppression persistants visibles dans Détails, Réglages et A-09 ; anciens instantanés revenus après suppression et substitut restant couverts par le banc. Estimation 4 à 6 h, arrêt à 9 h. Aucun changement de format ni de `canPublish`. Vérifications physiques regroupées avec l'IPA, jamais déclarées faites avant essai. Scénario rouge historique 4 repris de `c41d5d66` pour preuve sur le `main` courant.
+
 ## 2026-10-19 — T-TECH-01, garde de réactivité de publication
 
 La CI du commit `0bdf6160` (run 39259550252, job 118083324710) détecte une tâche navigateur de 408 ms pendant le scénario J10 de 5 000 opérations, au-dessus de 250 ms ; ses 51 tests de bundle passent. Aucun nouvel essai CI lancé. Le scénario passe localement sans reproduire les 408 ms ; deux profils CPU montrent du travail synchrone SQLite dans les lectures de 400 lignes. Le diagnostic à CPU ralenti ×4 reproduit des tâches de 251 à 348 ms dans ces lectures et autour de l'ajout au journal et du retrait SQL. La trace CI ne permet pas d'attribuer précisément ses 408 ms à une instruction unique.

@@ -6,6 +6,14 @@ Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 
 
 ## Contexte
 
+### Passe product-owner du 2026-10-19 — périmètre étendu autorisé
+
+Début de reprise après `main` `5d7bb1a4`. Estimation du périmètre étendu : **4 à 6 h**, arrêt et alerte à **9 h**. Statut courant : en cours, aucune validation revendiquée. Les décisions déjà prises restent appliquées : écrivain unique, format inchangé, publication et lecture non bloquées par l'entretien, aucune lecture iCloud pour écrire.
+
+Aux critères historiques s'ajoutent B5 réduit (`delete-own-failed`, segments, instantanés et anciennes époques) et les défauts 2 et 3 connus du banc Y-TECH-03 : un ancien instantané qui revient après une suppression acceptée doit produire un échec durable visible et être retenté sans attendre une nouvelle création d'instantané ; un substitut qui reste malgré une réponse sans suppression ne doit plus permettre « À jour ». Ces preuves sont établies sur le banc, sans données réelles.
+
+Le suivi local conserve la preuve des suppressions demandées et des échecs au redémarrage. Les échecs ne disparaissent qu'au succès ou à la confirmation de l'absence ; une disparition temporaire du listing ne doit pas faire oublier qu'un fichier revenu avait déjà été supprimé. Aucune reprise automatique supplémentaire en dehors des cycles existants. Les critères d'interface s'appliquent aux deux familles d'échecs avec cause traduite, dernier essai et action manuelle. Les essais physiques de clôture seront regroupés après publication de l'IPA : jusque-là, le statut sera « code vérifié, essai appareil en attente ».
+
 Constat de la séance iPhone 0.3.0 (2026-10-10) : après l'abandon de son époque orpheline, le fichier `s-00000001.cts` de l'ancienne époque de l'iPhone est **resté** dans `devices/<iPhone>/e0001-<iPhone>/` du dossier iCloud. La suppression (`retryOrphanDeletion` de `src/sync/orphanEpoch.ts`) a échoué ; le moteur journalise `orphan-epoch-delete-failed` avec son code et la retente à chaque cycle, **mais rien n'est montré à l'utilisateur**. Or tant que ce fichier existe, `canPublish` (`src/domain/sync/epoch.ts`, `listedFiles`) refuse la publication, et l'iPhone n'affiche que « Cet appareil n'a pas encore publié son état : vos autres appareils ne voient pas ses modifications », **sans dire pourquoi**. C'est un blocage durable sans cause visible, contraire à la règle d'Ali « aucun échec silencieux » (mémoire projet : tout blocage durable visible dans l'app, pas seulement dans les logs).
 
 **Mise à jour du 2026-10-16** : la séance 0.3.2 a montré que la prémisse « le moteur retente et journalise » était fausse dans le cas réel (le mémo `orphanEpoch` avait été effacé alors que le fichier restait) ; la cause du blocage est corrigée par **Y-IOS-02-FIX-02**, qui lève le « `canPublish` inchangé » de cette fiche ; la présente story reste utile pour afficher un échec de suppression (statut inchangé : à faire).
