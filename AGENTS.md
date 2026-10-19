@@ -23,7 +23,7 @@ Lis d'abord `CLAUDE.md` (stack, commandes, règles d'architecture) puis `docs/re
 ## Workflow git
 
 - Une branche par story, ID de la story dans chaque message de commit (ex. `T-TECH-01: ...`).
-- Une PR par branche (`gh pr create --base main`). La ruleset de `main` impose la PR et le statut « suite verte » : aucun push direct sur `main`, même pour la documentation.
+- Une PR par branche (`gh pr create --base main`). La protection classique de `main` impose la PR et le statut « suite verte » : aucun push direct sur `main`, même pour la documentation.
 - Fusion seulement quand `gh pr checks` montre « suite verte » vert et que la passe de revue est approuvée dans la fiche de story : `gh pr merge <n> --merge`. L'approbation GitHub n'est pas requise : GitHub interdit à l'auteur d'approuver sa propre PR, et Codex assure lui-même la revue en passe distincte (décision d'Ali du 2026-10-19). Protection de `main` : zéro approbation exigée, PR et contrôles CI obligatoires conservés, dont « suite verte » avec branche à jour. Jamais `--auto`, jamais `--force`.
 - En local, lance seulement les tests du module en cours ; la suite complète tourne dans GitHub Actions à chaque push (`.github/workflows/tests.yml`).
 - Pour un test ciblé, couper la couverture (`--coverage.enabled=false`) : le seuil de 80 % de `src/domain` s'applique à la suite complète. La validation d'une story exige la suite complète avec couverture active.
