@@ -24,6 +24,13 @@ const device = (deviceId: DeviceId, status: DeviceState, self = false): SyncBann
 const NONE: PersistedSyncFacts = { join: null, devices: null, blocking: null, readFailed: false };
 const JOIN = { done: 1200, total: 5000, failure: 'io' };
 
+it('Y-IOS-02-FIX-01 : un échec restauré pendant le premier cycle lève son bandeau avant la fin de ce cycle', () => {
+  const settled: SyncBannerStatus = { phase: 'idle', devices: [] };
+  const syncing = { phase: 'syncing' as const, devices: [], warnings: ['own-delete-failed' as const], ownDelete: [{ code: 'io' }] };
+  const banners = syncBannerFor(syncing, NONE, settled);
+  expect(banners.troubles.map((trouble) => trouble.code)).toContain('own-delete-failed');
+});
+
 /** Décision attendue de chaque phase (critère 9 b) : une ligne par phase, rien par défaut. */
 const EXPECTED: { readonly [P in SyncPhase]: PhaseBanner } = {
   'not-configured': { kind: 'none', reason: 'not-configured' },
