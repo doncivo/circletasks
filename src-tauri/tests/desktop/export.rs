@@ -32,7 +32,7 @@ fn failure_in_the_middle_leaves_no_partial_file_and_keeps_the_existing_one_intac
     std::fs::write(&target, b"ancien contenu").expect("fichier existant");
     let failing = |file: &mut std::fs::File, data: &[u8]| -> std::io::Result<()> {
         file.write_all(&data[..data.len() / 2])?; // la moitié est écrite, puis le disque est plein
-        Err(std::io::Error::new(std::io::ErrorKind::Other, "disque plein"))
+        Err(std::io::Error::other("disque plein"))
     };
     assert!(write_atomically_with(&target, b"nouveau contenu complet", &failing).is_err());
     assert_eq!(std::fs::read(&target).expect("lecture"), b"ancien contenu", "le fichier existant n'est pas touché");
@@ -44,7 +44,7 @@ fn failure_in_the_middle_leaves_no_partial_file_and_keeps_the_existing_one_intac
 fn failure_on_a_new_target_leaves_nothing_at_all() {
     let dir = tempfile::tempdir().expect("dossier");
     let target = dir.path().join("nouveau.pdf");
-    let failing = |_: &mut std::fs::File, _: &[u8]| -> std::io::Result<()> { Err(std::io::Error::new(std::io::ErrorKind::Other, "droits")) };
+    let failing = |_: &mut std::fs::File, _: &[u8]| -> std::io::Result<()> { Err(std::io::Error::other("droits")) };
     assert!(write_atomically_with(&target, b"x", &failing).is_err());
     assert_eq!(std::fs::read_dir(dir.path()).expect("dossier").count(), 0);
 }

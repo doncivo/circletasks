@@ -326,7 +326,7 @@ impl FakePlugin {
                 }
             },
             "resolve" => {
-                if state.invalid || state.unreachable || args["bookmark"].as_str().is_none_or(str::is_empty) {
+                if state.invalid || state.unreachable || args["bookmark"].as_str().map_or(true, str::is_empty) {
                     return reject("folder-unreachable");
                 }
                 state.session = true;

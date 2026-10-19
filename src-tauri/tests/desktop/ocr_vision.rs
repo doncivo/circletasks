@@ -134,7 +134,9 @@ fn jpeg(marker: u8, width: u16, height: u16) -> Vec<u8> {
     bytes
 }
 
-fn recognize(fake: &Arc<FakeVision>, state: &VisionState, bytes: &[u8]) -> Result<Vec<(String, Option<u8>)>, (&'static str, String)> {
+type RecognizedLines = Result<Vec<(String, Option<u8>)>, (&'static str, String)>;
+
+fn recognize(fake: &Arc<FakeVision>, state: &VisionState, bytes: &[u8]) -> RecognizedLines {
     recognize_with(&transport(fake), state, bytes, LONG)
         .map(|result| result.lines.into_iter().map(|l| (l.text, l.confidence)).collect())
         .map_err(|e| (e.code, e.message))
