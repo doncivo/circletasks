@@ -42,10 +42,10 @@ Conséquence directe : la garde (phase 3) n'est pas conditionnée par la marge. 
 ## Reprise Codex du 2026-10-19 — passes séparées
 
 - Product-owner : les 30 critères sont relus. Ordre de fusion d'Ali du 2026-10-19 : après #60 et avant #63 ; les mesures remplacent les anciens repères, sans modifier le plafond.
-- Module : rebase préparé sur le code vérifié de #60, incluant #62 fusionnée. Conflit limité au journal, avec conservation de toutes les entrées ; aucun conflit de code. Le recalage sur le commit de fusion de #60 reste dû avant le push final.
+- Module : rebase sur `main` **1838dbe5**, après fusion de #62 et #60. Conflit initial limité au journal, avec conservation de toutes les entrées ; aucun conflit de code. Le recalage final n'a changé aucun fichier de `src`, des tests du bundle ni de la configuration ESLint par rapport à l'arbre déjà vérifié (`ea525f8d`).
 - QA : 20 tests de rendu/chargement sur 4 fichiers verts ; bundle et fonctions de mesure/garde : 47 tests verts sur 4 fichiers. Départ normalisé **340 810 octets**, brut **340 758**, écart **52**, marge **17 590** sous le plafond inchangé de 358 400. Garde exacte sans extension de la liste. Les tests de frontières d'erreur vérifient les rejets et leurs messages.
 - Revue distincte : les imports statiques retirés, les sept blocs à la demande, les reprises de chargement, la normalisation bornée et la garde dans les deux sens sont relus avec leurs tests. Aucun seuil, délai ou attente e2e modifié. Lint, typage et CI finale doivent être verts avant fusion ; aucune auto-approbation GitHub.
-- Résultat de la passe : lint et typecheck verts, **revue approuvée** sur le diff et les tests. Aucun défaut bloquant relevé. Recalage sur `main` après #60, puis suite CI complète avec couverture avant fusion.
+- Résultat de la passe : lint et typecheck verts, **revue approuvée** sur le diff et les tests. Aucun défaut bloquant relevé. Recalage sur `main` terminé ; suite CI complète avec couverture exigée avant fusion.
 
 ## Critères de la fiche initiale
 
