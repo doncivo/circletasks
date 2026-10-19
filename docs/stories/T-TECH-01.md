@@ -172,6 +172,14 @@ Complément de revue R1 : un JSON de suivi illisible ou un accusé corrompu ne p
 
 ## Questions historiques de la fiche initiale
 
+### Complément de validation — réactivité de publication
+
+La CI du commit `0bdf6160`, run 39259550252, fournit une nouvelle preuve rouge : J10 détecte une tâche de 408 ms pendant la publication de 5 000 opérations (seuil 250 ms). Extension de validation avant fusion : garder les unités de travail de publication courtes sans changer les données publiées ni l'atomicité du retrait de file. Le diagnostic et ses limites sont consignés dans `docs/journal.md`.
+
+Correctif `d947b186` : lectures de 100 lignes et utilisation du découpeur temporel existant autour de l'ajout et entre les paquets SQL. QA : 60 tests ciblés verts (découpage, règles, publication différée et points d'arrêt), puis 11 scénarios de performance normaux verts, dont J10. Aucun test modifié dans le commit ; toute instrumentation de diagnostic a été retirée.
+
+Revue distincte du complément : les paquets de retrait gardent la même transaction avec la tête et l'intention ; aucun délai de test, seuil, format publié, ordre d'opérations ou échéance n'est relâché. Les pauses passent par le découpeur existant, sans minuterie ajoutée. Lint et typage verts ; bundle/garde **51/51**, départ normalisé **340 260 octets**, brut **340 188**, marge **18 140**, liste blanche inchangée. Revue approuvée ; nouvelle CI complète avec couverture requise avant fusion.
+
 1. **Premier rendu et report (écart avec T-06 critère 2).** Avec une synchro configurée, le report n'a plus lieu « avant le premier affichage d'Aujourd'hui » : les tâches en retard apparaissent dans Aujourd'hui quelques secondes après l'ouverture (quand le premier cycle est conclu, ou après 12 s au plus). Alternative : retenir le premier rendu jusqu'à 12 s, ce qui bloquerait l'ouverture quand iCloud est lent. (Recommandation : ne pas bloquer le rendu, accepter l'apparition différée ; l'écart est écrit dans decisions.md.) **Appliquée (H1).**
 2. **Forme de l'identifiant.** UUID v5 (retenu, seul compatible avec la validation actuelle des identifiants de `task` sans changer le format publié). Coût d'octets du SHA-1 à mesurer. (Recommandation : Web Crypto asynchrone, plus léger qu'une implémentation pure ; si la marge de 43 octets ne suffit pas, remontée à Ali avec la mesure, comme prévu.) **Appliquée (H2) : net −1 302 octets.**
 3. **Limite D6.** Deux appareils hors ligne en même temps, l'un déplaçant à la main, l'autre reportant à minuit : l'écriture la plus récente gagne, donc le report automatique peut encore écraser un déplacement manuel. Le supprimer demande un report « virtuel » (changement de modèle). (Recommandation : accepter la limite pour la 1.0, la documenter.) **Appliquée (H3).**
