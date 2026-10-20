@@ -15,8 +15,8 @@ beforeAll(warmSimDevices);
 beforeEach(async () => {
   d = await createSimDevice(SELF, { devicePlatform: 'ios' });
   await setupFirst(d);
-  await d.createTask('Avant éviction');
   await d.cycle();
+  await d.createTask('Avant éviction');
   await d.cycle();
   head = (await readJson<DeviceAck>(d.data.repos, META.head))!;
   expect(head.segment).toBeGreaterThan(0);
