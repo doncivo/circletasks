@@ -90,7 +90,7 @@ Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNA
 ## 5. Socle minimal recommandé avant la 1.0 (67 à 85 h)
 
 1. **Synchro, famille des impasses** : B1 (en cours), B2, B3, B5 réduit à « échec durable visible » : 20 à 25 h.
-2. **Sécurité** : B7 (plugin SQL) : 5 h. Signature hors du build front : 3 h.
+2. **Sécurité** : B7 (plugin SQL) : 5 h. Signature hors du build front : **CI-SEC-01 en validation le 2026-10-20**, rouge `f986b2f5`, compilation sans clé puis signature seule sur tag avec version liée ; 18 tests de publication verts, vrai CLI sur clé jetable vérifié (version correcte acceptée, autre version refusée), lint vert. Remise sur main après #68, typage/bundle et CI complète requis avant fusion ; estimation 3 h, alerte 4,5 h.
 3. **iOS** : B6 (délai sur le transport iCloud) : 7 h. Clavier checklist + gardes du sélecteur : 5 h.
 4. **Données/métier** : B8 (report après synchro + identifiants déterministes + migration de nettoyage) : 12 à 16 h.
 5. **Notifications** : B10 (corps avec heure et espace) : 3 h ; aperçus masqués (déjà écrit, N-IOS-FIX-01) ; essai des `%` sur l'iPhone : 1 h ; B9 selon décision : 5 h.
