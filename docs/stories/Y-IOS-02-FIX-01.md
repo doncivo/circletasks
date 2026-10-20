@@ -1,6 +1,6 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
-Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : en cours (2026-10-19) ; preuves rouges consignées, QA locale et revue finale en cours ; CI et essai appareil requis avant clôture
+Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : code fusionné et vérifié le 2026-10-20, PR #65 ; essai appareil en attente (critère 18)
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD ; ajoute un avertissement de plus à l'écran de Détails et aux bandeaux A-09.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 (bandeaux), Y-10-FIX-01 (aucune dépendance de code, mais même écran : fusionner dans l'ordre de la phase). Ne bloque aucune autre story.
 
@@ -101,3 +101,5 @@ Avenant du 2026-10-19 au périmètre autorisé : `orphanDeleteFailure` garde ce 
 2. Vérifier dans l'app Fichiers que le chemin indiqué est bien celui du fichier resté ; le supprimer à la main : « Réessayer maintenant » ou le cycle suivant fait disparaître l'avertissement et l'iPhone publie (« Cet appareil n'a pas encore publié son état » disparaît).
 3. Redémarrer l'app avec l'échec présent : l'avertissement est affiché dès le démarrage.
 4. Consigner dans la checklist de l'ordre 5.
+
+Validation CI finale : tête `1b908513`, runs `39277457609` et `39277480003`, 48 contrôles verts avec couverture complète. Fusion #65 : `095c5e4a`. Bundle sur `main` : 55/55, 342 924 octets normalisés, 342 871 bruts, marge 15 476. Essai physique encore requis avant « fait ».

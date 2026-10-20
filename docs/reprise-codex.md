@@ -12,6 +12,12 @@ Nettoyage autorisé : inventaire présenté avant suppression, puis **66 worktre
 
 Les sections suivantes décrivent le point de départ historique ; leurs PR ouvertes et leur ordre initial ne décrivent plus l'état courant. I-06 reste « code fusionné, en attente de vérification appareil » jusqu'au succès de A1 à A10.
 
+## Reprise du 2026-10-20
+
+Mise à jour du **2026-10-20** : Y-IOS-02-FIX-01 étendue (B5 et défauts 2/3 du banc) est fusionnée par **#65**, `main` **`095c5e4a`**. Tête `1b908513`, runs CI `39277457609` et `39277480003`, 48 contrôles verts avec couverture ; revue dans la fiche. Bundle sur `main` : 55/55, **342 924 octets normalisés**, 342 871 bruts, marge 15 476. Essai physique encore requis avant « fait ».
+
+Travail actif : branche et worktree **`y-ios-07`**, depuis ce `main`. Analyse préalable consignée avant code (`6da1939f`), scénario historique rouge `ad3ae641`, run CI rouge `39386547885`. Correctif relu **`43d2d299`** : rotation locale, cible et échec persistés, reprise après arrêt, bornes et panne du bloc de lecture couvertes. QA du module : **2 331 tests sur 196 fichiers**, puis **81 ciblés après revue**, **368 Rust**, e2e iPhone simulé **1/1**. Revue approuvée dans la fiche ; lint et typage verts, bundle 56/56 (**343 463 normalisés**, 343 425 bruts, marge 14 937). CI complète encore requise avant fusion. Aucun nouveau lot IPA compilé. Continuer ensuite N-TECH-02, N-FIX-02, CI-SEC-01, C-FIX-01, Y-IOS-06, N-IOS-FIX-01 sur la branche existante, les essais annexes, le lot IPA puis REL-01 à REL-03, selon l'ordre d'Ali.
+
 ## 1. Point de départ historique
 
 | Élément | Valeur |

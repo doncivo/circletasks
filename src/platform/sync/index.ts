@@ -61,8 +61,8 @@ const decodeSim = (text: string): unknown =>
 function createSyncSimClient(config: SyncSimConfig): SyncPlatform {
   const call = async (path: string, args: readonly unknown[]): Promise<never> => {
     const response = await fetch(`${config.url}/rpc`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: encodeSim({ room: config.room, device: config.device, role: config.role, platform: config.platform, path, args }) });
-    const reply = decodeSim(await response.text()) as { readonly ok?: unknown; readonly error?: { readonly code?: SyncErrorCode; readonly message?: string } };
-    if (reply.error) throw reply.error.code ? new SyncPlatformError(reply.error.code) : new Error(reply.error.message ?? 'simulateur');
+    const reply = decodeSim(await response.text()) as { readonly ok?: unknown; readonly error?: { readonly code?: SyncErrorCode; readonly message?: string; readonly appendBeforeWrite?: boolean } };
+    if (reply.error) throw reply.error.code ? new SyncPlatformError(reply.error.code, { appendBeforeWrite: reply.error.appendBeforeWrite === true }) : new Error(reply.error.message ?? 'simulateur');
     return reply.ok as never;
   };
   const method =

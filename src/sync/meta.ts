@@ -40,6 +40,7 @@ export const META = {
   ownDeletionReceipts: 'ownDeletionReceipts',
   orphanDeleteFailure: 'orphanDeleteFailure',
   ownDeleteFailure: 'ownDeleteFailure',
+  publishRotation: 'publishRotation',
   /** Dernier choix refusé ou en échec après une restauration (`restoreChoice.ts`, chargé à la demande). */
   restoreFailure: 'restoreFailure',
   /** Y-IOS-02 : traces purgées (`table|id`) de l'orpheline abandonnée, auteur cet appareil (garde `orphan-trace-hit`, §24 point 4 (a)). */

@@ -56,6 +56,7 @@ const randomDeviceId = (): DeviceId => crypto.randomUUID().toLowerCase() as Devi
 const WEEK_MS = 7 * 86_400_000;
 
 const ownDeletionModule = () => import('./ownDeletion');
+const publishRotationModule = () => import('./publishRotation');
 
 export function createSyncService(options: SyncServiceOptions): SyncEngineService {
   const deps: SyncDeps = {
@@ -162,6 +163,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     // Y-11 (exigence d'Ali) : réinitialisation en cours, en échec, à réassocier ou terminée, gardée dans sync_meta.
     const reset: SyncResetStatus | null | undefined = await read('reset', () => readResetStatus(options.data.repos, options.clock.nowMs()));
     const ownDelete = await read('own-deletion', async () => (await options.data.repos.sync.getMeta(META.ownDeletionReceipts)) === null ? [] : (await ownDeletionModule()).readOwnDeleteFailures(options.data.repos));
+    const publishFailure = await read('publish-rotation', async () => (await options.data.repos.sync.getMeta(META.publishRotation)) === null ? null : (await (await publishRotationModule()).readPublishRotation(options.data.repos))?.code ?? null);
     // Seconde revue, point 6 : début de l'attente d'iCloud (sync_meta, survit au redémarrage) ; référence de l'attente prolongée quand
     // aucune synchro n'a jamais été complète.
     const waiting = phaseOf(result) === 'waiting-icloud';
@@ -197,6 +199,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         ...(forget === undefined ? {} : { forget }),
         ...(reset === undefined ? {} : { reset }),
         ...(ownDelete === undefined ? {} : { ownDelete }),
+        ...(publishFailure === undefined ? {} : { publishFailure }),
         stateUnreadable: unreadable || result.stateUnreadable === true,
         nowMs: options.clock.nowMs(),
       }),
@@ -534,9 +537,14 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
 
   // Restaurer le signal sans scan iCloud, même si le premier cycle a déjà commencé. Une fin de cycle fait ensuite foi.
   void (async () => {
-    if ((await options.data.repos.sync.getMeta(META.ownDeletionReceipts)) === null) return;
-    const ownDelete = await (await ownDeletionModule()).readOwnDeleteFailures(options.data.repos);
-    if (!finishedOnce && ownDelete.length > 0) publish({ ...status, ownDelete, warnings: [...new Set([...(status.warnings ?? []), 'own-delete-failed' as const])] });
-  })().catch((error: unknown) => { readFailed('own-deletion', error); if (!finishedOnce) publish({ ...status, stateUnreadable: true }); });
+    if ((await options.data.repos.sync.getMeta(META.ownDeletionReceipts)) !== null) {
+      const ownDelete = await (await ownDeletionModule()).readOwnDeleteFailures(options.data.repos);
+      if (!finishedOnce && ownDelete.length > 0) publish({ ...status, ownDelete, warnings: [...new Set([...(status.warnings ?? []), 'own-delete-failed' as const])] });
+    }
+    if ((await options.data.repos.sync.getMeta(META.publishRotation)) !== null) {
+      const failed = await (await publishRotationModule()).readPublishRotation(options.data.repos);
+      if (!finishedOnce && failed) publish({ ...status, phase: failed.code === 'cloud-pending' ? 'waiting-icloud' : 'error', errorCode: failed.code });
+    }
+  })().catch((error: unknown) => { readFailed('durable-state', error); if (!finishedOnce) publish({ ...status, stateUnreadable: true }); });
   return service;
 }

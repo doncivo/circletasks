@@ -1803,6 +1803,16 @@ par `sync_closed_segments.rs` et `closedSegments.test.ts`), `src-tauri/tests/des
 inchangé, aucune entrée à 0, aller-retour état puis lecture), `tests/unit/sync/firstPublicationCrashPoints.test.ts` (critère 5 étendu
 côté PC). Commits dans `docs/stories/Y-FIX-05.md`.
 
+### 34. Avenant Y-IOS-07 : rotation locale sur tête évincée (B16, 2026-10-20)
+
+Décision d'Ali du 2026-10-17 : « L'écriture n'a pas besoin de lire ce qui précède. » L'ajout ne télécharge jamais le segment de tête. Le contrôle local existant peut répondre `cloud-pending` : **seul ce refus avant toute écriture** porte l'indice IPC fixe `appendBeforeWrite: true`. Un `cloud-pending` pendant `append`, après un morceau écrit ou lors d'une réponse tardive ne porte jamais cet indice. Les codes existants et le format publié restent inchangés ; aucun chemin ni contenu dans cet indice.
+
+Le moteur ouvre `max(local, publié, accusés, listing) + 1`, `expectRecords: 0`. Une seule rotation d'éviction pour tout le cycle, même avec plusieurs lots ; les deux tentatives existantes `segment-full` / `segment-mismatch` restent distinctes. Avant l'ajout, `sync_meta.publishRotation` garde époque, cible, hlc du lot et code d'échec. Une cible non publiée est réutilisée aux cycles suivants, sans croissance en cas de refus avant tout octet. La tête, le retrait de la file et l'effacement de l'intention sont transactionnels ; la résolution de l'intention après arrêt efface aussi le signal quand la tête prouve le succès.
+
+L'échec est restauré au démarrage sans scan iCloud et montré par les phases et motifs traduits existants dans Réglages, Détails et le bandeau. Il reste visible aux cycles sans publication réussie. Une valeur persistée illisible remonte comme état local illisible, jamais comme absence d'erreur. Le bloc de lecture et son analyseur sont à la demande, sans extension de la liste des modules du départ ; écrire ou effacer le mémo utilise l'accès local déjà disponible et ne dépend pas du chargement de ce bloc. La borne des numéros de fichiers est contrôlée avant de mémoriser une nouvelle cible. Une tête vide reprend d'abord sa cible persistée même si le maximum du listing a changé.
+
+Rust conserve le segment évincé et le ferme avec le nombre déjà annoncé dans `own.json`. La lecture hydrate les segments nécessaires et respecte `closed` ; elle ne saute pas une fin manquante. La purge conserve ses règles de couverture, d'accusés, d'ancienneté et d'exclusion de la tête. Le banc couvre le refus avant écriture, l'écriture partielle sans indice, les dix cycles refusés, plusieurs lots, l'arrêt entre ajout et retrait, les lecteurs et vingt segments courts. Réponse préalable : aucune raison de télécharger avant d'écrire, analyse détaillée dans la fiche Y-IOS-07.
+
 ## Conséquences
 
 - **Dépendances** (validées par l'architecte) :

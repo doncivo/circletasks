@@ -1,6 +1,6 @@
 # Y-IOS-07 — Segment de tête évincé par iOS : l'ajout au journal ouvre un segment suivant, sans jamais lire iCloud
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) · Agents : **sync-icloud** (`src/sync/publisher.ts`, `src/platform/sync/memory.ts`, tests de synchro) + **desktop-tauri** (`src-tauri/src/sync/store.rs`, tests Rust) · Relecture : code-reviewer · Statut : **à faire** (décision d'Ali du 2026-10-17)
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) · Agents : **sync-icloud** (`src/sync/publisher.ts`, `src/platform/sync/memory.ts`, tests de synchro) + **desktop-tauri** (`src-tauri/src/sync/store.rs`, tests Rust) · Relecture : code-reviewer · Statut : **en cours** (2026-10-20), correctif local et preuves du banc verts ; QA, revue et CI finale encore dues
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-17). Défaut nouveau n° 1 du rapport de Y-TECH-03 (section « Défauts révélés »), classé bloquant, **ajouté à l'audit 1.0 comme B16** (2026-10-17). Aucun écart au PRD.
 Dépend de : Y-TECH-03 (fait : banc, plan de pannes, `memory.ts` et `fake_bookmark` hostiles), Y-TECH-02 (champ `closed` de `state.ctx`, ADR 0011 §21 point 2). Indépendante de Y-FIX-02, Y-FIX-03, Y-IOS-05 ; touche `publisher.ts`, que Y-FIX-02 touche aussi (voir « Ordre et dossiers partagés »).
 Estimation : 4 à 6 h. Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de 9 h).
@@ -38,7 +38,15 @@ Ali veut être prévenu s'il en existe une. **Avant d'écrire une ligne de code,
 6. **Boucle de rotation sur une panne durable** : si `cloud-pending` vient de iCloud lui-même (et non de l'éviction), chaque cycle ouvrirait un segment de plus. Le plafond d'une rotation par cycle borne le rythme mais pas la croissance : vérifier que l'échec de la rotation ne laisse aucun fichier (écriture refusée avant tout octet) et que le cycle suivant ne rouvre pas un nouveau numéro tant que l'ajout au précédent n'a pas réussi.
 7. **Ordre des hlc** : l'ajout dans `n + 1` reprend le contrôle « hlc strictement croissants d'un ajout à l'autre dans une époque » depuis la tête connue (`store.rs` ~1209 et suivantes) ; vérifier qu'il ne dépend pas de la lecture du segment `n` pour connaître le dernier hlc.
 
-Réponse de l'agent d'implémentation : *à remplir avant le premier commit de code.*
+Réponse de Codex, passe product-owner du **2026-10-20**, avant tout code : **aucune raison de télécharger le segment avant l'ajout**. La décision de rotation reste appliquée. Reprise sur `main` `095c5e4a`, estimation 4 à 6 h de travail actif, alerte au-delà de 9 h.
+
+1. `store.rs:1165-1191` refuse les retours en arrière et les segments supérieurs authentifiés ; `publisher.ts:431-448` pose l'intention avant l'ajout et retire file/tête/intention ensemble ; `orphanEpoch.ts:214-225` résout cette intention au redémarrage. Le cas d'arrêt après l'ajout au nouveau segment sera figé par le banc.
+2. **Précaution nécessaire, sans téléchargement** : `bookmark.rs:279-297` écrit par morceaux et `mobile_call.rs` précise qu'une réponse peut arriver après l'échéance ; le seul code `cloud-pending` ne prouve donc pas qu'aucun octet n'a été écrit. La rotation sera réservée au refus de la lecture locale du segment de tête (`store.rs:1191-1195`, avant toute écriture), avec un indice d'origine transmis par l'erreur et son équivalent mémoire. Un échec indéterminé pendant l'écriture ne provoquera pas cette rotation. C'est la distinction de sécurité prévue au point 2 ci-dessus ; aucune décision de téléchargement n'est rouverte, aucun format iCloud ne change. Tests avant écriture et écriture partielle requis.
+3. `maintenance.ts:174-188` et `retention.ts:143-170` exigent couverture, accusés et ancienneté, et excluent la tête ; la rotation ne les change pas. Les substituts empruntent la suppression propre déjà vérifiée, sans droit nouveau.
+4. Les limites sont 10 000 entrées par dossier et 1 024 segments clos (`limits.rs:36-38`). Vingt segments courts restent sous ces bornes ; `engine.ts:1325-1359` conserve le déclenchement d'instantané par ancienneté. Le scénario de purge vérifiera la couverture ; aucune limite relevée.
+5. `reader.ts` s'arrête sur une page incomplète et `store.rs` utilise les comptes `closed` pour traverser les segments ; un essai à deux appareils vérifiera hydratation et refus de trou avant `n + 1`.
+6. Une seule rotation d'éviction pour tout l'appel de publication ; si le segment suivant est refusé avant écriture, sa cible reste mémorisée pour le cycle suivant. Dix cycles en panne et redémarrage vérifieront l'absence de croissance et la visibilité durable de l'échec.
+7. `store.rs:1216-1220` contrôle les hlc depuis `own.max_hlc`, indépendamment du téléchargement de `n` ; `store.rs:1238-1243` ferme `n` avec le nombre annoncé, sans le relire.
 
 ## Critères testables
 
@@ -77,7 +85,7 @@ Réponse de l'agent d'implémentation : *à remplir avant le premier commit de c
 
 11. **Étant donné** les cas existants `segment-full` et `segment-mismatch`, **alors** leur comportement est inchangé (même compteur `attempt < 2`, mêmes numéros de segment) : les tests existants de `publisher.ts` passent sans modification d'attente.
 12. **Alors** : `CT_TEST_WORKERS=1 npx vitest run src/sync src/platform/sync src/features/sync tests/sim tests/unit/sync --coverage.enabled=false` vert ; `cd src-tauri && cargo test --test desktop --features test-hooks -- sync_` vert ; lint et typage verts ; aucun `skip`, délai, retry ni test allongé ; **CI « suite verte » sur la branche** avant fusion.
-13. **Alors** le **bundle de départ est mesuré** : `tests/bundle/startBundle.test.ts` lancé avant tout push (état de départ : 358 045 octets gzip, marge de 355 octets sur le seuil de 358 400, soit 349,67 Ko sur 350 : **aucune marge**). La mesure (en octets) est notée dans la fiche. Le texte de l'avertissement et son composant d'affichage sont chargés à la demande ou rangés dans un bloc déjà hors départ ; si le départ dépasse, les leviers connus sont appliqués avant le push (mémoire projet « Bundle de départ saturé »).
+13. **Alors** le **bundle de départ est mesuré** avant tout push : référence de reprise `095c5e4a`, **342 924 octets normalisés**, marge 15 476 sur **358 400**, plafond inchangé. La mesure est notée dans la fiche. Tout bloc ou texte nouveau hors premier affichage reste à la demande ; aucune extension injustifiée de la liste du départ.
 14. **Alors** le texte de l'avertissement vit dans `src/i18n` (français, 24 h), jamais en dur, et reste sous un nom de motif de synchro existant si c'est possible.
 
 ### Documentation
@@ -128,7 +136,21 @@ Réponse de l'agent d'implémentation : *à remplir avant le premier commit de c
 
 | Élément | Valeur |
 |---|---|
-| Scénario 6 rouge avec le code actuel | commit et run : *à compléter* |
-| Scénario 6 vert après correctif | commit et run : *à compléter* |
-| Bundle de départ (octets gzip, seuil 358 400) | *à compléter* |
-| Réponse « raison technique de faire l'inverse » | *à compléter avant le code* |
+| Scénario 6 rouge avec le code actuel | `ad3ae641`, run CI `39386547885` : trois échecs cloud-pending sur trois cycles |
+| Scénario 6 vert après correctif | `43d2d299`, QA locale verte ; CI finale encore requise |
+| Bundle de départ (octets gzip, seuil 358 400) | **343 463 normalisés, 343 425 bruts, marge 14 937**, 56/56 ; liste du départ inchangée |
+| Réponse « raison technique de faire l'inverse » | consignée avant le code, commit `6da1939f` ; aucune raison de télécharger |
+
+## Passes de QA et de revue du 2026-10-20
+
+Passe module : `0dcf2434`, puis correctif de revue `43d2d299`. L'indice `appendBeforeWrite` est réservé au refus de lecture locale avant tout octet ; une écriture partielle ne le porte pas. La cible et son hlc sont persistés ; dix cycles refusés gardent la même cible. L'intention d'ajout et sa résolution au redémarrage protègent le retrait de la file. Aucune hydratation ajoutée au chemin d'écriture, aucun format iCloud changé.
+
+Passe QA : **2 331 tests verts sur 196 fichiers** du module, couverture coupée (669,31 s) ; puis **368 tests Rust `sync_` verts**, aucun nouvel ignore. E2e iPhone simulé sur le correctif relu : **1/1 vert, 22,9 s** ; l'indice traverse le client RPC, l'ajout ouvre le segment suivant et chaque saisie est publiée une fois. Les cas couvrent aussi lecture sans trou, `closed`, vingt segments courts, conservation avant accusé et purge après lecture, jamais la tête.
+
+Passe code-reviewer distincte : diff complet relu depuis `origin/main`, puis corrections relues. Gardes renforcées : (a) borne des numéros avant mémorisation d'une cible, y compris après `segment-full` ; (b) écriture et effacement du mémo indépendants du bloc de lecture à la demande ; (c) tête vide reprenant la cible persistée même si le maximum du listing augmente. Tests rouges de revue `607099b7` (trois échecs) et `1ef30588` (reprise et borne), correctif `43d2d299` ; **81 tests ciblés verts sur neuf fichiers** après correction. Le compteur historique des deux tentatives full/mismatch est conservé. Un mémo d'une autre époque ne choisit pas la cible courante et est effacé au succès courant. Les erreurs de stockage et les mémos illisibles remontent.
+
+**Revue du code approuvée** ; contrôles finaux et CI complète avec couverture obligatoires avant fusion. Les observations physiques restent dans les essais du lot IPA ; aucune preuve sur appareil réel revendiquée.
+
+Contrôles finaux sur le correctif relu : lint et typage verts, e2e iPhone 1/1, bundle 56/56 (343 463 normalisés, 343 425 bruts, écart 38/100). Scan des fichiers suivis sans secret détecté. CI complète encore requise avant fusion.
+
+CI initiale de #66 sur `20ec6508` : le run `39392116661` échoue sur le test SEC-01 de limitation des journaux SQL (20 lignes contre 10 à la frontière d'une minute). Le test supposait la rafale contenue dans une minute réelle. Horloge du journal injectée sous `test-hooks`, avec restauration et verrou existant ; dix lignes dans la minute figée, puis une ligne et le résumé des 991 refus après avance simulée. Aucun seuil ni timeout modifié, aucun test désactivé ou relancé à l'identique. **804 tests Rust verts en parallélisme normal**, correction relue et approuvée ; nouvelle CI complète obligatoire avant fusion.

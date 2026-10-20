@@ -1728,7 +1728,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (sameEpoch && r.segment === o.segment && r.expectRecords !== o.record) fail('segment-mismatch');
     if (epochDir && r.segment < maxKey(epochDir.segments)) fail('segment-mismatch');
     if (existing) {
-      if (existing.availability !== 'local') fail('cloud-pending');
+      if (existing.availability !== 'local') throw new SyncPlatformError('cloud-pending', { appendBeforeWrite: true });
       if (existing.partialTail || existing.lines.length !== r.expectRecords) fail('segment-mismatch');
       if (existing.lines.length > 0 && fileBytes(existing) + addBytes > SEGMENT_ROTATE_BYTES) fail('segment-full');
     } else if (r.expectRecords !== 0) {

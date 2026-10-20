@@ -179,12 +179,16 @@ impl SyncCode {
 }
 
 /// Rejet d'une commande : `{ code, message }`. Le message est technique et fixe par code : jamais de chemin, de clé ni de recopie de
-/// l'entrée (section 2.3). Les textes affichés viennent de `src/i18n`, choisis par le code.
+/// l'entrée (section 2.3). Seul l'indice fixe optionnel `appendBeforeWrite` peut compléter ce rejet IPC (Y-IOS-07).
+/// Les textes affichés viennent de `src/i18n`, choisis par le code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SyncError {
     #[serde(serialize_with = "serialize_code")]
     pub code: SyncCode,
     pub message: &'static str,
+    /// Y-IOS-07 : seule la lecture locale de la tête a refusé, avant toute écriture.
+    #[serde(rename = "appendBeforeWrite", skip_serializing_if = "Option::is_none")]
+    pub append_before_write: Option<bool>,
 }
 
 fn serialize_code<S: serde::Serializer>(code: &SyncCode, serializer: S) -> Result<S::Ok, S::Error> {
@@ -193,7 +197,7 @@ fn serialize_code<S: serde::Serializer>(code: &SyncCode, serializer: S) -> Resul
 
 impl SyncError {
     pub const fn new(code: SyncCode) -> Self {
-        Self { code, message: "synchro" }
+        Self { code, message: "synchro", append_before_write: None }
     }
 }
 

@@ -36,10 +36,12 @@ export { SYNC_ERROR_CODES, isSyncErrorCode, type SyncErrorCode } from '../../dom
 export class SyncPlatformError extends Error {
   override readonly name = 'SyncPlatformError';
   readonly code: SyncErrorCode;
+  declare readonly appendBeforeWrite?: true;
 
-  constructor(code: SyncErrorCode, options: { cause?: unknown } = {}) {
+  constructor(code: SyncErrorCode, options: { cause?: unknown; appendBeforeWrite?: boolean } = {}) {
     super(`synchro : ${code}`, options.cause === undefined ? undefined : { cause: options.cause });
     this.code = code;
+    if (code === 'cloud-pending' && options.appendBeforeWrite === true) this.appendBeforeWrite = true;
   }
 }
 

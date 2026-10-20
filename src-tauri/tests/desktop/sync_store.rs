@@ -300,6 +300,50 @@ fn y01_14_files_beyond_the_head_are_never_hydrated() {
 // ------------------------------------------------------------------------------------------------------------------------------
 
 #[test]
+fn y_ios_07_evicted_head_refuses_before_write_then_next_segment_needs_no_read_or_hydration() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 10, &["{}", "{}"]).unwrap();
+    let path = ["devices", DEV_A, ep.as_str(), "j-00000001.ctj"];
+    let before = fs.get(&path).unwrap();
+    fs.set_availability(&path, Availability::Cloud);
+    fs.arm(crate::support::fault_plan::parse_plan(&json!({ "name": "Y-IOS-07", "faults": [
+        { "id": "no-hydrate", "op": "hydrate", "file": path.join("/"), "nth": 1, "effect": "download-error" }
+    ] })).unwrap()).unwrap();
+    let writes = fs.writes.load(Ordering::SeqCst);
+    let error = append(&a, &ep, 1, 2, 20, &["{}"]).unwrap_err();
+    assert_eq!(error.code, SyncCode::CloudPending);
+    assert_eq!(error.append_before_write, Some(true));
+    assert_eq!(serde_json::to_value(error).unwrap()["appendBeforeWrite"], true);
+    assert_eq!(fs.writes.load(Ordering::SeqCst), writes);
+    assert_eq!(fs.get(&path).unwrap(), before);
+    let reads = fs.reads.load(Ordering::SeqCst);
+    assert_eq!(append(&a, &ep, 2, 0, 20, &["{}"]).unwrap().head, RecordCursor { segment: 2, record: 1 });
+    assert_eq!(fs.reads.load(Ordering::SeqCst), reads + 1, "seule la cible locale absente est vérifiée");
+    assert_eq!(fs.hydrations.load(Ordering::SeqCst), 0);
+    assert_eq!(fs.unfired(), vec!["no-hydrate".to_owned()]);
+    assert_eq!(fs.get(&path).unwrap(), before);
+}
+
+#[test]
+fn y_ios_07_partial_write_cloud_pending_never_claims_before_write() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 10, &["{}"]).unwrap();
+    let file = format!("devices/{DEV_A}/{ep}/j-00000001.ctj");
+    fs.arm(crate::support::fault_plan::parse_plan(&json!({ "name": "Y-IOS-07-partial", "faults": [
+        { "id": "partial", "op": "write", "file": file, "nth": 1, "effect": "error", "code": "cloud-pending", "partialLastLine": true }
+    ] })).unwrap()).unwrap();
+    let error = append(&a, &ep, 1, 1, 20, &["{}", "{}"]).unwrap_err();
+    assert_eq!(error.code, SyncCode::CloudPending);
+    assert_eq!(error.append_before_write, None);
+    assert!(serde_json::to_value(error).unwrap().get("appendBeforeWrite").is_none());
+    assert_eq!(fs.fired().len(), 1);
+}
+
+#[test]
 fn y01_13_append_checks_segment_records_and_first_record_is_computed() {
     let (a, fs) = device();
     a.setup(DEV_A);

@@ -207,6 +207,11 @@ export async function resolveInflight(deps: SyncDeps, inflight: Inflight, writeO
     if (ok) {
       await repos.sync.clearPublished(inflight.entries);
       await writeJson(repos, META.head, head);
+      if ((await repos.sync.getMeta(META.publishRotation)) !== null) {
+        const rotationModule = await import('./publishRotation');
+        const rotation = await rotationModule.readPublishRotation(repos);
+        if (rotation?.epoch === head.epoch && rotation.segment <= head.segment && head.hlc !== null && head.hlc >= rotation.maxHlc) await writeJson(repos, META.publishRotation, null);
+      }
     }
     await writeJson(repos, META.inflight, null);
   });
