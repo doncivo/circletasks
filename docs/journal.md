@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — ouverture C-FIX-01
+
+Pendant les validations de publication, passe product-owner C-FIX-01 sur le dossier indépendant des checklists : focaliser le titre au montage dans le geste d'ouverture, supprimer sa minuterie, conserver les pièges et la présentation existants. Estimation 2 h actives, alerte 3 h (total avec Y-IOS-06 maintenu à 5 h). Preuve synchrone écrite à 440, 393 et 1440 px avant correctif ; la montée du vrai clavier reste un essai de l'IPA, aucune preuve appareil revendiquée. Fusion après CI-SEC-01.
+
 ## 2026-10-20 — fusion de N-FIX-02, remise de CI-SEC-01 sur main
 
 #68 fusionnée dans `main` `f06bdee5`, tête `adbfd13f` : runs **39429974799 et 39429984825**, **48 contrôles verts** avec couverture, revue approuvée. Bundle sur main après fusion : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, net −38. B10 clôturé côté code vérifié ; essai réel du rappel décalé réservé à l'IPA.

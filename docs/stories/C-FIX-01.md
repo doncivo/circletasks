@@ -1,0 +1,20 @@
+# C-FIX-01 — Focus du titre de checklist dans le geste d'ouverture
+
+Module : checklists et iOS · Palier 1.0 · Estimation **2 h actives** (avec Y-IOS-06, total 5 h), alerte au-delà de **3 h** · Statut : en cours, passe product-owner du 2026-10-20.
+
+## Passe product-owner
+
+Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)` pour focaliser le titre après le piège de focus. Ce délai sort du geste d'ouverture et empêche la montée automatique du clavier dans WKWebView, comme l'ancien défaut Q-05. Réutiliser la focalisation au montage déjà prise en charge par `TextField` et conservée par `useFocusTrap`, sans minuterie. La maquette Checklists et la feuille existante gardent leur présentation ; aucun texte ni nouvelle interface. Dossier indépendant de la publication et des rappels en validation ; fusion après CI-SEC-01, remise sur main avant push.
+
+## Critères
+
+1. À l'ouverture de « Nouvelle checklist », le titre reçoit le focus dans le même rendu que le geste, avant toute minuterie ; le piège le conserve sur iPhone 440 et 393 px, et sur le panneau PC.
+2. Saisir le titre conserve le focus ; Échap ferme la feuille ou le panneau et rend le focus à l'action d'ouverture. Les règles de création, d'espace et de validation ne changent pas.
+3. Une modification de checklist existante ne prend pas un nouveau focus automatique dans le titre ; les pièges de focus existants restent actifs.
+4. Preuve rouge synchrone avant code, puis verte après ; tests du module, lint, typage, revue consignée et suite complète avec couverture avant fusion.
+5. Mesure du bundle avant push puis sur main après fusion ; aucun module ajouté au départ, aucun seuil modifié.
+6. Après compilation unique du lot, essai d'Ali sur l'iPhone : ouvrir une nouvelle checklist → clavier immédiatement visible et titre actif, taper puis créer → champ « Nouvel élément » actif ; ajouter plusieurs éléments → champ de saisie visible avec le clavier. Ce critère physique reste ouvert tant qu'Ali ne l'a pas vérifié ; aucune simulation ne sera présentée comme une preuve du clavier iOS.
+
+## Passes et preuves
+
+Product-owner consigné avant code. Tests rouges, qa-test, revue et CI à compléter ; la fiche ne porte pas « fait » avant ses vérifications.
