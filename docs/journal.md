@@ -4,6 +4,8 @@
 
 Pendant les validations de publication, passe product-owner C-FIX-01 sur le dossier indépendant des checklists : focaliser le titre au montage dans le geste d'ouverture, supprimer sa minuterie, conserver les pièges et la présentation existants. Estimation 2 h actives, alerte 3 h (total avec Y-IOS-06 maintenu à 5 h). Preuve synchrone écrite à 440, 393 et 1440 px avant correctif ; la montée du vrai clavier reste un essai de l'IPA, aucune preuve appareil revendiquée. Fusion après CI-SEC-01.
 
+C-FIX-01 rouge `ee2b51ab` : trois échecs synchrones, focus reçu sur « Fermer » au lieu du titre. La référence du titre est désormais donnée au piège de focus de son hôte en création, comme Q-05 ; la minuterie disparaît. Le test couvre aussi la restitution du focus et a refusé une première variante `autoFocus` qui capturait le mauvais élément de retour. Version par `initialFocusRef` : **3/3**, puis **91/91 tests du module**, lint global vert ; aucun texte ni changement de maquette. Typage, revue, remise sur main, bundle et CI encore requis, clavier physique réservé au lot IPA.
+
 ## 2026-10-20 — fusion de N-FIX-02, remise de CI-SEC-01 sur main
 
 #68 fusionnée dans `main` `f06bdee5`, tête `adbfd13f` : runs **39429974799 et 39429984825**, **48 contrôles verts** avec couverture, revue approuvée. Bundle sur main après fusion : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, net −38. B10 clôturé côté code vérifié ; essai réel du rappel décalé réservé à l'IPA.

@@ -4,7 +4,7 @@ Module : checklists et iOS · Palier 1.0 · Estimation **2 h actives** (avec Y-I
 
 ## Passe product-owner
 
-Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)` pour focaliser le titre après le piège de focus. Ce délai sort du geste d'ouverture et empêche la montée automatique du clavier dans WKWebView, comme l'ancien défaut Q-05. Réutiliser la focalisation au montage déjà prise en charge par `TextField` et conservée par `useFocusTrap`, sans minuterie. La maquette Checklists et la feuille existante gardent leur présentation ; aucun texte ni nouvelle interface. Dossier indépendant de la publication et des rappels en validation ; fusion après CI-SEC-01, remise sur main avant push.
+Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)` pour focaliser le titre après le piège de focus. Ce délai sort du geste d'ouverture et empêche la montée automatique du clavier dans WKWebView, comme l'ancien défaut Q-05. Réutiliser `initialFocusRef` de la feuille et `initialFocus` du piège, comme la feuille de création d'une tâche, sans minuterie. La maquette Checklists et la feuille existante gardent leur présentation ; aucun texte ni nouvelle interface. Dossier indépendant de la publication et des rappels en validation ; fusion après CI-SEC-01, remise sur main avant push.
 
 ## Critères
 
@@ -18,3 +18,9 @@ Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)`
 ## Passes et preuves
 
 Product-owner consigné avant code. Tests rouges, qa-test, revue et CI à compléter ; la fiche ne porte pas « fait » avant ses vérifications.
+
+Rouge **`ee2b51ab`** : **3/3 échecs** à 440, 393 et 1440 px, focus reçu sur « Fermer » au lieu du titre dans le geste d'ouverture. Les assertions sont synchrones, sans temporisation ni promesse après le clic. Le test PC utilise son libellé existant « + Nouvelle checklist ».
+
+Correctif : référence du titre portée par `ChecklistsScreen`, donnée au formulaire et à son hôte seulement pour la création ; `Sheet` / `EditorPanel` confient la focalisation à leur piège après capture de l'élément d'ouverture. Minuterie retirée, focus automatique absent en modification. Un simple `autoFocus` sur l'enfant avait échoué aux trois assertions de restitution du focus : le piège capturait alors le titre au lieu du bouton d'ouverture ; le passage par `initialFocusRef` corrige les deux sens de la transition.
+
+Passe qa-test : **3/3 verts** pour focus immédiat, saisie et fermeture avec restitution, puis **91 tests / huit fichiers du module verts**, couverture coupée ; lint global vert. La montée et la visibilité du vrai clavier ne sont pas prouvées par ces tests : critère 6 ouvert jusqu'à l'IPA. Typage, revue distincte, remise sur main après CI-SEC-01, bundle et CI complète encore requis.
