@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — fusion de Y-IOS-07, ouverture N-TECH-02
+
+Y-IOS-07 fusionnée par #66 dans `main` `51c6eb07`, tête finale `f7429d75`. Runs `39394538755` et `39394543966` : 48 contrôles verts avec couverture, dont le test de rafale SQL corrigé dans les deux exécutions ; revue consignée. Bundle sur `main` : **56/56, 343 463 octets normalisés, 343 425 bruts, marge 14 937**. Observation réelle d'éviction réservée au lot IPA.
+
+Passe product-owner de N-TECH-02 : fenêtre glissante de sept jours, repli par ligne de rappel, préfixe chronologique sans quota, couverture bornée par les rappels réellement posés. Aucune décision rouverte. Estimation 5 h actives, alerte à 7,5 h. Étape zéro : mesure de référence, puis essai isolé du chargement à la demande du planificateur avant tout changement de sa logique. Le net du départ reste non positif ; plafond et couverture inchangés. N-FIX-02 attend cette fusion, même module.
+
 ## 2026-10-20 — fusion de B5 et ouverture Y-IOS-07
 
 Y-IOS-02-FIX-01 : PR #65 fusionnée (`095c5e4a`), 48 contrôles CI verts sur `1b908513`, runs `39277457609` et `39277480003`, couverture complète active. Revue consignée dans la fiche. Bundle sur `main` après fusion : 55/55, **342 924 octets normalisés, 342 871 bruts, marge 15 476**. Code vérifié et fusionné ; critère physique encore ouvert jusqu'au lot IPA, jamais déclaré « fait ».

@@ -1,6 +1,6 @@
 # Y-IOS-07 — Segment de tête évincé par iOS : l'ajout au journal ouvre un segment suivant, sans jamais lire iCloud
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) · Agents : **sync-icloud** (`src/sync/publisher.ts`, `src/platform/sync/memory.ts`, tests de synchro) + **desktop-tauri** (`src-tauri/src/sync/store.rs`, tests Rust) · Relecture : code-reviewer · Statut : **en cours** (2026-10-20), correctif local et preuves du banc verts ; QA, revue et CI finale encore dues
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) · Agents : **sync-icloud** (`src/sync/publisher.ts`, `src/platform/sync/memory.ts`, tests de synchro) + **desktop-tauri** (`src-tauri/src/sync/store.rs`, tests Rust) · Relecture : code-reviewer · Statut : **fait**, code fusionné et vérifié le 2026-10-20, PR #66 ; observation physique dans le lot IPA
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-17). Défaut nouveau n° 1 du rapport de Y-TECH-03 (section « Défauts révélés »), classé bloquant, **ajouté à l'audit 1.0 comme B16** (2026-10-17). Aucun écart au PRD.
 Dépend de : Y-TECH-03 (fait : banc, plan de pannes, `memory.ts` et `fake_bookmark` hostiles), Y-TECH-02 (champ `closed` de `state.ctx`, ADR 0011 §21 point 2). Indépendante de Y-FIX-02, Y-FIX-03, Y-IOS-05 ; touche `publisher.ts`, que Y-FIX-02 touche aussi (voir « Ordre et dossiers partagés »).
 Estimation : 4 à 6 h. Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de 9 h).
@@ -154,3 +154,7 @@ Passe code-reviewer distincte : diff complet relu depuis `origin/main`, puis cor
 Contrôles finaux sur le correctif relu : lint et typage verts, e2e iPhone 1/1, bundle 56/56 (343 463 normalisés, 343 425 bruts, écart 38/100). Scan des fichiers suivis sans secret détecté. CI complète encore requise avant fusion.
 
 CI initiale de #66 sur `20ec6508` : le run `39392116661` échoue sur le test SEC-01 de limitation des journaux SQL (20 lignes contre 10 à la frontière d'une minute). Le test supposait la rafale contenue dans une minute réelle. Horloge du journal injectée sous `test-hooks`, avec restauration et verrou existant ; dix lignes dans la minute figée, puis une ligne et le résumé des 991 refus après avance simulée. Aucun seuil ni timeout modifié, aucun test désactivé ou relancé à l'identique. **804 tests Rust verts en parallélisme normal**, correction relue et approuvée ; nouvelle CI complète obligatoire avant fusion.
+
+## Fusion et validation finale
+
+PR #66 fusionnée le 2026-10-20, `main` `51c6eb07`. Tête finale `f7429d75`, runs `39394538755` et `39394543966`, **48 contrôles verts**, couverture complète active ; le test d’horloge corrigé passe dans les deux exécutions. Bundle remesuré sur `main` : **56/56, 343 463 normalisés, 343 425 bruts, marge 14 937**. Les quinze critères automatisables et documentaires sont vérifiés ; aucune observation sur appareil réel revendiquée.

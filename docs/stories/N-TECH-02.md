@@ -1,8 +1,12 @@
 # N-TECH-02 — Routines : fenêtre de 7 jours d'occurrences planifiées et plafond équitable des 64 notifications
 
-Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B9)**, avant N-FIX-02 (même dossier `src/features/reminders`, jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **5 h** (audit B9), **alerte à Ali si le travail dépasse 7,5 h (+50 %)** · Statut : fiche écrite, questions tranchées par Ali le 2026-10-18, à développer
+Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B9)**, avant N-FIX-02 (même dossier `src/features/reminders`, jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **5 h** (audit B9), **alerte à Ali si le travail dépasse 7,5 h (+50 %)** · Statut : en cours, passe product-owner du 2026-10-20 ; questions tranchées appliquées, mesure du levier avant logique métier
 Story technique, sans équivalent au PRD (le PRD lignes 581 et 728 parle déjà d'une « fenêtre glissante recalculée à chaque ouverture » : cette story la rend vraie pour les routines, aucun écart avec le PRD). Elle **remplace le critère 12 de N-TECH-01** (« un seul élément par avance : la prochaine occurrence »), décision 1 d'Ali du 2026-10-17 : « B9 : oui, je confirme la fenêtre de 7 jours » (docs/decisions.md, ligne du 2026-10-17 ; docs/audit-1.0.md, ligne B9).
 Dépend de : N-TECH-01, N-01, N-03 (livrés). Touche `src/domain/notificationPlan.ts` et ses tests, `src/features/reminders/notificationRunner.ts` (levier de bundle), les tests de `src/features/reminders`. Ne touche ni `src/db`, ni Swift, ni Rust.
+
+## Passe product-owner du 2026-10-20
+
+Reprise depuis `main` `51c6eb07` après fusion de #66. Estimation maintenue : **5 h actives**, alerte au-delà de **7,5 h**. Fenêtre glissante de sept jours, repli, préfixe chronologique sans quota par nature et bornes sur les rappels réellement posés : aucune décision rouverte. Le plafond reste 358 400 octets et le net du départ doit rester non positif. Mesurer d’abord le départ, puis le seul chargement à la demande de `replanNotifications`, sans conserver ce brouillon avant les preuves rouges. Le corps des notifications reste réservé à N-FIX-02.
 
 ## Contexte
 
@@ -28,7 +32,7 @@ Pourquoi les tests ne l'attrapaient pas : le test `src/domain/notificationPlan.t
 
 ## Bundle de départ (plafond inamovible)
 
-- Mesure de référence : **358 357 / 358 400 octets gzip** (`tests/bundle/startBundle.test.ts`, qui somme les seuls fichiers `.js` du graphe statique de `index.html`), marge **43 octets**. L'audit du départ (docs/audits/2026-10-18-bundle-depart.md, section 5) estime cette story à **+300 à +800 octets**.
+- Mesure de référence : **343 463 / 358 400 octets normalisés** (`main` `51c6eb07`, reprise du 2026-10-20) (`tests/bundle/startBundle.test.ts`, qui somme les seuls fichiers `.js` du graphe statique de `index.html`), marge **14 937 octets**. L'audit du départ (docs/audits/2026-10-18-bundle-depart.md, section 5) estime cette story à **+300 à +800 octets**.
 - Fichiers dans le départ : par imports statiques `src/App.tsx:17` → `features/app/startup.ts:11` → `features/reminders/notificationRunner.ts:2` → `replanNotifications.ts` → `src/domain/notificationPlan.ts` et `notificationTexts.ts`. **Ils sont dans le départ** (à confirmer par la mesure du premier commit). `coverageText.ts` est atteint par `reminders/index.ts:7`. `src/i18n/fr.notifications.ts` est dans `fr.ts` (départ).
 - **Exigence : net <= 0 octet** sur chaque commit, mesuré (`npm run test:bundle`) après **chaque** commit (pas seulement ceux qui touchent le démarrage), valeur notée dans la fiche.
 - **Levier proposé (étape 0 de la story, à mesurer avant tout code)** : `notificationRunner.ts` charge `replanNotifications` par `import()` (chargement à la demande) au lieu d'un import statique : le planificateur, les textes et les récapitulatifs sortent du départ (l'iPhone seulement les utilise ; le PC répond `pc` avant toute lecture). Pièges connus (mémoire du projet, Y-TECH-05) : un bloc à la demande qui importe un module du départ le sort du bloc principal et peut coûter des kilooctets de compression ; mesurer le départ avant/après ce seul changement. L'échec de chargement du bloc doit être **visible** (critère 21), jamais muet.
@@ -77,7 +81,7 @@ Toutes les valeurs ci-dessous sont en heure locale flottante, avec `now` = **202
 
 ### Bundle, documentation, vérifications
 
-22. **Bundle** : mesure de départ au premier commit (attendu 358 357), puis après chaque commit ; **net <= 0** sur chaque commit et sur la branche ; sinon arrêt (voir « Bundle de départ »). Les valeurs avant/après et le gain éventuel du levier sont notés dans « Preuves ».
+22. **Bundle** : mesure de départ au premier commit (référence de reprise 343 463), puis après chaque commit ; **net <= 0** sur chaque commit et sur la branche ; sinon arrêt (voir « Bundle de départ »). Les valeurs avant/après et le gain éventuel du levier sont notés dans « Preuves ».
 23. **Documentation** : ADR 0012 (avenant : section 5, « seule la prochaine occurrence d'une routine » remplacée par la fenêtre de 7 jours, couverture à deux bornes, égalité de minute) ; docs/decisions.md (ligne du 2026-10-07 « seule la prochaine occurrence d'une routine » marquée remplacée) ; `docs/stories/N-TECH-01.md` : critère 12 marqué « remplacé par N-TECH-02 », critères 13, 14 et 20 renvoyés vers les critères 6 à 8 et 12 de cette fiche ; docs/journal.md ; docs/backlog.md ; docs/audit-1.0.md (B9). Aucun écart avec le PRD (lignes 581 et 728 déjà conformes).
 24. **Vérifications** : tests du module en local seulement (`CT_TEST_WORKERS=1 npx vitest run src/domain/notificationPlan src/features/reminders src/platform/notifications --coverage.enabled=false`), lint et typage verts ; suite complète en CI sur la branche (« suite verte ») ; aucun `skip`, aucun délai, aucun retry ; le journal technique ne reçoit aucun titre.
 
