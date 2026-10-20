@@ -4,6 +4,8 @@
 
 N-FIX-02 #68 est en CI sur ses propres fichiers. Passe product-owner CI-SEC-01 (3 h actives, alerte 4,5 h) : compilation NSIS et front sans clé updater, étape de signature distincte liée à la version, vérification et publication conservées. Périmètre indépendant des rappels ; remise sur main après fusion de #68 avant push. Fiche et garde de portée écrites avant correctif, aucune clé réelle utilisée ni affichée.
 
+CI-SEC-01 : rouge `f986b2f5`, trois contrôles en échec sur l'exposition au build et l'absence d'étape distincte ; correctif du workflow, puis **18 tests de publication verts**. Banc hors ligne du vrai CLI, clé et fichier jetables confinés au worktree : génération 0, signature 0, version attendue acceptée 0, autre version refusée 1 ; nettoyage du chemin vérifié, aucun secret réel utilisé. La compilation ne reçoit plus la clé updater ; signature seule sur tag avec version liée, collecte et vérification conservées. Documentation de publication corrigée ; lint final, revue, remise sur main, bundle et CI encore requis avant fusion.
+
 ## 2026-10-20 — N-TECH-02 fusionnée, ouverture N-FIX-02
 
 #67 fusionnée dans `main` `e64e0148`, tête `7b1b9779` : runs **39424065781 et 39424072422**, 48 contrôles verts, couverture complète, revue approuvée. Bundle sur main après fusion : **57/57, 338 481 normalisés, 338 433 bruts, marge 19 919**, gain 4 982. B9 clôturé côté code vérifié ; aucune preuve physique inventée.

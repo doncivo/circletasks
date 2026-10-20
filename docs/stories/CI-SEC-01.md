@@ -21,3 +21,9 @@ Le workflow Windows transmet aujourd'hui la clé updater et son mot de passe à 
 ## Passes et preuves
 
 Product-owner : périmètre ci-dessus approuvé pour implémentation, aucune décision rouverte. Tests rouges, agent du module, qa-test, revue et CI à consigner au fur et à mesure. Aucun statut « fait » à ce stade.
+
+Preuve rouge **`f986b2f5`** : garde du workflow actuel, **trois échecs / un succès**, dont la présence effective des variables privées dans l'étape de compilation. Le test de collecte et de vérification existante passe déjà. Le correctif retire les secrets de la compilation et signe ensuite le même fichier, avec version liée, dans une étape réservée aux tags.
+
+Passe qa-test : **18 tests / deux fichiers de publication verts**, couverture coupée ; garde de portée de toutes les références, ordre compilation → signature → collecte, refus de clé absente, absence de compilation dans l'étape de signature, configuration globale sans artefacts signés au build, vérification et SHA-256 conservés. Le vrai CLI installé a généré une clé jetable dans le worktree, signé un fichier factice en version 1.2.3 puis passé le vérificateur existant : génération **0**, signature **0**, vérification 1.2.3 **0**, version 1.2.4 refusée **1**. Les fichiers jetables ont été effacés après contrôle du chemin dans le worktree ; aucune clé réelle ni valeur de clé affichée. Une première configuration du banc avait posé à vide une variable de chemin de clé qui entrait en conflit avec la clé en chaîne ; le banc retire désormais cette variable, absente du workflow réel. Aucun délai, timeout ni relance automatique ajouté.
+
+Lint final et typage, revue distincte, remise sur main après #68, mesure avant push et CI complète encore attendus. La compilation et signature réelles du NSIS de livraison restent celles du tag de livraison ; aucun installeur n'a été lancé sur le PC d'Ali.
