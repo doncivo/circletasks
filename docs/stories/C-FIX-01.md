@@ -17,6 +17,8 @@ Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)`
 
 ## Passes et preuves
 
+Remise sur main après #69 (`ea596996`) avant premier push : rouge `ee2b51ab` devenu `e2bac0ec`, correctif `3b716ac4` devenu `292e9e59`, revue `fb5f679f` devenue `95a76c61`. Le blob du test rouge est identique avant et après rebase (`465c652fe51bbb975e88da745dbee46d64b044e5`). Conflits documentaires résolus en conservant les preuves de N-FIX-02 et CI-SEC-01 ; aucun conflit de code.
+
 Product-owner consigné avant code. Tests rouges, qa-test, revue et CI à compléter ; la fiche ne porte pas « fait » avant ses vérifications.
 
 Rouge **`ee2b51ab`** : **3/3 échecs** à 440, 393 et 1440 px, focus reçu sur « Fermer » au lieu du titre dans le geste d'ouverture. Les assertions sont synchrones, sans temporisation ni promesse après le clic. Le test PC utilise son libellé existant « + Nouvelle checklist ».

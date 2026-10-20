@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — CI-SEC-01 fusionnée, remise de C-FIX-01 sur main
+
+#69 fusionnée dans main `ea596996`, tête `99a445fe`, runs **39432599987 et 39432607833**, **48 contrôles verts**. Mesure sur main : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, coût nul. Clé updater réservée à la signature, revue approuvée ; publication réelle signée réservée à la livraison.
+
+C-FIX-01 rebasée avant premier push : rouge `e2bac0ec`, correctif `292e9e59`, revue `95a76c61` ; blob rouge identique, conflits documentaires conservant les preuves des deux stories précédentes. Contrôle ciblé et mesure avant push en cours, aucun essai physique revendiqué.
+
 ## 2026-10-20 — ouverture C-FIX-01
 
 Pendant les validations de publication, passe product-owner C-FIX-01 sur le dossier indépendant des checklists : focaliser le titre au montage dans le geste d'ouverture, supprimer sa minuterie, conserver les pièges et la présentation existants. Estimation 2 h actives, alerte 3 h (total avec Y-IOS-06 maintenu à 5 h). Preuve synchrone écrite à 440, 393 et 1440 px avant correctif ; la montée du vrai clavier reste un essai de l'IPA, aucune preuve appareil revendiquée. Fusion après CI-SEC-01.
