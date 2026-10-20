@@ -240,6 +240,7 @@ describe('routines (critères 12 à 14)', () => {
     const r = reminder('routine', routine, 30);
     const result = plan({ routines: [routine], reminders: [r], now: asLocalDateTime('2026-10-07T07:00') });
     expect(result.items).toHaveLength(7);
+    expect(result.coverage).toEqual({ state: 'until', until: '2026-10-14T06:30' });
     expect(result.items[0]).toMatchObject({
       id: `routine:${r.id}:2026-10-08`,
       kind: 'routine',

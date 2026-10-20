@@ -122,6 +122,12 @@ Adaptation explicite des attentes historiques (aucune assertion retirée) : quot
 
 Première QA module : **419/419 dans 27 fichiers**, couverture coupée. Les scénarios nouveaux de calcul pur et cas d'usage sont verts ; le faux conserve les rappels sonnés, donc reprise à deux jours **scheduled 2, kept 5, cancelled 2**. Validation finale élargie, lint, revue, bundle et CI encore attendus.
 
+Passe qa-test complémentaire : **83 tests / 4 fichiers verts** (calcul, fenêtre, chargement et Réglages), puis **63 / 2 fichiers** après la remarque de revue ci-dessous. Le chargement impossible rend `schedule-failed`, écrit le réglage persistant, reste visible après nouveau conteneur, apparaît en bandeau et Réglages, et ne disparaît qu'au succès. Préfixe mêlé vérifié à 64/63/10 sur douze tâches, six routines à deux avances, quatre événements répétés, deux répétitions et récapitulatifs ; ordre inversé identique. Les 64 premiers de chaque source suffisent à l'oracle de l'union, sans relever la limite réelle du planificateur.
+
+Passe code-reviewer distincte : relecture du diff `origin/main...` après QA, bornes ouvertes/fermées, repli, filtres et quota, stabilité des identifiants, égalité au plafond, erreurs persistées sans texte utilisateur, import dynamique et absence d'ajout à la liste de départ. Remarque R1 de cette revue : un raccourci par seul runtime aurait exclu le faux disponible en navigateur utilisé par les essais iPhone. Rouge sur `b7a40514` : `notificationRunnerLoad.test.ts`, résultat `pc` au lieu de `planned` ; correction par disponibilité de l'adaptateur, avec contrôle séparé PC indisponible sans lecture ni chargement. **63/63 verts** après correction. Les cinq dépendances embarquées dans le bloc différé sont contrôlées par les cartes de source du départ, non comme cinq entrées dynamiques autonomes inexistantes ; l'entrée `replanNotifications` reste contrôlée comme import dynamique réel. Aucun seuil ni module ajouté.
+
+Mesure après `b7a40514` : **338 466 octets normalisés, 338 428 bruts, marge 19 934**, net **−4 997** ; le plafond et la garde exacte sont verts, mais cinq assertions nouvelles réclamaient à tort des entrées autonomes du manifeste pour les dépendances du même bloc. Elles ont été corrigées en assertions de sources hors départ. Mesure définitive de la revue et CI encore attendues. Lint global et typecheck de cette première version verts.
+
 | Élément | Valeur |
 |---|---|
 | Départ de référence (octets gzip, seuil 358 400) | |

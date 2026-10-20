@@ -95,7 +95,7 @@ export function getNotificationRunner(container: AppContainer): NotificationRunn
     known = createNotificationRunner(async (trigger) => {
       const status = statusController(container);
       try {
-        if (!isInstalledIphone(container)) {
+        if (!isInstalledIphone(container) && await container.notifications.availability() === 'unavailable') {
           status.setAvailability('unavailable');
           return { status: 'pc' };
         }
