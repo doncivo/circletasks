@@ -43,6 +43,18 @@ test.describe('I-02 — alerte avant expiration (iPhone, profil et planificateur
       (globalThis as { __ctNotificationsFake?: boolean }).__ctNotificationsFake = true;
       (globalThis as { __ctSigningFake?: boolean }).__ctSigningFake = true;
     });
+    if (testInfo.tags.includes('@permission-denied')) {
+      await page.addInitScript(() => {
+        // Configurer le vrai faux avant sa première lecture, pas après le démarrage du runner.
+        Object.defineProperty(window, '__ctNotifications', {
+          configurable: true,
+          set(scheduler: NonNullable<Window['__ctNotifications']>) {
+            scheduler.setPermission('denied');
+            Object.defineProperty(window, '__ctNotifications', { value: scheduler, writable: true, configurable: true });
+          },
+        });
+      });
+    }
     await page.clock.install({ time: NOW });
     await openApp(page);
   });
@@ -100,8 +112,7 @@ test.describe('I-02 — alerte avant expiration (iPhone, profil et planificateur
     expect(await signing(page, (hooks) => hooks.alert.scheduled.length)).toBe(0);
   });
 
-  test('autorisation refusée : « Les notifications sont refusées : vous ne serez pas prévenu » dans À propos (critère 7)', async ({ page }) => {
-    await page.evaluate(() => window.__ctNotifications?.setPermission('denied'));
+  test('autorisation refusée : « Les notifications sont refusées : vous ne serez pas prévenu » dans À propos (critère 7)', { tag: '@permission-denied' }, async ({ page }) => {
     await signing(page, (hooks) => hooks.source.expireAt('2026-10-14T07:00:00Z'));
     await resume(page);
     await openSettings(page);

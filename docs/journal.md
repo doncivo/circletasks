@@ -2,6 +2,8 @@
 
 ## 2026-10-20 — CI-SEC-01 fusionnée, remise de C-FIX-01 sur main
 
+Première CI de #70, run `39436501825`, job `118674781567` : I-02 autorisation refusée rouge (une alerte dans l'historique au lieu de zéro, 159 parcours verts). Cause : le test refusait l'autorisation après l'ouverture ; le runner initial pouvait déjà avoir capturé `granted`, puis lire la date injectée avant la reprise refusée. Reproduction locale isolée verte, cohérente avec cette course. Le scénario marqué `@permission-denied` configure maintenant le faux testé à sa création, avant toute première lecture, par un script d'initialisation propre au test ; l'assertion zéro et le texte refusé restent identiques. Aucun code applicatif, délai, timeout, retry ou saut ajouté. Après correction : **9 parcours I-02 iPhone verts**, cas PC toujours réservé à son projet. Revue distincte du complément approuvée : précondition du scénario établie avant le démarrage, sans vider l'historique ni affaiblir l'oracle ; lint, typage/bundle et nouvelle CI requis avant fusion.
+
 #69 fusionnée dans main `ea596996`, tête `99a445fe`, runs **39432599987 et 39432607833**, **48 contrôles verts**. Mesure sur main : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, coût nul. Clé updater réservée à la signature, revue approuvée ; publication réelle signée réservée à la livraison.
 
 C-FIX-01 rebasée avant premier push : rouge `e2bac0ec`, correctif `292e9e59`, revue `95a76c61` ; blob rouge identique, conflits documentaires conservant les preuves des deux stories précédentes. Contrôle ciblé et mesure avant push en cours, aucun essai physique revendiqué.

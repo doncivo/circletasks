@@ -17,6 +17,8 @@ Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)`
 
 ## Passes et preuves
 
+Complément CI #70 : run rouge `39436501825`, job `118674781567`, I-02 refus d'autorisation (historique d'une alerte au lieu de zéro). La permission est désormais refusée à la création du faux, avant sa première lecture, au lieu d'être modifiée après démarrage. Aucun délai ni assertion supprimée ; **9 parcours I-02 iPhone verts**, garde PC existante conservée pour son projet. Revue distincte du complément approuvée, nouvelle CI complète requise.
+
 Remise sur main après #69 (`ea596996`) avant premier push : rouge `ee2b51ab` devenu `e2bac0ec`, correctif `3b716ac4` devenu `292e9e59`, revue `fb5f679f` devenue `95a76c61`. Le blob du test rouge est identique avant et après rebase (`465c652fe51bbb975e88da745dbee46d64b044e5`). Conflits documentaires résolus en conservant les preuves de N-FIX-02 et CI-SEC-01 ; aucun conflit de code.
 
 Product-owner consigné avant code. Tests rouges, qa-test, revue et CI à compléter ; la fiche ne porte pas « fait » avant ses vérifications.
