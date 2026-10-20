@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Reminder, Task } from './model';
 import { planNotifications, type NotificationPlanInput } from './notificationPlan';
 import { makeRoutine } from './routineTestKit';
-import { asLocalDateTime, asLocalTime } from './types';
+import { asLocalDate, asLocalDateTime, asLocalTime } from './types';
 
 describe('N-TECH-02 : couverture réelle des routines', () => {
   const routine = makeRoutine({ time: asLocalTime('07:00') });
@@ -40,7 +40,7 @@ describe('N-TECH-02 : couverture réelle des routines', () => {
 
   it('douze routines et récapitulatifs : préfixe de 64, aucun jour partiellement couvert', () => {
     const routines = Array.from({ length: 12 }, () => makeRoutine({ time: asLocalTime('07:00') }));
-    const reminders = routines.map((r, i) => ({ ...reminder, id: `22000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, targetId: r.id }) as Reminder);
+    const reminders = routines.map((r, i) => ({ ...reminder, id: `22000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, targetId: r.id }) as unknown as Reminder);
     const result = plan('2026-10-07T10:00', { routines, reminders, recaps: { morning: { enabled: true, time: asLocalTime('07:30') }, evening: { enabled: true, time: asLocalTime('21:00') } } });
     expect(result.total).toBe(885);
     expect(result.items).toHaveLength(64);
@@ -52,7 +52,7 @@ describe('N-TECH-02 : couverture réelle des routines', () => {
 
   it.each([false, true])('plafond et égalité de minute : allSame=%s', allSame => {
     const tasks = Array.from({ length: 70 }, (_, i) => ({ id: `11000000-0000-4000-8000-${String(i).padStart(12, '0')}`, spaceId: routine.spaceId, title: 'Tâche', date: '2026-10-08', time: allSame || i < 60 ? '08:00' : '09:00', status: 'todo', someday: false, deletedAt: null }) as unknown as Task);
-    const reminders = tasks.map((task, i) => ({ ...reminder, id: `22000000-0000-4000-8000-${String(i).padStart(12, '0')}`, targetType: 'task', targetId: task.id }) as Reminder);
+    const reminders = tasks.map((task, i) => ({ ...reminder, id: `22000000-0000-4000-8000-${String(i).padStart(12, '0')}`, targetType: 'task', targetId: task.id }) as unknown as Reminder);
     const result = plan('2026-10-07T10:00', { routines: [], tasks, reminders });
     expect(result.items).toHaveLength(64);
     expect(result.coverage).toEqual({ state: 'until', until: allSame ? '2026-10-07T10:00' : '2026-10-08T08:00' });
@@ -60,8 +60,22 @@ describe('N-TECH-02 : couverture réelle des routines', () => {
 
   it('une tâche lointaine ne prolonge pas artificiellement la couverture des routines', () => {
     const task = { id: '11000000-0000-4000-8000-000000000001', spaceId: routine.spaceId, title: 'Tâche', date: '2026-10-20', time: '09:00', status: 'todo', someday: false, deletedAt: null } as unknown as Task;
-    const result = plan('2026-10-07T10:00', { tasks: [task], reminders: [reminder, { ...reminder, id: '22000000-0000-4000-8000-000000000002', targetType: 'task', targetId: task.id } as Reminder] });
+    const result = plan('2026-10-07T10:00', { tasks: [task], reminders: [reminder, { ...reminder, id: '22000000-0000-4000-8000-000000000002', targetType: 'task', targetId: task.id } as unknown as Reminder] });
     expect(result.items).toHaveLength(8);
     expect(result.coverage).toEqual({ state: 'until', until: '2026-10-14T07:00' });
+  });
+
+  it('repli hors fenêtre : première occurrence réellement posée et sa couverture', () => {
+    const late = { ...routine, scheduleType: 'every_n_days' as const, interval: 14, startDate: asLocalDate('2026-10-20') };
+    const result = plan('2026-10-07T10:00', { routines: [late] });
+    expect(result.items.map(item => item.fireAt)).toEqual(['2026-10-20T07:00']);
+    expect(result.coverage).toEqual({ state: 'until', until: '2026-10-20T07:00' });
+  });
+
+  it('plafond au jour trois : la couverture désigne un rappel posé, jamais la fin visée', () => {
+    const result = plan('2026-10-07T10:00', { limit: 3 });
+    expect(result.items.map(item => item.fireAt)).toEqual(['2026-10-08T07:00', '2026-10-09T07:00', '2026-10-10T07:00']);
+    expect(result.coverage).toEqual({ state: 'until', until: '2026-10-10T07:00' });
+    expect(plan('2026-10-07T10:00', { limit: 0 }).coverage).toEqual({ state: 'until', until: '2026-10-07T10:00' });
   });
 });

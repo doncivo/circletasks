@@ -77,6 +77,31 @@ function plan(over: Partial<NotificationPlanInput> = {}) {
 const fires = (items: readonly PlannedItem[]): string[] => items.map((item) => item.fireAt);
 const ids = (items: readonly PlannedItem[]): string[] => items.map((item) => item.id);
 
+it.each([64, 63, 10])('N-TECH-02 : préfixe global mêlé, limite %s sans réserve par nature', limit => {
+  const tasks = Array.from({ length: 12 }, (_, i) => task({ date: asLocalDate(`2026-10-${String(i + 8).padStart(2, '0')}`) }));
+  const routines = Array.from({ length: 6 }, () => makeRoutine({ spaceId: PERSO, time: asLocalTime('07:00') }));
+  const events = Array.from({ length: 4 }, (_, i) => makeEvent({ spaceId: PERSO, startDate: `2026-10-${i + 10}`, repeat: 'yearly' }));
+  const reminders = [...tasks.map(t => reminder('task', t, 0)), ...routines.flatMap(r => [reminder('routine', r, 0), reminder('routine', r, 30)]), ...events.map(e => reminder('event', e, 0))];
+  const snoozes = reminders.slice(0, 2).map((r, i) => ({ id: `snooze:task:${r.id}`, originId: `task:${r.id}`, fireAt: asLocalDateTime(`2026-10-08T10:${i === 0 ? '15' : '30'}`) }));
+  const input = { tasks, routines, events, reminders, snoozes, recaps: DEFAULT_RECAPS };
+  // Les 64 premiers de chaque source suffisent à construire les 64 premiers de leur union.
+  // Chaque ligne hors récapitulatifs a ici moins de 64 candidats : aucune coupe cachée.
+  const candidates = reminders.flatMap(r => plan({ tasks, routines, events, reminders: [r] }).items);
+  candidates.push(...plan({ tasks, routines, events, reminders, snoozes }).items.filter(item => item.kind === 'snooze'));
+  candidates.push(...plan({ tasks, routines, recaps: DEFAULT_RECAPS }).items);
+  candidates.sort((a, b) => {
+    if (a.fireAt !== b.fireAt) return a.fireAt < b.fireAt ? -1 : 1;
+    if ((a.kind === 'recap') !== (b.kind === 'recap')) return a.kind === 'recap' ? 1 : -1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  const result = plan({ ...input, limit });
+  expect(result.items).toEqual(candidates.slice(0, limit));
+  expect(result.items).toHaveLength(limit);
+  expect(candidates[limit]).toBeDefined();
+  expect((result.items.at(-1)?.fireAt ?? '') <= (candidates[limit]?.fireAt ?? '')).toBe(true);
+  expect(plan({ ...input, limit, reminders: [...reminders].reverse(), routines: [...routines].reverse(), tasks: [...tasks].reverse(), events: [...events].reverse() })).toEqual(result);
+});
+
 function pause(routine: Routine, from: string, to: string | null): RoutinePause {
   counter += 1;
   return { id: uuid('33000000', counter) as RoutinePauseId, routineId: routine.id, fromDate: asLocalDate(from), toDate: to === null ? null : asLocalDate(to), deletedAt: null } as unknown as RoutinePause;
@@ -210,11 +235,11 @@ describe('plages silencieuses (critères 10 et 11)', () => {
 describe('routines (critères 12 à 14)', () => {
   const at = (hhmm: string, over: Partial<Routine> = {}): Routine => makeRoutine({ spaceId: PERSO, time: asLocalTime(hhmm), ...over });
 
-  it('12 : une routine quotidienne à 07:00, avance 30 min : un seul élément, la prochaine occurrence', () => {
+  it('12 : une routine quotidienne à 07:00, avance 30 min : sept occurrences dans la fenêtre', () => {
     const routine = at('07:00');
     const r = reminder('routine', routine, 30);
     const result = plan({ routines: [routine], reminders: [r], now: asLocalDateTime('2026-10-07T07:00') });
-    expect(result.items).toHaveLength(1);
+    expect(result.items).toHaveLength(7);
     expect(result.items[0]).toMatchObject({
       id: `routine:${r.id}:2026-10-08`,
       kind: 'routine',
@@ -223,14 +248,14 @@ describe('routines (critères 12 à 14)', () => {
     });
     // Le plan suit le temps : un jour plus tard, le lendemain (pure fonction de now).
     const next = plan({ routines: [routine], reminders: [r], now: asLocalDateTime('2026-10-08T07:00') });
-    expect(next.items.map((item) => item.id)).toEqual([`routine:${r.id}:2026-10-09`]);
+    expect(next.items.map((item) => item.id)).toEqual(Array.from({ length: 7 }, (_, i) => `routine:${r.id}:2026-10-${String(i + 9).padStart(2, '0')}`));
   });
 
   it('12 : avant l’échéance du jour, l’occurrence du jour ; un élément par avance', () => {
     const routine = at('07:00');
     const rs = [reminder('routine', routine, 0), reminder('routine', routine, 30)];
     const result = plan({ routines: [routine], reminders: rs, now: asLocalDateTime('2026-10-07T06:00') });
-    expect(fires(result.items)).toEqual(['2026-10-07T06:30', '2026-10-07T07:00']);
+    expect(fires(result.items)).toEqual(Array.from({ length: 7 }, (_, i) => [`2026-10-${String(i + 7).padStart(2, '0')}T06:30`, `2026-10-${String(i + 7).padStart(2, '0')}T07:00`]).flat());
   });
 
   it('13 : ignorées si archivée, supprimée, sans heure ou en pause sans période', () => {
@@ -246,7 +271,7 @@ describe('routines (critères 12 à 14)', () => {
     const routine = at('07:00');
     const r = reminder('routine', routine, 0);
     const bounded = plan({ routines: [routine], reminders: [r], routinePauses: [pause(routine, '2026-10-07', '2026-10-09')] });
-    expect(bounded.items.map((item) => item.fireAt)).toEqual(['2026-10-10T07:00']);
+    expect(bounded.items.map((item) => item.fireAt)).toEqual(Array.from({ length: 5 }, (_, i) => `2026-10-${i + 10}T07:00`));
     const open = plan({ routines: [routine], reminders: [r], routinePauses: [pause(routine, '2026-10-07', null)] });
     expect(open.items).toEqual([]);
   });
@@ -267,9 +292,9 @@ describe('routines (critères 12 à 14)', () => {
     const r = reminder('routine', routine, 0);
     const logs = [makeLog(routine, '2026-10-05'), makeLog(routine, '2026-10-06')];
     const result = plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-07T06:00') });
-    expect(result.items.map((item) => item.fireAt)).toEqual(['2026-10-12T07:00']);
+    expect(result.items.map((item) => item.fireAt)).toEqual(['2026-10-12T07:00', '2026-10-13T07:00']);
     const notReached = plan({ routines: [routine], reminders: [r], routineLogs: [logs[0] as RoutineLog], now: asLocalDateTime('2026-10-07T06:00') });
-    expect(notReached.items.map((item) => item.fireAt)).toEqual(['2026-10-07T07:00']);
+    expect(notReached.items.map((item) => item.fireAt)).toEqual(Array.from({ length: 7 }, (_, i) => `2026-10-${String(i + 7).padStart(2, '0')}T07:00`));
   });
 
   it('13 : une routine Pro suit les plages silencieuses de son espace', () => {
@@ -281,7 +306,7 @@ describe('routines (critères 12 à 14)', () => {
   it('14 : tous les 2 jours : la prochaine occurrence suit la règle', () => {
     const routine = at('07:00', { scheduleType: 'every_n_days', interval: 2, startDate: asLocalDate('2026-10-07') });
     const result = plan({ routines: [routine], reminders: [reminder('routine', routine, 0)] });
-    expect(result.items.map((item) => (item.kind === 'recap' ? null : item.occurrenceDate))).toEqual(['2026-10-09']);
+    expect(result.items.map((item) => (item.kind === 'recap' ? null : item.occurrenceDate))).toEqual(['2026-10-09', '2026-10-11', '2026-10-13']);
   });
 
   it('14 : toutes les 2 semaines : la prochaine occurrence suit la règle', () => {
@@ -523,7 +548,7 @@ describe('pureté et déterminisme (critères 22 à 24)', () => {
 
   it('22 : un doublon de ligne reminder donne le même résultat dans les deux ordres', () => {
     const input = scenario();
-    const copy = { ...(input.reminders[0] as Reminder), id: uuid('22000000', 999) as ReminderId };
+    const copy = { ...(input.reminders[0] as Reminder), id: uuid('ffffffff', 999) as ReminderId };
     const a = planNotifications({ ...input, reminders: [...input.reminders, copy] });
     const b = planNotifications({ ...input, reminders: [copy, ...[...input.reminders].reverse()] });
     expect(a).toEqual(b);

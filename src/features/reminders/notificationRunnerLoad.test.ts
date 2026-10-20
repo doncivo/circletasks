@@ -13,6 +13,9 @@ it('N-TECH-02 : bloc impossible à charger, échec persistant visible après red
     await statusController(reopened).load();
     expect(notificationStatusStore.get(reopened).getState().status.planFailure).toMatchObject({ reason: 'schedule-failed' });
     expect(h.fake.calls.filter(call => call.type === 'replace')).toHaveLength(0);
+    vi.doUnmock('./replanNotifications');
+    expect(await getNotificationRunner(reopened).request('resume')).toMatchObject({ status: 'planned' });
+    expect(notificationStatusStore.get(reopened).getState().status.planFailure).toBeNull();
   } finally {
     vi.doUnmock('./replanNotifications');
     await h.db.close();

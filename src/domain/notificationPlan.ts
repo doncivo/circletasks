@@ -44,6 +44,7 @@ import {
  */
 
 export const NOTIFICATION_HORIZON_DAYS = 400;
+export const NOTIFICATION_ROUTINE_WINDOW_DAYS = 7;
 /** Plafond iOS des notifications locales en attente. */
 export const NOTIFICATION_LIMIT_DEFAULT = 64;
 
@@ -168,6 +169,8 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
   const horizonEnd = addDays(today, NOTIFICATION_HORIZON_DAYS);
   const limit = clampLimit(input.limit);
   const horizonLimit = `${horizonEnd}T23:59`;
+  const routineWindowEnd = `${addDays(today, NOTIFICATION_ROUTINE_WINDOW_DAYS)}T${nowMinute.slice(11)}`;
+  const continuingRoutines = new Set<string>();
 
   const quietBySpace = new Map(input.spaces.map((space) => [space.id as string, space.quietHours]));
   const candidates: PlannedItem[] = [];
@@ -264,11 +267,17 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
     } else if (reminder.targetType === 'routine') {
       const routine = routines.get(reminder.targetId);
       if (routine === undefined || routine.time === null) continue;
-      // Une seule occurrence par avance : la première dont l'échéance effective est à venir (critère 12).
+      // Fenêtre glissante sur l'échéance effective ; à défaut, première occurrence future.
+      let added = false;
       for (const date of routineEligibleDates(routine)) {
         const scheduledAt = fireAtOf(date, routine.time, offsetMin);
         const fireAt = scheduledAt === null ? null : effectiveOf(routine.spaceId, scheduledAt, true);
         if (scheduledAt === null || fireAt === null) continue;
+        const beyondWindow = fireAt > routineWindowEnd;
+        if (beyondWindow) {
+          continuingRoutines.add(reminder.id);
+          if (added) break;
+        }
         candidates.push({
           kind: 'routine',
           id: routineNotificationId(reminder.id, date),
@@ -280,7 +289,8 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
           scheduledAt,
           fireAt,
         });
-        break;
+        added = true;
+        if (beyondWindow) break;
       }
     } else {
       const event = events.get(reminder.targetId);
@@ -335,11 +345,22 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
   if (candidates.length === 0) return { ...EMPTY_PLAN, deadSnoozeIds };
   candidates.sort(comparePlanned);
   const items = candidates.slice(0, limit);
-  const last = items[items.length - 1];
-  const coverage: PlanCoverage =
-    candidates.length <= limit
-      ? { state: 'complete' }
-      : // Plafond à 0 : rien n'est planifié, la couverture s'arrête à `now`.
-        { state: 'until', until: last === undefined ? (nowMinute as LocalDateTime) : last.fireAt };
+  const bounds: LocalDateTime[] = [];
+  const firstDropped = candidates[items.length];
+  if (firstDropped !== undefined) {
+    // Une minute partiellement posée ne peut pas être déclarée couverte.
+    const beforeCut = items.filter(item => item.fireAt < firstDropped.fireAt).at(-1);
+    bounds.push(beforeCut?.fireAt ?? nowMinute as LocalDateTime);
+  }
+  for (const reminderId of continuingRoutines) {
+    const retained = items.filter(item => item.kind === 'routine' && item.reminderId === reminderId);
+    // Une ligne coupée dans sa fenêtre relève déjà de la borne du plafond.
+    if (retained.length < candidates.filter(item => item.kind === 'routine' && item.reminderId === reminderId).length) continue;
+    const last = retained.at(-1);
+    bounds.push(last?.fireAt ?? nowMinute as LocalDateTime);
+  }
+  const coverage: PlanCoverage = bounds.length === 0
+    ? { state: 'complete' }
+    : { state: 'until', until: bounds.reduce((earliest, bound) => bound < earliest ? bound : earliest) };
   return { items, coverage, total: candidates.length, deadSnoozeIds };
 }

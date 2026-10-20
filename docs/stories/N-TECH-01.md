@@ -7,7 +7,7 @@ Dépend de : R-02, R-05, N-02, N-04, ES-07, E-01 (données déjà livrées). Auc
 ## Contexte
 
 - Dettes de docs/dettes.md, « Ordre 5 (iPhone) » : interface de planification absente de `src/platform` ; planifier sur `effectiveFireAt` ; routines en pause ou archivées ignorées ; rappels d'événements recalculés par occurrence ; plan limité aux rappels à venir.
-- Décisions du 2026-10-07 : plugin officiel `tauri-plugin-notification` (N-01, pas ici) ; les 64 prochaines notifications par ordre chronologique, récapitulatifs compris ; seule la prochaine occurrence d'une routine ; « planifiés jusqu'au {date} ».
+- Décisions du 2026-10-07 : plugin officiel `tauri-plugin-notification` (N-01, pas ici) ; les 64 prochaines notifications par ordre chronologique, récapitulatifs compris ; r?gle historique de la seule prochaine occurrence remplac?e par N-TECH-02 ; « planifiés jusqu'au {date} ».
 - Règles métier dans `src/domain` seulement ; accès base par `src/db/repositories` seulement. **Cette story ne touche pas à `src/db`** : le planificateur reçoit ses données en arguments ; la lecture en base est de N-01.
 
 ## Contrat de sortie du planificateur (ADR 0012, sections 2 et 5)
@@ -38,9 +38,9 @@ Dépend de : R-02, R-05, N-02, N-04, ES-07, E-01 (données déjà livrées). Auc
 
 ### Routines
 
-12. **Étant donné** une routine active à 07:00 tous les jours avec avance 30 min, **alors** un seul élément par avance : la prochaine occurrence à venir (`routineReminderFireAt` ou `nextOccurrences`). Avec `now` à 07:00 passé, c'est le lendemain ; avec `now` avancé d'un jour, le plan suit (recalcul quotidien, fonction pure).
-13. **Alors** sont ignorées : routine archivée ; routine sans heure (QB-07) ; occurrence couverte par une pause (la première occurrence hors pause est planifiée, aucune si la pause n'a pas de fin) ; occurrence du jour déjà validée (R-03), l'occurrence suivante la remplace ; routine « X fois par semaine » dont le quota est atteint, aucun rappel ces jours-là (même règle que `routinesForDay`). Identifiant `routine:{reminderId}:{dateOccurrence}`.
-14. **Étant donné** une routine tous les 2 jours ou toutes les 2 semaines (R-07), **alors** la prochaine occurrence suit la règle (test par règle).
+12. **Remplac? par N-TECH-02 (fen?tre de sept jours, crit?res 1 ? 4). Ancienne r?gle conserv?e comme historique :** **Étant donné** une routine active à 07:00 tous les jours avec avance 30 min, **alors** un seul élément par avance : la prochaine occurrence à venir (`routineReminderFireAt` ou `nextOccurrences`). Avec `now` à 07:00 passé, c'est le lendemain ; avec `now` avancé d'un jour, le plan suit (recalcul quotidien, fonction pure).
+13. **Filtres conserv?s ; cardinalit?s et repli : N-TECH-02 crit?res 6 ? 8.** **Alors** sont ignorées : routine archivée ; routine sans heure (QB-07) ; occurrence couverte par une pause (la première occurrence hors pause est planifiée, aucune si la pause n'a pas de fin) ; occurrence du jour déjà validée (R-03), l'occurrence suivante la remplace ; routine « X fois par semaine » dont le quota est atteint, aucun rappel ces jours-là (même règle que `routinesForDay`). Identifiant `routine:{reminderId}:{dateOccurrence}`.
+14. **Fen?tre et repli : N-TECH-02 crit?re 6.** **Étant donné** une routine tous les 2 jours ou toutes les 2 semaines (R-07), **alors** la prochaine occurrence suit la règle (test par règle).
 
 ### Événements (dette E-01)
 
@@ -55,7 +55,7 @@ Dépend de : R-02, R-05, N-02, N-04, ES-07, E-01 (données déjà livrées). Auc
 
 ### Plafond et couverture
 
-20. **Étant donné** 100 éléments candidats, **alors** les 64 premiers par échéance effective sont gardés ; à égalité, ordre fixe (rappel avant récapitulatif, puis identifiant) ; `total` = 100, `coverage` = `{ state: 'until', until }` avec l'échéance effective du dernier élément gardé. Sous le plafond, `{ state: 'complete' }` ; sans aucun candidat, `{ state: 'empty' }`. Les mots français restent ceux du critère 21 (les identifiants de code sont sans accent).
+20. **Couverture remplac?e par les deux bornes de N-TECH-02, notamment crit?re 12 (minute partiellement gard?e exclue). Texte historique :** **Étant donné** 100 éléments candidats, **alors** les 64 premiers par échéance effective sont gardés ; à égalité, ordre fixe (rappel avant récapitulatif, puis identifiant) ; `total` = 100, `coverage` = `{ state: 'until', until }` avec l'échéance effective du dernier élément gardé. Sous le plafond, `{ state: 'complete' }` ; sans aucun candidat, `{ state: 'empty' }`. Les mots français restent ceux du critère 21 (les identifiants de code sont sans accent).
 21. **Alors** les clés i18n françaises et une fonction de mise en forme testée donnent « Planifiés jusqu'au {date} » (date et heure 24 h), « Tous les rappels sont planifiés » et « Aucun rappel à planifier ». L'écran Réglages > Rappels les affiche avec N-01.
 
 ### Pureté et déterminisme

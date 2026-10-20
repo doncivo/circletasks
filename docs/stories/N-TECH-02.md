@@ -118,6 +118,10 @@ Preuves rouges : `6246cc6b`, calcul pur et cas d'usage, **2/2 en échec : un rap
 
 Projection demandée par Ali : coûts supplémentaires estimés après levier, N-TECH-02 net non positif, N-FIX-02 jusqu'à 0,1 Ko, signature 0, clavier/sélecteur/aperçus 0,5–2,5 Ko, livraison et réserve 1–3 Ko. Marge projetée environ 14–18 Ko après levier, à remplacer par mesures après chaque fusion ; déclenchement immédiat des leviers restants si la projection descend sous 3 Ko. Les paliers migrations/synchro non retenus ne sont pas rouverts.
 
+Adaptation explicite des attentes historiques (aucune assertion retirée) : quotidienne 1 → 7 ; deux avances 2 → 14 ; pause bornée 1 → 5 ; quota atteint 1 → 2 et non atteint 1 → 7 ; intervalle deux jours 1 → 3. QA : changements d'heure 1 → 7 ; pause du jour 1 → 6 ; pause supprimée 1 → 7 ; reprise de quota selon `now`, 1 → 2/6/7 ; plage Pro 1 → 7 avec trois échéances effectives communes le lundi. Égalité de minute au plafond : ancienne minute partiellement gardée remplacée par la minute de `now`, conformément au critère 12. Les tests des autres natures restent inchangés. Contrôle de doublon : préfixe de fixture `ffffffff` plutôt qu'un numéro 999 supposé supérieur à un compteur global ; assertions de déduplication conservées.
+
+Première QA module : **419/419 dans 27 fichiers**, couverture coupée. Les scénarios nouveaux de calcul pur et cas d'usage sont verts ; le faux conserve les rappels sonnés, donc reprise à deux jours **scheduled 2, kept 5, cancelled 2**. Validation finale élargie, lint, revue, bundle et CI encore attendus.
+
 | Élément | Valeur |
 |---|---|
 | Départ de référence (octets gzip, seuil 358 400) | |
