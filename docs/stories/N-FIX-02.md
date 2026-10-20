@@ -1,6 +1,6 @@
 # N-FIX-02 — Corps de notification avec heure, espace et date : un constructeur unique testé sur le texte final
 
-Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B10), après N-TECH-02** (même dossier `src/features/reminders` et même budget de départ : jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **3 h** (audit B10), **alerte à Ali au-delà de 4,5 h (+50 %)** · Statut : en cours, passe product-owner du 2026-10-20 après fusion de N-TECH-02
+Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B10), après N-TECH-02** (même dossier `src/features/reminders` et même budget de départ : jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **3 h** (audit B10), **alerte à Ali au-delà de 4,5 h (+50 %)** · Statut : fait, code vérifié et fusionné par #68 le 2026-10-20
 Correctif sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-18). Source : docs/audit-1.0.md, ligne B10. Règles de CLAUDE.md : les rappels sont émis sur l'iPhone uniquement ; textes dans `src/i18n`, heures en 24 h ; règles métier dans `src/domain`.
 Dépend de : N-01, N-03, N-TECH-02 (pour la marge de bundle, voir ci-dessous). Touche `src/features/reminders/notificationTexts.ts`, `replanNotifications.ts` (contenu du dictionnaire de recherche seulement), `src/i18n/fr.notifications.ts` et `en.notifications.ts`, un nouveau module de `src/domain`, et trois fichiers de tests existants. Ne touche ni le planificateur, ni `src/db`, ni Swift, ni Rust.
 
@@ -112,6 +112,8 @@ Découpage : 0,75 + 0,5 + 1 + 0,5 + 0,25 = 3 h.
 - Clôture refusée si un critère manque : le product-owner vérifie les 28 critères avant « fait ».
 
 ## Preuves (à remplir par l'agent)
+
+Clôture vérifiée le 2026-10-20 : #68 fusionnée dans `main` **`f06bdee5`**, tête **`adbfd13f`**. Runs **39429974799 et 39429984825**, **48 contrôles verts**, suite complète avec couverture active ; lint, typage et revue approuvés. Bundle mesuré après fusion sur main : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, net **−38** depuis `e64e0148`. Aucun essai physique revendiqué ; le rappel décalé réel reste dans le guide du lot IPA.
 
 Passe product-owner consignée avant code. **Rouge `2b77799c` : 26/26 corps finaux en échec**, premier attendu `09:00 · Pro`, reçu `À l’heure` ; aucune erreur de compilation utilisée comme preuve. Bundle de ce commit : **57/57, 338 481 normalisés, 338 433 bruts**, marge **19 919**.
 
