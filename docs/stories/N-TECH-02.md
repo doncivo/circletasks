@@ -141,6 +141,8 @@ Mesure après `b7a40514` : **338 466 octets normalisés, 338 428 bruts, marge 19
 
 **Revue finale approuvée le 2026-10-20**, après correction de R1 et relecture du diff à froid. Budget net non positif, six modules retirés de la liste exacte, aucun ajout ni changement de seuil, PC et faux navigateur couverts. La story reste **en validation** jusqu'à la suite complète avec couverture en CI, fusion puis mesure sur `main`. Aucun essai physique revendiqué. Temps actif à cette passe inférieur à l'estimation de 5 h ; aucune décision rouverte.
 
+Complément CI sur `dc9e22d1`, PR #67 : run `39423463377`, Vitest node 3/5, **970 verts / 1 rouge**, test de mise au calme `restoreQa.reminders` critère 6. Reproduction locale identique (1 rouge / 1 vert) : l'attente fixe de vingt microtâches ne prouve pas que le module différé et le drainage ont démarré. Signal d'entrée du faux `drain` attendu explicitement ; aucun délai ni timeout changé, assertions de restauration inchangées. **10/10 verts dans trois fichiers** après correction, lint vert ; relecture approuvée de ce complément, CI complète à repasser sur le code modifié. Bundle après `dc9e22d1` avant son push : **57/57, 338 481**, brut 338 433.
+
 ## Écarts
 
 (aucun à ce jour)
