@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### N-IOS-FIX-01 — reprise des aperçus masqués (2026-10-20)
+
+Correctif de la branche existante remis sur main puis isolé du départ : textes de remplacement par catégorie et explication iPhone, champ natif facultatif. Rouge de frontière `1ed328c3`, correctif `e3cbfa4c` ; 344 tests du module, 19 tests de frontière, 9 contrôles Rust, lint, typage et revue distincte verts. CI, bundle final, compilation Swift et essai sur écran verrouillé encore requis ; aucune clôture appareil revendiquée.
+
 ### CI-SEC-01 : audit TLS rouge du 2026-10-21
 
 **Résolu et vérifié #73**, main **9baff642**, tête **f1eb69f4**, runs **39554560617 / 39554565334**, **48 CI verts** dont audit et garde RSA, revue approuvée. Dépendances corrigées 0.103.16 / 1.0.10 ; bundle main **58/58, 338 443 normalisés, marge 19 957**. Les rouges suivants sont historiques. Signature de livraison encore ouverte.
