@@ -39,7 +39,7 @@ describe('Y-IOS-07 : rotation locale et origine du refus', () => {
     d.folder.setAvailability(d.id, file, 'cloud');
     d.folder.armFaults({ name: 'aucune-lecture-pour-ecrire', faults: [
       { id: 'read-head', op: 'read', file: `devices/${SELF}/${file}`, nth: 1, effect: 'error', code: 'io' },
-      { id: 'hydrate-head', op: 'hydrate', file: `devices/${SELF}/${file}`, nth: 1, effect: 'error', code: 'io' },
+      { id: 'hydrate-head', op: 'hydrate', file: `devices/${SELF}/${file}`, nth: 1, effect: 'download-error' },
     ] });
     const outcome = await publishOutbox(deps, head.epoch, head, 7);
     expect(outcome.error).toBeNull();
