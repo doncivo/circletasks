@@ -9,7 +9,7 @@ describe('N-TECH-02 : couverture réelle des routines', () => {
   const reminder = {
     id: '22000000-0000-4000-8000-000000000001', targetType: 'routine', targetId: routine.id,
     offsetMin: 0, deletedAt: null,
-  } as Reminder;
+  } as unknown as Reminder;
   const plan = (now: string, over: Partial<NotificationPlanInput> = {}) => planNotifications({
     now: asLocalDateTime(now), tasks: [], routines: [routine], routinePauses: [], routineLogs: [], events: [],
     reminders: [reminder], spaces: [{ id: routine.spaceId, quietHours: [] }],
@@ -51,7 +51,7 @@ describe('N-TECH-02 : couverture réelle des routines', () => {
   });
 
   it.each([false, true])('plafond et égalité de minute : allSame=%s', allSame => {
-    const tasks = Array.from({ length: 70 }, (_, i) => ({ id: `11000000-0000-4000-8000-${String(i).padStart(12, '0')}`, spaceId: routine.spaceId, title: 'Tâche', date: '2026-10-08', time: allSame || i < 60 ? '08:00' : '09:00', status: 'todo', someday: false, deletedAt: null }) as Task);
+    const tasks = Array.from({ length: 70 }, (_, i) => ({ id: `11000000-0000-4000-8000-${String(i).padStart(12, '0')}`, spaceId: routine.spaceId, title: 'Tâche', date: '2026-10-08', time: allSame || i < 60 ? '08:00' : '09:00', status: 'todo', someday: false, deletedAt: null }) as unknown as Task);
     const reminders = tasks.map((task, i) => ({ ...reminder, id: `22000000-0000-4000-8000-${String(i).padStart(12, '0')}`, targetType: 'task', targetId: task.id }) as Reminder);
     const result = plan('2026-10-07T10:00', { routines: [], tasks, reminders });
     expect(result.items).toHaveLength(64);
@@ -59,7 +59,7 @@ describe('N-TECH-02 : couverture réelle des routines', () => {
   });
 
   it('une tâche lointaine ne prolonge pas artificiellement la couverture des routines', () => {
-    const task = { id: '11000000-0000-4000-8000-000000000001', spaceId: routine.spaceId, title: 'Tâche', date: '2026-10-20', time: '09:00', status: 'todo', someday: false, deletedAt: null } as Task;
+    const task = { id: '11000000-0000-4000-8000-000000000001', spaceId: routine.spaceId, title: 'Tâche', date: '2026-10-20', time: '09:00', status: 'todo', someday: false, deletedAt: null } as unknown as Task;
     const result = plan('2026-10-07T10:00', { tasks: [task], reminders: [reminder, { ...reminder, id: '22000000-0000-4000-8000-000000000002', targetType: 'task', targetId: task.id } as Reminder] });
     expect(result.items).toHaveLength(8);
     expect(result.coverage).toEqual({ state: 'until', until: '2026-10-14T07:00' });

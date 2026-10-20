@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — N-TECH-02, mesures et preuves rouges
+
+Levier isolé `import()` de `replanNotifications` : départ 343 463 → 338 381 octets normalisés, gain 5 082, marge 20 019 ; six modules sortis de la garde, aucun ajouté. Brouillon retiré avant les tests rouges. `6246cc6b` : calcul pur et cas d'usage échouent chacun sur un rappel au lieu de sept ; `1be2b700` ajoute les bornes, l'équité et l'échec de chargement. Une fixture incomplète a empêché le build TypeScript de la première mesure intermédiaire : cast de fixture corrigé, aucun seuil ni test contourné. Correctif métier encore en cours.
+
 ## 2026-10-20 — fusion de Y-IOS-07, ouverture N-TECH-02
 
 Y-IOS-07 fusionnée par #66 dans `main` `51c6eb07`, tête finale `f7429d75`. Runs `39394538755` et `39394543966` : 48 contrôles verts avec couverture, dont le test de rafale SQL corrigé dans les deux exécutions ; revue consignée. Bundle sur `main` : **56/56, 343 463 octets normalisés, 343 425 bruts, marge 14 937**. Observation réelle d'éviction réservée au lot IPA.

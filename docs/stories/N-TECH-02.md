@@ -112,6 +112,12 @@ Découpage : 0,5 + 1 + 1,5 + 1 + 0,5 + 0,5 de réserve de relecture = 5 h.
 
 ## Preuves (à remplir par l'agent)
 
+Mesures du 2026-10-20 : référence après `e576aba6`, **56/56, 343 463 octets normalisés**. Essai isolé, non conservé : seul import dynamique de `replanNotifications`, **338 381 octets**, gain **5 082**, marge **20 019**. La garde signale exactement six modules sortis (planificateur, actions domaine, récapitulatifs et leurs textes), sans module entrant ; ces sorties seront retirées de la liste lors du correctif réel, avec assertions hors départ. Aucun seuil changé.
+
+Preuves rouges : `6246cc6b`, calcul pur et cas d'usage, **2/2 en échec : un rappel au lieu de sept** ; puis `1be2b700`, bornes exactes, équité, égalités de minute, tâche lointaine et chargement du bloc en échec. Les six scénarios de bornes échouent avant correction ; le scénario de chargement rend à tort `planned` au lieu de l'échec attendu. Le premier build de mesure des tests rouges a révélé un cast de fixture incomplet refusé par TypeScript : correction de fixture uniquement, sans changement métier, avant nouvelle mesure. Pas de preuve verte revendiquée à ce stade.
+
+Projection demandée par Ali : coûts supplémentaires estimés après levier, N-TECH-02 net non positif, N-FIX-02 jusqu'à 0,1 Ko, signature 0, clavier/sélecteur/aperçus 0,5–2,5 Ko, livraison et réserve 1–3 Ko. Marge projetée environ 14–18 Ko après levier, à remplacer par mesures après chaque fusion ; déclenchement immédiat des leviers restants si la projection descend sous 3 Ko. Les paliers migrations/synchro non retenus ne sont pas rouverts.
+
 | Élément | Valeur |
 |---|---|
 | Départ de référence (octets gzip, seuil 358 400) | |
