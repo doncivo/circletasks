@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — fusion de N-FIX-02, remise de CI-SEC-01 sur main
+
+#68 fusionnée dans `main` `f06bdee5`, tête `adbfd13f` : runs **39429974799 et 39429984825**, **48 contrôles verts** avec couverture, revue approuvée. Bundle sur main après fusion : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, net −38. B10 clôturé côté code vérifié ; essai réel du rappel décalé réservé à l'IPA.
+
+CI-SEC-01 remise sur ce main avant premier push : conflits du seul journal résolus en conservant les deux séries de preuves, aucun conflit de code ; rouge rebasé `a63dfbc9`, correctif `e1643aef`, revue `9f15c037`. Blobs du test et du workflow rouges identiques à ceux exécutés avant rebase. C-FIX-01 est préparée dans le dossier indépendant des checklists, avec trois preuves rouges à 440/393/1440 px puis trois vertes ; sa validation et sa fusion attendent son tour après CI-SEC-01. Aucune preuve physique de clavier revendiquée.
+
 ## 2026-10-20 — ouverture CI-SEC-01 pendant la CI de N-FIX-02
 
 N-FIX-02 #68 est en CI sur ses propres fichiers. Passe product-owner CI-SEC-01 (3 h actives, alerte 4,5 h) : compilation NSIS et front sans clé updater, étape de signature distincte liée à la version, vérification et publication conservées. Périmètre indépendant des rappels ; remise sur main après fusion de #68 avant push. Fiche et garde de portée écrites avant correctif, aucune clé réelle utilisée ni affichée.
