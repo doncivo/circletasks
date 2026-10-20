@@ -2,6 +2,8 @@
 
 ## 2026-10-20 — reprise N-IOS-FIX-01 sur la branche existante
 
+Mesure préparatoire : **58/58, 338 464 normalisés, 338 401 bruts, marge 19 936**, coût **21 octets**, catalogues hors départ et garde inchangée. Premier build local refusé car le cache de l'ancien worktree ne contenait pas le worker Tesseract ; copie complète des dépendances vérifiées du dépôt, puis contrôle réussi. Ce n'est pas une relance d'un test instable : la dépendance manquante est corrigée, sans modifier les tests ou les seuils. Mesure finale après remise sur main requise avant push.
+
 `n-ios-apercus` conservée, rebase du commit historique sur main après #69 (`11ec2744`), seul conflit de journal résolu en gardant les deux historiques. Textes nouveaux isolés dans leurs catalogues à la demande, garde hors du départ ; catégories sans titre utilisateur ni `%`, aide simple réservée à l'iPhone. **48 tests ciblés**, **344 tests du module**, **9 contrôles Rust**, lint global et typage verts. Frontière JS/natif : rouge `1ed328c3` reconstruit sur l'ancien adaptateur (champ absent), correctif `e3cbfa4c`, puis **19/19 verts**, dont l'appel historique sans champ. Aucun échec de main nouveau revendiqué. Revue distincte approuvée côté code ; remise sur main après Y-IOS-06, bundle, CI et compilation Swift du lot encore requis, essai réel des aperçus ouvert. Estimation d'intégration 2 h actives, alerte 3 h.
 
 ## 2026-10-21 — audit TLS, complément CI-SEC-01
