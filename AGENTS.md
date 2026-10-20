@@ -4,6 +4,8 @@ Lis d'abord `CLAUDE.md` (stack, commandes, règles d'architecture) puis `docs/re
 
 ## Règles permanentes
 
+- Après chaque compaction du contexte, relis `AGENTS.md`, `CLAUDE.md` et `docs/reprise-codex.md` avant de reprendre ; distingue les décisions déjà tranchées des états historiques.
+
 - Ne désactive, ne saute et ne retarde jamais un test instable. Cherche la cause, corrige-la, note cause et correctif dans `docs/journal.md`. Aucun délai ajouté, aucun timeout allongé, aucune relance automatique.
 - Ne relâche jamais un seuil de taille ni de couverture pour faire passer un test. Le plafond du bundle de départ (`tests/bundle/startBundle.test.ts`, 358 400 octets gzip) et le seuil de couverture de `src/domain` (80 %) ne bougent pas.
 - Aucune défaillance silencieuse. Toute erreur durable est visible dans l'app (ligne d'état dans Réglages, écran Détails, bandeau A-09), persistante après redémarrage, effacée seulement au succès. Un journal technique seul ne suffit jamais.

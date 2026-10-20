@@ -2,6 +2,8 @@
 
 ## 2026-10-20 — ouverture Y-IOS-06
 
+Rouge `2060194` : 3/3 échecs de source avant correctif. Vert `c2586009` : **40/40 tests du module sync_bookmark**, dont les trois gardes ; lint global et typage verts. Revue distincte du diff à froid : garde appelée sur le fil principal avant réservation, aucune écriture de la référence précédente en cas de refus, callbacks du sélecteur protégés avant réponse, annulation de confirmation en arrière-plan conservée. Revue du code approuvée ; compilation Swift, CI complète, bundle et critère physique restent ouverts. Le contrôle facultatif `cargo fmt --check` révèle un formatage historique non conforme dès build.rs et dans les autres modules ; aucun reformatage global ajouté à cette story.
+
 Passe product-owner des gardes natives, dossier indépendant du front : premier plan, interaction libre, présentateur attaché et sans transition ; délégué du sélecteur à réponse unique, annulation après fermeture interactive. Contrat, codes et commandes sans échéance conservés. Estimation 3 h actives, alerte 4,5 h (total C-FIX-01 + Y-IOS-06 : 5 h). Contrôles de source Rust écrits avant correctif ; ils ne remplacent ni la compilation Swift du lot unique ni les essais d'interface d'Ali. Fusion après C-FIX-01, aucun fichier utilisateur réel consulté.
 
 ## 2026-10-20 — CI-SEC-01 fusionnée, remise de C-FIX-01 sur main
