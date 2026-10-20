@@ -1,5 +1,19 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Point d'arrêt du 2026-10-20 — prioritaire sur l'historique ci-dessous
+
+Après chaque compaction, relire AGENTS.md, CLAUDE.md et ce point de reprise dans le worktree actif avant de travailler. Le checkout racine `passation-codex` est ancien et contient des modifications personnelles à conserver.
+
+**Arrêt demandé par la règle d'Ali, cas 2 : état faux confirmé.** Audit préparatoire sur branche `rel-02-audit`, worktree `.claude/worktrees/rel-02-audit`. Preuve rouge **`016dbd04`**, `tests/unit/sync/hostile/mixedOldEpochDeletion.test.ts` : refus `io`, puis suppression partielle d'une ancienne époque ; un substitut reste, mais l'interface dit **« À jour · à l'instant »**, sans cause persistée. Test ciblé rouge, lint vert, aucune correction fonctionnelle. Complément de **B5 / Y-IOS-02-FIX-01**, sans nouvelle story (décision déjà prise pour les substituts). Voir sa fiche, l'audit et le journal. Ne pas lancer de compilation iPhone ou déclarer le lot livré pendant cet arrêt.
+
+Main **`44441dbe`** : #65 B5 initiale, #66 Y-IOS-07, #67 N-TECH-02, #68 N-FIX-02, #69 CI-SEC-01, #70 C-FIX-01 fusionnées. Dernière mesure après #70 : **58/58, 338 443 normalisés, 338 387 bruts, marge 19 957**. #70 tête `6f2a66be`, runs 39468511359 / 39468517620, 48 contrôles verts ; clavier physique ouvert. Les preuves B5 initiales sont historiques et n'incluent pas le nouveau cas partiel.
+
+**Y-IOS-06 #71**, branche `y-ios-06`, tête **`004d45a1`** : les trois rouges demandés sont verts, puis **371 tests Rust sync verts**, lint, typage, revue et **48 CI verts**. Rouge initial publié `546bee4e`, correctif `f535596f`, blobs identiques aux preuves avant rebase. Le contrat voisin sync_ios_y02 a été adapté à la garde factorisée après un rouge CI ; aucune assertion Annuler ou premier plan supprimée. PR non fusionnée à cause de l'arrêt global. Sa branche contient la règle de relecture après compaction et le guide `docs/essais-iphone.md` réécrit avec les cinq cas déjà cassés en tête, annexes et I-06 A1 à A10. UIKit reste à vérifier avec l'unique lot iPhone.
+
+**N-IOS-FIX-01**, branche existante `n-ios-apercus`, tête préparatoire **`c068df93`**, non publiée : texte facultatif d'aperçu masqué, aide iPhone, catalogues propres hors départ. 344 tests du module, 19 adaptateur, 9 Rust, lint, typage et revue verts ; 35 contrôles ciblés verts après rebase intermédiaire. Budget préparatoire **338 464**, marge **19 936**, coût 21 octets. Rebase sur main après #71, mesure finale, PR/CI/fusion encore requis. Identifiants de preuve à remapper au rebase final ; les anciens restent consignés dans la fiche.
+
+Suite après traitement du cas d'arrêt : terminer B5, #71 puis N-IOS-FIX-01 ; guide et unique IPA ; REL-01, REL-02, REL-03. `%`, clavier, gardes, aperçus, B5 et I-06 ont des preuves physiques ouvertes. REL-02 est seulement préparée (npm 0 avis, exception RSA documentée non compilée, pas de conformité finale). Aucun worktree supplémentaire supprimé ; données personnelles hors dépôt jamais consultées.
+
 Écrit à la passation de Claude Code vers Codex (décision d'Ali du 2026-10-19). Règles de travail : `AGENTS.md`. Plan de la 1.0 : `docs/backlog.md` section « Palier 1.0 », audit `docs/audit-1.0.md`, décisions `docs/decisions.md`.
 
 ## Suivi du 2026-10-20 — à lire avant l'historique

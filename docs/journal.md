@@ -2,6 +2,14 @@
 
 ## 2026-10-20 — ouverture Y-IOS-06
 
+## 2026-10-20 — arrêt du lot, complément B5 confirmé par le banc
+
+La vérification préparatoire REL-02 reproduit l'hypothèse : premier cycle refus de suppression visible, deuxième cycle succès partiel avec ancien substitut toujours listé, mais **« À jour · à l'instant »**, aucune cause persistée et aucun fichier en attente. Preuve rouge **`016dbd04`**, un test en échec (couverture coupée), lint ciblé vert. Compteur agrégé pris pour un succès complet dans `deleteOwnTracked`. Complément rattaché à **Y-IOS-02-FIX-01**, sans nouvelle story conformément à la décision d'Ali sur B5 ; fiche, backlog et audit actualisés. Arrêt au titre du cas 2, aucun correctif fonctionnel ni compilation iPhone.
+
+Au point d'arrêt : main `44441dbe` (#70), bundle après fusion **58/58, 338 443 normalisés, marge 19 957**. Y-IOS-06 : trois preuves initiales vertes, **371 Rust sync verts**, PR #71 tête `004d45a1`, **48 contrôles CI verts**, non fusionnée pendant cet arrêt. `n-ios-apercus` reste préparée et non publiée ; suite du palier et preuves physiques toujours ouvertes. Aucun worktree supplémentaire supprimé.
+
+## 2026-10-20 — préparation des audits REL-02
+
 CI #71 rouge sur `sync_ios_y02::y_ios_02_13` (run `39470831050`, job `118794148125`) : la QA locale initiale du seul fichier sync_bookmark n'avait pas inclus ce contrat voisin. L'assertion attendait encore le premier plan directement dans `confirm` ; elle suit maintenant l'appel à la garde commune et vérifie son refus avant création de l'alerte. Styles Annuler/confirmer, action préférée et annulation en arrière-plan conservés ; les trois tests initiaux ne changent pas. Après élargissement au module sync : **371 tests verts, zéro échec, deux ignorés préexistants**, aucun délai ni timeout changé. Revue du complément approuvée, nouvelle CI et mesure avant push requises.
 
 #70 fusionnée dans main `44441dbe`, tête `6f2a66be`, runs **39468511359 et 39468517620**, **48 contrôles verts** avec couverture, lint, typage et revue approuvés. Bundle après fusion : **58/58, 338 443 normalisés, 338 387 bruts, marge 19 957**, coût nul ; clavier physique ouvert. Y-IOS-06 remise sur ce main avant premier push : rouge `546bee4e`, correctif `f535596f`, blobs identiques aux preuves exécutées avant rebase, aucun conflit de code. Guide d'essais réécrit avec les cinq cas déjà cassés en tête, annexes et I-06 ; chaque ligne décrit une action et son résultat attendu. CI complète et mesure de la branche encore requises.

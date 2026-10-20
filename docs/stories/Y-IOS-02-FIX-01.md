@@ -1,5 +1,19 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
+## Complément B5 du 2026-10-20 — arrêt convenu, état faux reproduit
+
+**Statut du complément : rouge, non corrigé, bloquant avant publication.** Rattaché à cette story existante, conformément à la décision d'Ali d'étendre B5 aux substituts persistants sans nouvelle story. Estimation initiale du complément : **2 h actives**, alerte à **3 h**, à compter de la reprise d'implémentation.
+
+Ce qu'Ali verrait dans ce cas du banc : après un premier refus de suppression, un nouvel essai retire un fichier mais laisse l'autre substitut ; la ligne affiche pourtant **« À jour · à l'instant »**, sans avertissement, et la cause persistée est effacée.
+
+Preuve rouge **`016dbd04`**, `tests/unit/sync/hostile/mixedOldEpochDeletion.test.ts` : **un test, un échec**, couverture coupée. Le service complet et son constructeur de texte sont utilisés avec le banc hostile déjà établi : ancienne époque contenant deux instantanés, `removeLeavesPlaceholder: true`, substitut du second, refus `io` ponctuel sur le premier. Le premier cycle signale bien l'erreur. Au deuxième, le premier fichier part, le second reste ; résultat observé : `line = À jour · à l'instant`, `ownDelete = []`, `pending = []`, `ownDeleteFailure = null`. Aucune donnée utilisateur réelle consultée, aucun essai physique iPhone revendiqué.
+
+Cause localisée : `deleteOwnTracked` traite un compteur agrégé strictement positif comme un succès pour toutes les références et efface la cause antérieure ; pour une référence d'époque, ce compteur peut représenter une seule partie de ses fichiers. Les anciens fichiers évincés ne figurent pas dans les fichiers attendus de l'état courant, donc aucun autre avertissement ne compense cette perte de cause.
+
+Acceptation du complément : conserver une cause visible et persistante tant que la suppression complète n'est pas prouvée ; le cas partiel doit devenir vert sans modifier son oracle. Le succès complet doit toujours résoudre la cause, et les retours tardifs déjà couverts par B5 doivent rester signalés. Aucun relâchement de budget, de couverture, de protocole ou de la règle « l'écriture ne lit jamais iCloud ». Garder les trois passes QA/revue/CI et le critère physique 18 ouverts jusqu'aux preuves. **Aucun correctif fonctionnel appliqué pendant cet arrêt.**
+
+## Historique du correctif initial fusionné dans #65
+
 Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : code fusionné et vérifié le 2026-10-20, PR #65 ; essai appareil en attente (critère 18)
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD ; ajoute un avertissement de plus à l'écran de Détails et aux bandeaux A-09.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 (bandeaux), Y-10-FIX-01 (aucune dépendance de code, mais même écran : fusionner dans l'ordre de la phase). Ne bloque aucune autre story.
