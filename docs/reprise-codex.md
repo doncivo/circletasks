@@ -1,6 +1,20 @@
-# Reprise par Codex — état exact au 2026-10-19
+# Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
 Écrit à la passation de Claude Code vers Codex (décision d'Ali du 2026-10-19). Règles de travail : `AGENTS.md`. Plan de la 1.0 : `docs/backlog.md` section « Palier 1.0 », audit `docs/audit-1.0.md`, décisions `docs/decisions.md`.
+
+## Suivi du 2026-10-20 — à lire avant l'historique
+
+Après chaque compaction, relire `AGENTS.md`, `CLAUDE.md` et ce fichier avant de travailler (règle d'Ali du 2026-10-20). Le checkout racine `passation-codex` peut être ancien : lire aussi les documents du worktree de validation de main à jour et conserver les modifications personnelles du checkout racine.
+
+Main vérifié : `ea596996`, après **#65 B5**, **#66 Y-IOS-07**, **#67 N-TECH-02**, **#68 N-FIX-02**, **#69 CI-SEC-01**. Chaque fusion a attendu sa CI complète et sa revue consignée ; bundle remesuré sur main à chaque fois. Dernière mesure : **58/58, 338 443 octets normalisés, marge 19 957**, plafond 358 400 inchangé. Le chargement différé des rappels a rendu environ 5 Ko de marge. B5 conserve son critère physique 18 ouvert.
+
+**C-FIX-01 #70** : code clavier vérifié, trois preuves rouges puis vertes, 91 tests du module, lint/typage et revue approuvés. Tête `6f2a66be` en CI : deux causes d'instabilité des tests corrigées et consignées dans sa fiche et le journal, aucune temporisation ou assertion affaiblie. Son vrai clavier reste à vérifier sur l'IPA. Attendre la CI verte avant fusion, puis mesure sur main.
+
+**Y-IOS-06** : les trois tests de source rouges demandés par Ali sont devenus verts ; **40/40 tests du module Rust**, lint, typage et revue approuvés. Travail non publié sur sa branche, préparé après C-FIX-01 ; fusion dans cet ordre, après CI complète. Les gardes natives et le délégué à réponse unique ne sont pas encore vérifiés par exécution de UIKit. `docs/essais-iphone.md` a été réécrit : cinq cas déjà cassés en tête, puis annexes et I-06 A1 à A10, chaque ligne avec action et résultat attendu. A9 reste explicitement ouvert sans son protocole appareil.
+
+**N-IOS-FIX-01** : branche existante `n-ios-apercus` conservée, tête préparatoire `c6e5d0c5`, non publiée. Texte de remplacement facultatif, aide iPhone et catalogues propres hors du départ ; rouge de frontière `1ed328c3`, correctif `e3cbfa4c`, 344 tests du module + 19 adaptateur + 9 Rust, lint, typage et revue verts. Budget préparatoire **338 464**, marge **19 936**, coût 21 octets. Rebase après Y-IOS-06, mesure finale, PR/CI et fusion encore requis. Le cache local incomplet du vieux worktree a été complété avant sa mesure verte.
+
+Suite inchangée : terminer ces fusions ; vérifier le guide puis une seule compilation iPhone du lot et publication de l'IPA ; REL-01, REL-02, REL-03. Les preuves physiques B5, clavier, sélecteur, aperçus, `%` et I-06 restent ouvertes. Ne s'arrêter que pour les quatre cas convenus, pas pour un compte rendu ; deux lignes par story terminée et enchaînement. Aucun worktree supplémentaire supprimé pendant ce suivi ; les fichiers personnels hors dépôt restent intouchables.
 
 ## Mise à jour de reprise du 2026-10-19 — quatre PR fusionnées
 
