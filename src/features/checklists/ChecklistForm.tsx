@@ -14,7 +14,7 @@ export interface ChecklistFormProps {
   /** Espace proposé à la création (ES-02 : filtre actif, sinon Pro). */
   readonly initialSpaceId: SpaceId;
   /** Référence transmise au piège de focus de l'hôte, focalisée dans le geste d'ouverture. */
-  readonly titleRef: RefObject<HTMLInputElement | null>;
+  readonly titleRef: RefObject<HTMLInputElement>;
   /** Enregistre ; renvoie vrai si c'est fait (la feuille se ferme alors), faux sinon (elle reste ouverte). */
   readonly onSubmit: (input: NewChecklistInput) => Promise<boolean>;
   readonly onClose: () => void;

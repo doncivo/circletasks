@@ -6,6 +6,8 @@ Pendant les validations de publication, passe product-owner C-FIX-01 sur le doss
 
 C-FIX-01 rouge `ee2b51ab` : trois échecs synchrones, focus reçu sur « Fermer » au lieu du titre. La référence du titre est désormais donnée au piège de focus de son hôte en création, comme Q-05 ; la minuterie disparaît. Le test couvre aussi la restitution du focus et a refusé une première variante `autoFocus` qui capturait le mauvais élément de retour. Version par `initialFocusRef` : **3/3**, puis **91/91 tests du module**, lint global vert ; aucun texte ni changement de maquette. Typage, revue, remise sur main, bundle et CI encore requis, clavier physique réservé au lot IPA.
 
+C-FIX-01 : typage final vert après l'annotation React 18 `RefObject<HTMLInputElement>` ; revue distincte du diff approuvée côté code. La référence est stable, donnée au piège seulement à la création, et les deux sens du focus sont vérifiés sans attente. Remise sur main après CI-SEC-01, mesure et CI complète requises avant fusion ; la montée réelle du clavier garde son essai physique ouvert.
+
 ## 2026-10-20 — fusion de N-FIX-02, remise de CI-SEC-01 sur main
 
 #68 fusionnée dans `main` `f06bdee5`, tête `adbfd13f` : runs **39429974799 et 39429984825**, **48 contrôles verts** avec couverture, revue approuvée. Bundle sur main après fusion : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, net −38. B10 clôturé côté code vérifié ; essai réel du rappel décalé réservé à l'IPA.
