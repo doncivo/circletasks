@@ -24,7 +24,7 @@ import {
  * Implémentation Tauri de `SyncPlatform` (ADR 0011, section 11 ; Y-01 critère 18) : **seul** code qui appelle les commandes Rust
  * `sync_*` (contrôlé par un test qui cherche `invoke('sync_` dans `src/`). Aucune donnée n'est gardée ici : ni chemin (Rust ne rend
  * qu'un libellé), ni clé, ni texte du QR, ni saisie. Les rejets Rust `{ code, message }` deviennent des `SyncPlatformError { code }`
- * sans recopie du message ni de l'entrée.
+ * sans recopie du message ni de l'entrée ; seul l'indice fixe `appendBeforeWrite` peut accompagner `cloud-pending`.
  */
 
 /** Appel d'une commande `sync_*` (injectable pour les tests). */
@@ -64,7 +64,7 @@ export interface QrScanner {
 /** `prompt-with-rationale` (Android) et toute valeur inconnue : à demander. */
 const cameraState = (raw: string): CameraPermission => (raw === 'granted' ? 'granted' : raw === 'denied' ? 'denied' : 'prompt');
 
-/** Rejet Rust -> `SyncPlatformError` (code seul ; `io` pour une erreur inconnue). */
+/** Rejet Rust -> code et indice fixe de refus avant écriture ; `io` pour une erreur inconnue. */
 export function toSyncError(error: unknown): SyncPlatformError {
   const appendBeforeWrite = typeof error === 'object' && error !== null && (error as { appendBeforeWrite?: unknown }).appendBeforeWrite === true;
   return new SyncPlatformError(syncErrorCodeOf(error), { appendBeforeWrite });

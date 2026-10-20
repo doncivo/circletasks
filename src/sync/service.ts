@@ -545,6 +545,6 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       const failed = await (await publishRotationModule()).readPublishRotation(options.data.repos);
       if (!finishedOnce && failed) publish({ ...status, phase: failed.code === 'cloud-pending' ? 'waiting-icloud' : 'error', errorCode: failed.code });
     }
-  })().catch((error: unknown) => { readFailed('own-deletion', error); if (!finishedOnce) publish({ ...status, stateUnreadable: true }); });
+  })().catch((error: unknown) => { readFailed('durable-state', error); if (!finishedOnce) publish({ ...status, stateUnreadable: true }); });
   return service;
 }

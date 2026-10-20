@@ -209,4 +209,12 @@ describe('Y-IOS-07 : rotation locale et origine du refus', () => {
     expect(calls).toEqual([2, 3, 3]);
     expect(parsePublishRotation(await d.data.repos.sync.getMeta('publishRotation'))).toMatchObject({ segment: 3 });
   });
+
+  it('un mémo d’une autre époque ne choisit pas la cible et disparaît au succès courant', async () => {
+    await d.data.repos.sync.setMeta('publishRotation', JSON.stringify({ epoch: `e0002-${SELF}`, segment: 7, code: 'io', maxHlc: d.hlc.now() }));
+    const result = await publishOutbox(deps, head.epoch, head, head.segment);
+    expect(result.error).toBeNull();
+    expect(result.head.segment).toBe(head.segment);
+    expect(await d.data.repos.sync.getMeta('publishRotation')).toBeNull();
+  });
 });

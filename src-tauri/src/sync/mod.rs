@@ -179,7 +179,8 @@ impl SyncCode {
 }
 
 /// Rejet d'une commande : `{ code, message }`. Le message est technique et fixe par code : jamais de chemin, de clé ni de recopie de
-/// l'entrée (section 2.3). Les textes affichés viennent de `src/i18n`, choisis par le code.
+/// l'entrée (section 2.3). Seul l'indice fixe optionnel `appendBeforeWrite` peut compléter ce rejet IPC (Y-IOS-07).
+/// Les textes affichés viennent de `src/i18n`, choisis par le code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SyncError {
     #[serde(serialize_with = "serialize_code")]
