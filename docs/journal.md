@@ -8,6 +8,8 @@ Première validation du module après correctif : **419 tests / 27 fichiers vert
 
 N-TECH-02, QA complémentaire **83/83** puis revue du diff à froid : le raccourci PC excluait aussi le faux iPhone disponible dans le navigateur. Test rouge sur `b7a40514`, puis correctif fondé sur la disponibilité, **63/63** dans les deux fichiers revérifiés ; PC indisponible sans lecture et import impossible avec état persistant également couverts. Bundle intermédiaire **338 466**, marge **19 934**, soit −4 997 ; cinq assertions nouvelles du manifeste confondaient dépendances d'un bloc et entrées dynamiques, remplacées par la garde sur leurs sources hors départ. Mesure finale et CI requises avant fusion.
 
+Version revue `6d534fdd` : **bundle 57/57, 338 481 normalisés, 338 433 bruts, marge 19 919**, gain net **4 982** depuis main ; typecheck du build et lint verts. Revue distincte approuvée dans la fiche, B9 et backlog en validation, pas « fait » avant CI complète et fusion. Encodage des notes de N-TECH-01 et de la décision corrigé (passage de texte accentué par l'entrée standard de Node sous PowerShell) ; prochaines éditions françaises par patch UTF-8. Aucune donnée utilisateur consultée.
+
 ## 2026-10-20 — fusion de Y-IOS-07, ouverture N-TECH-02
 
 Y-IOS-07 fusionnée par #66 dans `main` `51c6eb07`, tête finale `f7429d75`. Runs `39394538755` et `39394543966` : 48 contrôles verts avec couverture, dont le test de rafale SQL corrigé dans les deux exécutions ; revue consignée. Bundle sur `main` : **56/56, 343 463 octets normalisés, 343 425 bruts, marge 14 937**. Observation réelle d'éviction réservée au lot IPA.

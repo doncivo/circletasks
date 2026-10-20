@@ -130,14 +130,16 @@ Mesure après `b7a40514` : **338 466 octets normalisés, 338 428 bruts, marge 19
 
 | Élément | Valeur |
 |---|---|
-| Départ de référence (octets gzip, seuil 358 400) | |
-| Levier `import()` de `replanNotifications` : départ avant / après | |
-| Critères 15 et 16, rouge avant (commit, assertion) | |
-| Critères 15 et 16, vert après (commit) | |
-| Tableau « ancienne attente → nouvelle attente » (critère 17) | |
-| Critère 25 : bornes divergentes (a) jour 3 et (b) 06:30, rouge puis vert | |
-| Départ après chaque commit (net <= 0) | |
-| Commandes locales et résultats | |
+| Départ de référence (octets gzip, seuil 358 400) | `e576aba6` : 343 463, 56/56 |
+| Levier `import()` de `replanNotifications` : départ avant / après | Essai isolé 343 463 → 338 381, gain 5 082 |
+| Critères 15 et 16, rouge avant (commit, assertion) | `6246cc6b` : deux échecs, un rappel au lieu de sept |
+| Critères 15 et 16, vert après (commit) | `b7a40514` puis `6d534fdd`, calcul et vrai cas d'usage sur faux ; reprise 2 ajoutés / 5 gardés / 2 retirés |
+| Tableau « ancienne attente → nouvelle attente » (critère 17) | Détail ci-dessus ; aucune assertion retirée |
+| Critère 25 : bornes divergentes (a) jour 3 et (b) 06:30, rouge puis vert | `1be2b700` rouge ; calculs et couverture des routines dans `6d534fdd` verts, jour trois au 10-10 07:00, avance 30 au 10-14 06:30 |
+| Départ après chaque commit (net <= 0) | Commits de tests `6246cc6b`, `1be2b700`, `50f74c5e` : mesures tentées mais builds refusés par casts de fixtures, aucune valeur inventée ; runtime inchangé. `b7a40514` : 338 466 (assertions nouvelles du manifeste corrigées ensuite). `6d534fdd` : **338 481**, brut 338 433, marge **19 919**, **57/57 verts**, net **−4 982** ; mesure du commit documentaire suivant encore requise avant push |
+| Commandes locales et résultats | Module 419/27 ; compléments 83/4 puis revue 63/2, couverture coupée. `npm run lint` vert ; typecheck vert dans le build final ; lint des quatre fichiers retouchés après revue vert |
+
+**Revue finale approuvée le 2026-10-20**, après correction de R1 et relecture du diff à froid. Budget net non positif, six modules retirés de la liste exacte, aucun ajout ni changement de seuil, PC et faux navigateur couverts. La story reste **en validation** jusqu'à la suite complète avec couverture en CI, fusion puis mesure sur `main`. Aucun essai physique revendiqué. Temps actif à cette passe inférieur à l'estimation de 5 h ; aucune décision rouverte.
 
 ## Écarts
 
