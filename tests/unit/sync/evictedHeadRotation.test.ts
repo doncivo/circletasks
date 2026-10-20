@@ -17,7 +17,9 @@ beforeEach(async () => {
   await setupFirst(d);
   await d.createTask('Avant éviction');
   await d.cycle();
+  await d.cycle();
   head = (await readJson<DeviceAck>(d.data.repos, META.head))!;
+  expect(head.segment).toBeGreaterThan(0);
   await d.createTask('Après éviction');
   deps = { data: d.data, platform: d.platform, deviceId: d.id, devicePlatform: d.devicePlatform, hlc: d.hlc, clock: d.clock, logger: d.logger, sv: SCHEMA_VERSION, appVersion: '0.3.3' };
 });
