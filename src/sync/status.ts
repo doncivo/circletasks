@@ -90,6 +90,7 @@ export function statusFromFacts(
     /** Y-11 (exigence d'Ali) : réinitialisation lue dans `sync_meta.resetState` ; undefined : lecture impossible, valeur gardée. */
     readonly reset?: SyncResetStatus | null;
     readonly ownDelete?: readonly OwnDeleteFailure[];
+    readonly publishFailure?: SyncErrorCode | null;
     /** Y-TECH-02 : une lecture de fin de cycle (conflits, réintégration, oubli, réinitialisation) a échoué. */
     readonly stateUnreadable?: boolean;
     /** Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours ; null : aucune. */
@@ -119,7 +120,7 @@ export function statusFromFacts(
     ...(unreadable ? { stateUnreadable: true } : {}),
     ...(extra.waitingSince ? { waitingSince: extra.waitingSince } : {}),
     ...repeat,
-    phase,
+    phase: phase === 'idle' && extra.publishFailure ? (extra.publishFailure === 'cloud-pending' ? 'waiting-icloud' : 'error') : phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,
     lastSyncAt: extra.lastSyncAt,
@@ -127,7 +128,7 @@ export function statusFromFacts(
     pendingFiles: facts.pendingFiles,
     conflictsThisWeek: extra.conflictsThisWeek,
     progress: null,
-    errorCode: facts.errorCode,
+    errorCode: facts.errorCode ?? extra.publishFailure ?? null,
     clockAheadDevice: clockAhead ? (clockAhead.deviceId as DeviceId) : null,
   };
 }

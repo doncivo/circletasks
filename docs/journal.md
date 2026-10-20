@@ -1,5 +1,15 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — fusion de B5 et ouverture Y-IOS-07
+
+Y-IOS-02-FIX-01 : PR #65 fusionnée (`095c5e4a`), 48 contrôles CI verts sur `1b908513`, runs `39277457609` et `39277480003`, couverture complète active. Revue consignée dans la fiche. Bundle sur `main` après fusion : 55/55, **342 924 octets normalisés, 342 871 bruts, marge 15 476**. Code vérifié et fusionné ; critère physique encore ouvert jusqu'au lot IPA, jamais déclaré « fait ».
+
+Y-IOS-07, passe product-owner : aucune raison de télécharger pour écrire ; réponse détaillée dans la fiche avant code. Le refus avant écriture porte un indice fixe, car un délai dépassé pendant `append` peut masquer une écriture déjà effectuée. Une rotation maximum, cible persistée et réutilisée en panne, erreur restaurée avant le premier cycle. Estimation 4–6 h actives, alerte à 9 h.
+
+Preuve rouge historique `ad3ae641` : trois `publish-failed { cloud-pending }` pour trois cycles. Preuve complémentaire de rotation `17b14552` : `cloud-pending` au lieu d'un ajout réussi dans `max + 1`. La préparation des nouveaux tests a été corrigée : l'amorce initiale écrit un instantané, donc la tâche du journal est créée après ce cycle ; `hydrate` accepte `download-error`, pas `error`. Aucun délai ni seuil modifié. Premier contrôle du correctif : 46 tests verts sur cinq fichiers (scénario 6, gardes de rotation, adaptateur IPC, plateforme mémoire, segments clos). Rust, arrêts brutaux, lecture/purge, QA complète du module et revue restent en cours.
+
+Preuve distante avant correctif : run `39386547885`, `ad3ae641`, tranche node 4/5 rouge sur le scénario 6 (1 échec, 1 127 tests verts dans cette tranche). Le banc étendu passe ensuite localement : arrêt entre ajout et retrait, dix cycles refusés sans croissance, plusieurs lots avec une seule rotation, aucun appel de lecture ni hydratation sur le chemin d'écriture, lecture sans trou et vingt segments courts conservés avant accusé puis purgés après. Les essais de lecture précisent maintenant le téléchargement simulé (1 s de budget, aucun délai réel) et l'annonce du PC actualise ensemble `stateSeq` et `head.stateSeq` ; les attentes métier sont conservées. Tests Rust dédiés 2/2 verts, puis non-régression `sync_` : 368 verts, aucun nouvel ignore. Lint et typage verts ; QA Vitest du module et parcours navigateur encore en cours, puis revue à froid, bundle et CI finale requis.
+
 ## 2026-10-19 — ouverture Y-IOS-02-FIX-01 étendue
 
 Passe product-owner : B5 réduit et défauts 2/3 connus du banc repris ensemble, après fusion de #62 et #63. Échecs de suppression persistants visibles dans Détails, Réglages et A-09 ; anciens instantanés revenus après suppression et substitut restant couverts par le banc. Estimation 4 à 6 h, arrêt à 9 h. Aucun changement de format ni de `canPublish`. Vérifications physiques regroupées avec l'IPA, jamais déclarées faites avant essai. Scénario rouge historique 4 repris de `c41d5d66` pour preuve sur le `main` courant.

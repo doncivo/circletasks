@@ -1192,6 +1192,12 @@ impl<'a> Store<'a> {
             Ok(bytes) => Some(bytes),
             Err(FsError::NotFound) => None,
             Err(FsError::TooLarge) => return fail(SyncCode::SegmentMismatch),
+            Err(FsError::CloudPending) => {
+                // Aucun octet écrit : le moteur peut ouvrir le segment suivant sans télécharger celui-ci.
+                let mut error = SyncError::new(SyncCode::CloudPending);
+                error.append_before_write = Some(true);
+                return Err(error);
+            }
             Err(error) => return Err(fs_error(error)),
         };
         let first_record = match &existing {

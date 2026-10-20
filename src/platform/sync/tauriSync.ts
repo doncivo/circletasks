@@ -66,7 +66,8 @@ const cameraState = (raw: string): CameraPermission => (raw === 'granted' ? 'gra
 
 /** Rejet Rust -> `SyncPlatformError` (code seul ; `io` pour une erreur inconnue). */
 export function toSyncError(error: unknown): SyncPlatformError {
-  return new SyncPlatformError(syncErrorCodeOf(error));
+  const appendBeforeWrite = typeof error === 'object' && error !== null && (error as { appendBeforeWrite?: unknown }).appendBeforeWrite === true;
+  return new SyncPlatformError(syncErrorCodeOf(error), { appendBeforeWrite });
 }
 
 /** Forme IPC du dossier -> `SyncFolderInfo` (nom du dossier dans `label`). */

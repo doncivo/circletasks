@@ -3,6 +3,7 @@ import { MAX_APPEND_CALL_BYTES, MAX_RECORD_PLAINTEXT_BYTES, SYNC_FORMAT_MAJOR, e
 import { hlcDevice, journalEnvelopeBytes, journalRecordToText, opTextBytes } from '../domain/sync/parse';
 import { syncTable, tableRank, type SyncTable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc } from '../domain/types';
+import type { PublishRotation } from '../domain/sync/publishRotation';
 import { syncErrorCodeOf } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { META, readJson, writeJson } from './meta';
@@ -389,6 +390,14 @@ export interface PublishResult {
  */
 export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: DeviceAck, maxSegment: number): Promise<PublishResult> {
   const { data, platform, deviceId, sv, logger } = deps;
+  const rotationModule = () => import('./publishRotation');
+  let rotation: PublishRotation | null = (await data.repos.sync.getMeta(META.publishRotation)) === null ? null : await (await rotationModule()).readPublishRotation(data.repos);
+  if (rotation && head.epoch === epoch && head.segment >= rotation.segment && head.hlc !== null && head.hlc >= rotation.maxHlc) {
+    // L'intention d'ajout a été résolue après un arrêt ; la tête confirme la publication réussie.
+    await (await rotationModule()).savePublishRotation(data.repos, null);
+    rotation = null;
+  }
+  let rotatedForCloud = false;
   // Rangs des lignes entières réservés avant la lecture (le pilote est sérialisé : toute écriture tamponnée avant est déjà en file et
   // sera vue ; toute écriture tamponnée après a un hlc plus grand).
   // Tâches courtes (Y-05 critère 6) : une grosse file est lue et mise en forme par tranches, la boucle d'événements reprend la main entre deux.
@@ -415,6 +424,7 @@ export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: Device
   const pending = material.entries.filter((e) => !refused.has(e.hlc)).sort((a, b) => (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
   let current: DeviceAck = head.epoch === epoch ? head : { epoch, segment: 0, record: 0, hlc: null, stateSeq: head.stateSeq };
   let segment = current.segment === 0 ? Math.max(1, maxSegment + (maxSegment > 0 ? 1 : 0)) : current.segment;
+  if (rotation?.epoch === epoch && rotation.segment >= segment) segment = rotation.segment;
   let expect = current.segment === 0 || segment !== current.segment ? 0 : current.record;
   let published = 0;
   for (const batch of batches) {
@@ -443,24 +453,43 @@ export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: Device
           }
           await writeJson(repos, META.head, current);
           await writeJson(repos, META.inflight, null);
+          if (rotation !== null) await (await rotationModule()).savePublishRotation(repos, null);
           const times = (await readJson<Record<string, number>>(repos, META.segments)) ?? {};
           await writeJson(repos, META.segments, { ...times, [`${epoch}/${String(current.segment)}`]: deps.clock.nowMs() });
         });
         published += batch.length;
+        rotation = null;
         segment = current.segment;
         expect = current.record;
         break;
       } catch (error) {
         await writeJson(data.repos, META.inflight, null);
         const code = syncErrorCodeOf(error);
+        const beforeWrite = typeof error === 'object' && error !== null && (error as { appendBeforeWrite?: unknown }).appendBeforeWrite === true;
+        if (code === 'cloud-pending' && beforeWrite && !rotatedForCloud && (rotation === null || rotation.epoch !== epoch || rotation.segment === current.segment)) {
+          // Une seule rotation d'éviction pour cet appel entier, distincte des tentatives full/mismatch.
+          rotatedForCloud = true;
+          maxSegment = Math.max(maxSegment, segment);
+          segment = maxSegment + 1;
+          expect = 0;
+          rotation = { epoch, segment, code, maxHlc };
+          await (await rotationModule()).savePublishRotation(data.repos, rotation);
+          logger.log('append-rotate-cloud-pending', { segment });
+          continue;
+        }
         if ((code === 'segment-full' || code === 'segment-mismatch') && attempt < 2) {
           // Segment suivant : max(local, publié, accusés, plus grand fichier listé) + 1 (règle 1).
           attempt += 1;
           maxSegment = Math.max(maxSegment, segment);
           segment = maxSegment + 1;
           expect = 0;
+          if (rotation !== null) {
+            rotation = { epoch, segment, code, maxHlc };
+            await (await rotationModule()).savePublishRotation(data.repos, rotation);
+          }
           continue;
         }
+        if (rotation !== null || rotatedForCloud) await (await rotationModule()).savePublishRotation(data.repos, { epoch, segment, code, maxHlc });
         logger.log('publish-failed', { code });
         return { published, head: current, error: code };
       }

@@ -225,7 +225,7 @@ async function rpc(rooms: Map<string, Room>, request: SimRequest): Promise<SimRe
     }
     return { status: 200, headers: { 'content-type': 'application/json' }, body: encode({ ok: result ?? null }) };
   } catch (error) {
-    if (error instanceof SyncPlatformError) return { status: 200, headers: { 'content-type': 'application/json' }, body: encode({ error: { code: error.code } }) };
+    if (error instanceof SyncPlatformError) return { status: 200, headers: { 'content-type': 'application/json' }, body: encode({ error: { code: error.code, ...(error.appendBeforeWrite ? { appendBeforeWrite: true } : {}) } }) };
     return { status: 200, headers: { 'content-type': 'application/json' }, body: encode({ error: { message: error instanceof Error ? error.message : String(error) } }) };
   }
 }

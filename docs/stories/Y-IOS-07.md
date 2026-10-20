@@ -1,6 +1,6 @@
 # Y-IOS-07 — Segment de tête évincé par iOS : l'ajout au journal ouvre un segment suivant, sans jamais lire iCloud
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) · Agents : **sync-icloud** (`src/sync/publisher.ts`, `src/platform/sync/memory.ts`, tests de synchro) + **desktop-tauri** (`src-tauri/src/sync/store.rs`, tests Rust) · Relecture : code-reviewer · Statut : **à faire** (décision d'Ali du 2026-10-17)
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (avec Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) · Agents : **sync-icloud** (`src/sync/publisher.ts`, `src/platform/sync/memory.ts`, tests de synchro) + **desktop-tauri** (`src-tauri/src/sync/store.rs`, tests Rust) · Relecture : code-reviewer · Statut : **en cours** (2026-10-20), correctif local et preuves du banc verts ; QA, revue et CI finale encore dues
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-17). Défaut nouveau n° 1 du rapport de Y-TECH-03 (section « Défauts révélés »), classé bloquant, **ajouté à l'audit 1.0 comme B16** (2026-10-17). Aucun écart au PRD.
 Dépend de : Y-TECH-03 (fait : banc, plan de pannes, `memory.ts` et `fake_bookmark` hostiles), Y-TECH-02 (champ `closed` de `state.ctx`, ADR 0011 §21 point 2). Indépendante de Y-FIX-02, Y-FIX-03, Y-IOS-05 ; touche `publisher.ts`, que Y-FIX-02 touche aussi (voir « Ordre et dossiers partagés »).
 Estimation : 4 à 6 h. Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de 9 h).
@@ -136,7 +136,7 @@ Réponse de Codex, passe product-owner du **2026-10-20**, avant tout code : **au
 
 | Élément | Valeur |
 |---|---|
-| Scénario 6 rouge avec le code actuel | commit et run : *à compléter* |
+| Scénario 6 rouge avec le code actuel | `ad3ae641`, run CI `39386547885` : trois échecs cloud-pending sur trois cycles |
 | Scénario 6 vert après correctif | commit et run : *à compléter* |
 | Bundle de départ (octets gzip, seuil 358 400) | *à compléter* |
-| Réponse « raison technique de faire l'inverse » | *à compléter avant le code* |
+| Réponse « raison technique de faire l'inverse » | consignée avant le code, commit `6da1939f` ; aucune raison de télécharger |

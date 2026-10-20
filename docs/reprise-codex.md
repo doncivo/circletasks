@@ -14,6 +14,10 @@ Les sections suivantes décrivent le point de départ historique ; leurs PR ouve
 
 ## 1. Point de départ historique
 
+Mise à jour du **2026-10-20** : Y-IOS-02-FIX-01 étendue (B5 et défauts 2/3 du banc) est fusionnée par **#65**, `main` **`095c5e4a`**. Tête `1b908513`, runs CI `39277457609` et `39277480003`, 48 contrôles verts avec couverture ; revue dans la fiche. Bundle sur `main` : 55/55, **342 924 octets normalisés**, 342 871 bruts, marge 15 476. Essai physique encore requis avant « fait ».
+
+Travail actif : branche et worktree **`y-ios-07`**, depuis ce `main`. Analyse préalable de sécurité consignée avant code (`6da1939f`), scénario historique rouge `ad3ae641`, run CI rouge `39386547885`. Correctif local de rotation et cible persistée ; preuves ciblées vertes, non-régression Rust 368 tests verts. QA Vitest du module, parcours d'interface, revue, bundle et CI finale encore requis avant fusion. Aucun nouveau lot IPA compilé. Continuer ensuite N-TECH-02, N-FIX-02, CI-SEC-01, C-FIX-01, Y-IOS-06, N-IOS-FIX-01 sur la branche existante, les essais annexes, le lot IPA puis REL-01 à REL-03, selon l'ordre d'Ali. Ne pas prendre les tableaux historiques ci-dessous pour l'état courant.
+
 | Élément | Valeur |
 | --- | --- |
 | `main` | `5bd03d46` (PR #59 SEC-01), CI « suite verte » verte (run 39138955865) |

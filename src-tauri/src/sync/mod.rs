@@ -185,6 +185,9 @@ pub struct SyncError {
     #[serde(serialize_with = "serialize_code")]
     pub code: SyncCode,
     pub message: &'static str,
+    /// Y-IOS-07 : seule la lecture locale de la tête a refusé, avant toute écriture.
+    #[serde(rename = "appendBeforeWrite", skip_serializing_if = "Option::is_none")]
+    pub append_before_write: Option<bool>,
 }
 
 fn serialize_code<S: serde::Serializer>(code: &SyncCode, serializer: S) -> Result<S::Ok, S::Error> {
@@ -193,7 +196,7 @@ fn serialize_code<S: serde::Serializer>(code: &SyncCode, serializer: S) -> Resul
 
 impl SyncError {
     pub const fn new(code: SyncCode) -> Self {
-        Self { code, message: "synchro" }
+        Self { code, message: "synchro", append_before_write: None }
     }
 }
 
