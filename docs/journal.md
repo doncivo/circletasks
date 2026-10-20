@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — B5 : inventaire avant correction, estimation révisée
+
+À la demande d'Ali, recherche des effacements persistés avant correctif : `docs/audits/2026-10-20-effacement-erreurs.md`. Le compteur global de suppression efface une cause sans succès de toute la cible ; chemins voisins recensés dans entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple et Focus. Les constats par lecture restent sans preuve d'exécution. Deux nouveaux rouges exécutés, **2 échecs / 18 succès**, couverture coupée : persistance après lot partiel et erreur du magasin après réparation de réglage. `016dbd04` reste la preuve rouge initiale. Aucun correctif fonctionnel, délai, timeout augmenté ou test désactivé.
+
+Estimation généralisée **2 h → 5 h actives (+150 %)**, seuil d'alerte 3 h : arrêt au commit et information d'Ali, cas 3, sans clôture. #71 fusionnée après 48 CI verts et revue consignée ; main `dc14badf`, bundle **58/58**, mesure **338 413 normalisés / 338 339 bruts**, marge **19 987**. UIKit reste à vérifier dans l'unique lot iPhone. Aucun worktree supprimé.
+
 ## 2026-10-20 — ouverture Y-IOS-06
 
 ## 2026-10-20 — arrêt du lot, complément B5 confirmé par le banc

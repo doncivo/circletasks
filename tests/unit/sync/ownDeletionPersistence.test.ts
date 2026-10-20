@@ -21,6 +21,17 @@ beforeEach(async () => {
 afterEach(async () => { await device.close(); });
 
 describe('Y-IOS-02-FIX-01 : persistance et erreurs de suppression', () => {
+  it('une erreur persiste apres un lot partiellement reussi puis un redemarrage', async () => {
+    const files = [{ epoch: EPOCH, kind: 's' as const, n: 1 }, { epoch: EPOCH, kind: 's' as const, n: 2 }];
+    await deleteOwnTracked(deps, files);
+    const failure = await device.data.repos.sync.getMeta('ownDeleteFailure');
+    expect(failure).not.toBeNull();
+    await deleteOwnTracked({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.resolve(1) } }, files);
+    expect(await device.data.repos.sync.getMeta('ownDeleteFailure')).toBe(failure);
+    await device.restart();
+    expect(await readOwnDeleteFailures(device.data.repos)).toMatchObject([{ code: 'io' }, { code: 'io' }]);
+  });
+
   it('code et heure sont mis à jour ; un succès efface la cause, pas la preuve de suppression', async () => {
     await deleteOwnTracked(deps, [{ epoch: EPOCH, kind: 'epoch' }], true);
     expect(JSON.parse((await device.data.repos.sync.getMeta('orphanDeleteFailure')) ?? 'null')).toMatchObject({ code: 'io', at: new Date(device.clock.nowMs()).toISOString() });

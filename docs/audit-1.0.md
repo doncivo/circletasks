@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### B5 — inventaire avant correction et estimation révisée
+
+Inventaire dans `docs/audits/2026-10-20-effacement-erreurs.md`, communiqué avant correction : effacements prématurés dans les suppressions, reprises et Rappels Apple ; Focus et autres transitions explicitement à prouver. Deux nouveaux rouges exécutés, **2 échecs / 18 succès**, couverture coupée ; rouge initial `016dbd04` conservé. **Non corrigé**. Estimation du complément généralisé 2 h → 5 h (+150 %), arrêt au commit selon le cas 3 d'Ali. #71 fusionnée (`dc14badf`), 48 CI verts et revue consignée, bundle main **58/58, 338 413 normalisés, marge 19 987** ; UIKit physique ouvert. Aucun feu vert de livraison.
+
 ### CI-SEC-01 et C-FIX-01 — suivi des fusions du 2026-10-20
 
 Clé updater hors du build : **#69 fusionnée** (`ea596996`), 48 CI verts et revue approuvée, banc de signature réel à clé jetable vérifié ; signature de livraison encore requise. Focus de checklist : **#70 fusionnée** (`44441dbe`), 48 CI verts sur `6f2a66be`, preuves rouge/verte et revue approuvées ; clavier réel encore ouvert. Bundle sur main après chacune : **58/58, 338 443 normalisés, marge 19 957**, coût nul. Aucune clôture physique inventée.

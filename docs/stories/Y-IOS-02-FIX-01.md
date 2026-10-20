@@ -1,5 +1,15 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
+## Inventaire avant correction — 2026-10-20
+
+Ali a autorisé le complément et sa généralisation, avec `016dbd04` comme preuve rouge conservée. [Inventaire des chemins](../audits/2026-10-20-effacement-erreurs.md) : suppression propre agrégée, entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple partiels/réparation/autorisation et fin de Focus. Les autres familles et les acquittements explicites y sont distingués ; les pistes par lecture restent à prouver, aucune revue finale inventée.
+
+Deux rouges supplémentaires exécutés avant correction : `ownDeletionPersistence.test.ts` exige explicitement la conservation de la cause après un lot partiellement réussi ; `appleListsSafety.test.ts` exige que réparer les réglages ne résolve pas une erreur de lecture du magasin. Résultat ciblé : **2 rouges, 18 verts**, couverture coupée. Le redémarrage prévu dans le premier test reste après l'assertion actuellement rouge et n'a donc pas encore été atteint : aucune preuve de ce point revendiquée.
+
+Lint des deux fichiers de test et typage global verts. Pas de passe de revue finale ni de CI complète revendiquée pour un correctif encore absent. Tests et inventaire sauvegardés au commit d'arrêt ; aucun push de cette branche rouge.
+
+**Arrêt au commit, cas 3 : estimation révisée de 2 h à 5 h actives (+150 %), seuil de 3 h dépassé par le périmètre généralisé. Aucun correctif fonctionnel appliqué.** Reprendre après information d'Ali, avec les preuves rouges des autres chemins avant leurs corrections ; ne pas ouvrir une nouvelle story. #71 est désormais fusionnée (`dc14badf`), bundle 58/58, 338 413 normalisés, marge 19 987 ; UIKit physique encore ouvert.
+
 ## Complément B5 du 2026-10-20 — arrêt convenu, état faux reproduit
 
 **Statut du complément : rouge, non corrigé, bloquant avant publication.** Rattaché à cette story existante, conformément à la décision d'Ali d'étendre B5 aux substituts persistants sans nouvelle story. Estimation initiale du complément : **2 h actives**, alerte à **3 h**, à compter de la reprise d'implémentation.

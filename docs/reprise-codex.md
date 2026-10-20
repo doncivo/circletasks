@@ -1,6 +1,14 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
-## Point d'arrêt du 2026-10-20 — prioritaire sur l'historique ci-dessous
+## Point prioritaire — inventaire B5 et arrêt sur estimation
+
+Relire AGENTS.md, CLAUDE.md et ce point après chaque compaction. Ali a levé l'arrêt sur le défaut B5 et demandé l'inventaire des effacements persistés avant correction. Travail actif : branche `y-ios-02-fix-01-partiel`, worktree `.claude/worktrees/rel-02-audit`. Rouge original `016dbd04` conservé, copie `b441548a` ; aucun correctif de production appliqué.
+
+**Nouvel arrêt, cas 3 : estimation de 2 h à 5 h actives (+150 %), alerte initiale à 3 h.** Voir `docs/audits/2026-10-20-effacement-erreurs.md` : chemins prématurés, résolutions relues, points restant à prouver et acquittements explicites. Deux rouges supplémentaires exécutés, 2 rouges / 18 verts, couverture coupée : cause effacée après lot partiel et `store-unavailable` effacé après réparation de réglage Apple. Après information d'Ali : preuves des autres chemins, correction commune B5 sans nouvelle story, QA module, lint/typage, revue, bundle avant push, CI complète avec couverture, fusion et mesure main.
+
+#71 fusionnée après 48 CI verts : main **`dc14badf`**. Bundle **58/58, 338 413 normalisés, 338 339 bruts, marge 19 987**. UIKit physique encore ouvert. Ensuite N-IOS-FIX-01 sur `n-ios-apercus` (préparation `c068df93`, non publiée), annexes, IPA unique, REL-01 à REL-03. Aucun nouveau build iPhone ni suppression de worktree ; aucune donnée personnelle hors dépôt consultée. Les mentions historiques d'arrêt cas 2 ci-dessous sont dépassées par ce point.
+
+## Point d'arrêt historique du 2026-10-20
 
 Après chaque compaction, relire AGENTS.md, CLAUDE.md et ce point de reprise dans le worktree actif avant de travailler. Le checkout racine `passation-codex` est ancien et contient des modifications personnelles à conserver.
 
