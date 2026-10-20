@@ -1,8 +1,12 @@
 # N-TECH-02 — Routines : fenêtre de 7 jours d'occurrences planifiées et plafond équitable des 64 notifications
 
-Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B9)**, avant N-FIX-02 (même dossier `src/features/reminders`, jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **5 h** (audit B9), **alerte à Ali si le travail dépasse 7,5 h (+50 %)** · Statut : fiche écrite, questions tranchées par Ali le 2026-10-18, à développer
+Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B9)**, avant N-FIX-02 (même dossier `src/features/reminders`, jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **5 h** (audit B9), **alerte à Ali si le travail dépasse 7,5 h (+50 %)** · Statut : en cours, passe product-owner du 2026-10-20 ; questions tranchées appliquées, mesure du levier avant logique métier
 Story technique, sans équivalent au PRD (le PRD lignes 581 et 728 parle déjà d'une « fenêtre glissante recalculée à chaque ouverture » : cette story la rend vraie pour les routines, aucun écart avec le PRD). Elle **remplace le critère 12 de N-TECH-01** (« un seul élément par avance : la prochaine occurrence »), décision 1 d'Ali du 2026-10-17 : « B9 : oui, je confirme la fenêtre de 7 jours » (docs/decisions.md, ligne du 2026-10-17 ; docs/audit-1.0.md, ligne B9).
 Dépend de : N-TECH-01, N-01, N-03 (livrés). Touche `src/domain/notificationPlan.ts` et ses tests, `src/features/reminders/notificationRunner.ts` (levier de bundle), les tests de `src/features/reminders`. Ne touche ni `src/db`, ni Swift, ni Rust.
+
+## Passe product-owner du 2026-10-20
+
+Reprise depuis `main` `51c6eb07` après fusion de #66. Estimation maintenue : **5 h actives**, alerte au-delà de **7,5 h**. Fenêtre glissante de sept jours, repli, préfixe chronologique sans quota par nature et bornes sur les rappels réellement posés : aucune décision rouverte. Le plafond reste 358 400 octets et le net du départ doit rester non positif. Mesurer d’abord le départ, puis le seul chargement à la demande de `replanNotifications`, sans conserver ce brouillon avant les preuves rouges. Le corps des notifications reste réservé à N-FIX-02.
 
 ## Contexte
 
@@ -28,7 +32,7 @@ Pourquoi les tests ne l'attrapaient pas : le test `src/domain/notificationPlan.t
 
 ## Bundle de départ (plafond inamovible)
 
-- Mesure de référence : **358 357 / 358 400 octets gzip** (`tests/bundle/startBundle.test.ts`, qui somme les seuls fichiers `.js` du graphe statique de `index.html`), marge **43 octets**. L'audit du départ (docs/audits/2026-10-18-bundle-depart.md, section 5) estime cette story à **+300 à +800 octets**.
+- Mesure de référence : **343 463 / 358 400 octets normalisés** (`main` `51c6eb07`, reprise du 2026-10-20) (`tests/bundle/startBundle.test.ts`, qui somme les seuls fichiers `.js` du graphe statique de `index.html`), marge **14 937 octets**. L'audit du départ (docs/audits/2026-10-18-bundle-depart.md, section 5) estime cette story à **+300 à +800 octets**.
 - Fichiers dans le départ : par imports statiques `src/App.tsx:17` → `features/app/startup.ts:11` → `features/reminders/notificationRunner.ts:2` → `replanNotifications.ts` → `src/domain/notificationPlan.ts` et `notificationTexts.ts`. **Ils sont dans le départ** (à confirmer par la mesure du premier commit). `coverageText.ts` est atteint par `reminders/index.ts:7`. `src/i18n/fr.notifications.ts` est dans `fr.ts` (départ).
 - **Exigence : net <= 0 octet** sur chaque commit, mesuré (`npm run test:bundle`) après **chaque** commit (pas seulement ceux qui touchent le démarrage), valeur notée dans la fiche.
 - **Levier proposé (étape 0 de la story, à mesurer avant tout code)** : `notificationRunner.ts` charge `replanNotifications` par `import()` (chargement à la demande) au lieu d'un import statique : le planificateur, les textes et les récapitulatifs sortent du départ (l'iPhone seulement les utilise ; le PC répond `pc` avant toute lecture). Pièges connus (mémoire du projet, Y-TECH-05) : un bloc à la demande qui importe un module du départ le sort du bloc principal et peut coûter des kilooctets de compression ; mesurer le départ avant/après ce seul changement. L'échec de chargement du bloc doit être **visible** (critère 21), jamais muet.
@@ -77,7 +81,7 @@ Toutes les valeurs ci-dessous sont en heure locale flottante, avec `now` = **202
 
 ### Bundle, documentation, vérifications
 
-22. **Bundle** : mesure de départ au premier commit (attendu 358 357), puis après chaque commit ; **net <= 0** sur chaque commit et sur la branche ; sinon arrêt (voir « Bundle de départ »). Les valeurs avant/après et le gain éventuel du levier sont notés dans « Preuves ».
+22. **Bundle** : mesure de départ au premier commit (référence de reprise 343 463), puis après chaque commit ; **net <= 0** sur chaque commit et sur la branche ; sinon arrêt (voir « Bundle de départ »). Les valeurs avant/après et le gain éventuel du levier sont notés dans « Preuves ».
 23. **Documentation** : ADR 0012 (avenant : section 5, « seule la prochaine occurrence d'une routine » remplacée par la fenêtre de 7 jours, couverture à deux bornes, égalité de minute) ; docs/decisions.md (ligne du 2026-10-07 « seule la prochaine occurrence d'une routine » marquée remplacée) ; `docs/stories/N-TECH-01.md` : critère 12 marqué « remplacé par N-TECH-02 », critères 13, 14 et 20 renvoyés vers les critères 6 à 8 et 12 de cette fiche ; docs/journal.md ; docs/backlog.md ; docs/audit-1.0.md (B9). Aucun écart avec le PRD (lignes 581 et 728 déjà conformes).
 24. **Vérifications** : tests du module en local seulement (`CT_TEST_WORKERS=1 npx vitest run src/domain/notificationPlan src/features/reminders src/platform/notifications --coverage.enabled=false`), lint et typage verts ; suite complète en CI sur la branche (« suite verte ») ; aucun `skip`, aucun délai, aucun retry ; le journal technique ne reçoit aucun titre.
 
@@ -108,16 +112,36 @@ Découpage : 0,5 + 1 + 1,5 + 1 + 0,5 + 0,5 de réserve de relecture = 5 h.
 
 ## Preuves (à remplir par l'agent)
 
+Mesures du 2026-10-20 : référence après `e576aba6`, **56/56, 343 463 octets normalisés**. Essai isolé, non conservé : seul import dynamique de `replanNotifications`, **338 381 octets**, gain **5 082**, marge **20 019**. La garde signale exactement six modules sortis (planificateur, actions domaine, récapitulatifs et leurs textes), sans module entrant ; ces sorties seront retirées de la liste lors du correctif réel, avec assertions hors départ. Aucun seuil changé.
+
+Preuves rouges : `6246cc6b`, calcul pur et cas d'usage, **2/2 en échec : un rappel au lieu de sept** ; puis `1be2b700`, bornes exactes, équité, égalités de minute, tâche lointaine et chargement du bloc en échec. Les six scénarios de bornes échouent avant correction ; le scénario de chargement rend à tort `planned` au lieu de l'échec attendu. Le premier build de mesure des tests rouges a révélé un cast de fixture incomplet refusé par TypeScript : correction de fixture uniquement, sans changement métier, avant nouvelle mesure. Pas de preuve verte revendiquée à ce stade.
+
+Projection demandée par Ali : coûts supplémentaires estimés après levier, N-TECH-02 net non positif, N-FIX-02 jusqu'à 0,1 Ko, signature 0, clavier/sélecteur/aperçus 0,5–2,5 Ko, livraison et réserve 1–3 Ko. Marge projetée environ 14–18 Ko après levier, à remplacer par mesures après chaque fusion ; déclenchement immédiat des leviers restants si la projection descend sous 3 Ko. Les paliers migrations/synchro non retenus ne sont pas rouverts.
+
+Adaptation explicite des attentes historiques (aucune assertion retirée) : quotidienne 1 → 7 ; deux avances 2 → 14 ; pause bornée 1 → 5 ; quota atteint 1 → 2 et non atteint 1 → 7 ; intervalle deux jours 1 → 3. QA : changements d'heure 1 → 7 ; pause du jour 1 → 6 ; pause supprimée 1 → 7 ; reprise de quota selon `now`, 1 → 2/6/7 ; plage Pro 1 → 7 avec trois échéances effectives communes le lundi. Égalité de minute au plafond : ancienne minute partiellement gardée remplacée par la minute de `now`, conformément au critère 12. Les tests des autres natures restent inchangés. Contrôle de doublon : préfixe de fixture `ffffffff` plutôt qu'un numéro 999 supposé supérieur à un compteur global ; assertions de déduplication conservées.
+
+Première QA module : **419/419 dans 27 fichiers**, couverture coupée. Les scénarios nouveaux de calcul pur et cas d'usage sont verts ; le faux conserve les rappels sonnés, donc reprise à deux jours **scheduled 2, kept 5, cancelled 2**. Validation finale élargie, lint, revue, bundle et CI encore attendus.
+
+Passe qa-test complémentaire : **83 tests / 4 fichiers verts** (calcul, fenêtre, chargement et Réglages), puis **63 / 2 fichiers** après la remarque de revue ci-dessous. Le chargement impossible rend `schedule-failed`, écrit le réglage persistant, reste visible après nouveau conteneur, apparaît en bandeau et Réglages, et ne disparaît qu'au succès. Préfixe mêlé vérifié à 64/63/10 sur douze tâches, six routines à deux avances, quatre événements répétés, deux répétitions et récapitulatifs ; ordre inversé identique. Les 64 premiers de chaque source suffisent à l'oracle de l'union, sans relever la limite réelle du planificateur.
+
+Passe code-reviewer distincte : relecture du diff `origin/main...` après QA, bornes ouvertes/fermées, repli, filtres et quota, stabilité des identifiants, égalité au plafond, erreurs persistées sans texte utilisateur, import dynamique et absence d'ajout à la liste de départ. Remarque R1 de cette revue : un raccourci par seul runtime aurait exclu le faux disponible en navigateur utilisé par les essais iPhone. Rouge sur `b7a40514` : `notificationRunnerLoad.test.ts`, résultat `pc` au lieu de `planned` ; correction par disponibilité de l'adaptateur, avec contrôle séparé PC indisponible sans lecture ni chargement. **63/63 verts** après correction. Les cinq dépendances embarquées dans le bloc différé sont contrôlées par les cartes de source du départ, non comme cinq entrées dynamiques autonomes inexistantes ; l'entrée `replanNotifications` reste contrôlée comme import dynamique réel. Aucun seuil ni module ajouté.
+
+Mesure après `b7a40514` : **338 466 octets normalisés, 338 428 bruts, marge 19 934**, net **−4 997** ; le plafond et la garde exacte sont verts, mais cinq assertions nouvelles réclamaient à tort des entrées autonomes du manifeste pour les dépendances du même bloc. Elles ont été corrigées en assertions de sources hors départ. Mesure définitive de la revue et CI encore attendues. Lint global et typecheck de cette première version verts.
+
 | Élément | Valeur |
 |---|---|
-| Départ de référence (octets gzip, seuil 358 400) | |
-| Levier `import()` de `replanNotifications` : départ avant / après | |
-| Critères 15 et 16, rouge avant (commit, assertion) | |
-| Critères 15 et 16, vert après (commit) | |
-| Tableau « ancienne attente → nouvelle attente » (critère 17) | |
-| Critère 25 : bornes divergentes (a) jour 3 et (b) 06:30, rouge puis vert | |
-| Départ après chaque commit (net <= 0) | |
-| Commandes locales et résultats | |
+| Départ de référence (octets gzip, seuil 358 400) | `e576aba6` : 343 463, 56/56 |
+| Levier `import()` de `replanNotifications` : départ avant / après | Essai isolé 343 463 → 338 381, gain 5 082 |
+| Critères 15 et 16, rouge avant (commit, assertion) | `6246cc6b` : deux échecs, un rappel au lieu de sept |
+| Critères 15 et 16, vert après (commit) | `b7a40514` puis `6d534fdd`, calcul et vrai cas d'usage sur faux ; reprise 2 ajoutés / 5 gardés / 2 retirés |
+| Tableau « ancienne attente → nouvelle attente » (critère 17) | Détail ci-dessus ; aucune assertion retirée |
+| Critère 25 : bornes divergentes (a) jour 3 et (b) 06:30, rouge puis vert | `1be2b700` rouge ; calculs et couverture des routines dans `6d534fdd` verts, jour trois au 10-10 07:00, avance 30 au 10-14 06:30 |
+| Départ après chaque commit (net <= 0) | Commits de tests `6246cc6b`, `1be2b700`, `50f74c5e` : mesures tentées mais builds refusés par casts de fixtures, aucune valeur inventée ; runtime inchangé. `b7a40514` : 338 466 (assertions nouvelles du manifeste corrigées ensuite). `6d534fdd` : **338 481**, brut 338 433, marge **19 919**, **57/57 verts**, net **−4 982** ; mesure du commit documentaire suivant encore requise avant push |
+| Commandes locales et résultats | Module 419/27 ; compléments 83/4 puis revue 63/2, couverture coupée. `npm run lint` vert ; typecheck vert dans le build final ; lint des quatre fichiers retouchés après revue vert |
+
+**Revue finale approuvée le 2026-10-20**, après correction de R1 et relecture du diff à froid. Budget net non positif, six modules retirés de la liste exacte, aucun ajout ni changement de seuil, PC et faux navigateur couverts. La story reste **en validation** jusqu'à la suite complète avec couverture en CI, fusion puis mesure sur `main`. Aucun essai physique revendiqué. Temps actif à cette passe inférieur à l'estimation de 5 h ; aucune décision rouverte.
+
+Complément CI sur `dc9e22d1`, PR #67 : run `39423463377`, Vitest node 3/5, **970 verts / 1 rouge**, test de mise au calme `restoreQa.reminders` critère 6. Reproduction locale identique (1 rouge / 1 vert) : l'attente fixe de vingt microtâches ne prouve pas que le module différé et le drainage ont démarré. Signal d'entrée du faux `drain` attendu explicitement ; aucun délai ni timeout changé, assertions de restauration inchangées. **10/10 verts dans trois fichiers** après correction, lint vert ; relecture approuvée de ce complément, CI complète à repasser sur le code modifié. Bundle après `dc9e22d1` avant son push : **57/57, 338 481**, brut 338 433.
 
 ## Écarts
 

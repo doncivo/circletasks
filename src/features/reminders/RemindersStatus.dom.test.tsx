@@ -1,12 +1,16 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeNotificationActionSource, NotificationSchedulerError } from '../../platform/notifications';
+import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
+import { asLocalDate, asLocalTime } from '../../domain/types';
+import { createRoutineUseCases } from '../routines/routineUseCases';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { AppStatusBanner } from '../app/AppStatusBanner';
 import { useAppStatusStore } from '../app/appStatus';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { RecapSettingsScreen } from './RecapSettingsScreen';
 import { statusController } from './notificationStatus';
+import { getNotificationRunner } from './notificationRunner';
 import { replanNotifications } from './replanNotifications';
 import { reopenReminders, seedReminderTask, setupReminders, type ReminderHarness } from './testKit';
 
@@ -52,6 +56,34 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     });
     const line = await screen.findByText(/^Planifiés jusqu’au /);
     expect(line).toHaveTextContent(/^Planifiés jusqu’au \d{1,2} \S+ à \d{2}:\d{2}$/);
+  });
+
+  it('N-TECH-02 : une routine seule affiche le dernier rappel posé, jamais la couverture complète', async () => {
+    await open({ startAt: '2026-10-07T08:00:00.000Z' }, async (harness) => {
+      await harness.container.data.repos.settings.set('reminders.morningRecap', { enabled: false, time: asLocalTime('07:30') });
+      await harness.container.data.repos.settings.set('reminders.eveningRecap', { enabled: false, time: asLocalTime('21:00') });
+      const created = await createRoutineUseCases(harness.container).create({
+        fields: { spaceId: SPACE_PERSO_ID, title: 'Routine', icon: null, scheduleType: 'daily', weekdays: [], timesPerWeek: null, interval: null, startDate: asLocalDate('2026-09-01'), time: asLocalTime('07:00'), paused: false, archived: false },
+        reminderOffsets: [0],
+      });
+      expect(created.ok).toBe(true);
+      await replanNotifications(harness.container, 'open');
+    });
+    expect(await screen.findByText(/^Planifiés jusqu’au /)).toHaveTextContent('14 oct. à 07:00');
+    expect(screen.queryByText('Tous les rappels sont planifiés')).not.toBeInTheDocument();
+  });
+
+  it('N-TECH-02 : échec de chargement visible dans Réglages et en bandeau', async () => {
+    vi.doMock('./replanNotifications', () => { throw new Error('chunk-load-failed'); });
+    try {
+      await open({}, async harness => {
+        expect(await getNotificationRunner(harness.container).request('open')).toEqual({ status: 'failed', reason: 'schedule-failed' });
+      });
+      expect(screen.getAllByText('Les rappels n’ont pas pu être planifiés', { exact: false }).length).toBeGreaterThan(0);
+      expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Les rappels n’ont pas pu être planifiés');
+    } finally {
+      vi.doUnmock('./replanNotifications');
+    }
   });
 
   it('critère 10 : « Tous les rappels sont planifiés » et « Aucun rappel à planifier »', async () => {

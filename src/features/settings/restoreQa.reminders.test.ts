@@ -49,11 +49,16 @@ describe('P-04-iOS QA : restauration et rappels / actions N-03', () => {
     await replanNotifications(h.container, 'open');
     const realDrain = source.drain.bind(source);
     let releaseDrain: (() => void) | undefined;
-    vi.spyOn(source, 'drain').mockImplementationOnce(() => new Promise((resolve) => (releaseDrain = () => resolve(realDrain()))));
+    let enteredDrain!: () => void;
+    const drainEntered = new Promise<void>(resolve => { enteredDrain = resolve; });
+    vi.spyOn(source, 'drain').mockImplementationOnce(() => new Promise(resolve => {
+      releaseDrain = () => resolve(realDrain());
+      enteredDrain();
+    }));
     source.push(line(h, `task:${rid}`, 'done'), { wake: false });
     const runner = getNotificationRunner(h.container);
     const acting = runner.request('action');
-    await turns();
+    await drainEntered;
     expect(releaseDrain).toBeDefined();
 
     let quiet: Awaited<ReturnType<typeof quiesceForRestore>> | undefined;

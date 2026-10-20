@@ -1,5 +1,8 @@
 import type { AppContainer } from '../app/container';
-import { replanNotifications, type ReplanOutcome, type ReplanTrigger } from './replanNotifications';
+import { nowIso } from '../../domain/clock';
+import { logFailure } from '../../platform/desktop/log';
+import type { ReplanOutcome, ReplanTrigger } from './replanNotifications';
+import { isInstalledIphone, statusController } from './notificationStatus';
 
 /**
  * Sérialisation et coalescence des passages (N-01 critère 8, ADR 0012 avenant N1.3) : au plus UN passage en cours et UN passage en
@@ -89,7 +92,20 @@ const runners = new WeakMap<AppContainer, NotificationRunner>();
 export function getNotificationRunner(container: AppContainer): NotificationRunner {
   let known = runners.get(container);
   if (known === undefined) {
-    known = createNotificationRunner((trigger) => replanNotifications(container, trigger));
+    known = createNotificationRunner(async (trigger) => {
+      const status = statusController(container);
+      try {
+        if (!isInstalledIphone(container) && await container.notifications.availability() === 'unavailable') {
+          status.setAvailability('unavailable');
+          return { status: 'pc' };
+        }
+        return await (await import('./replanNotifications')).replanNotifications(container, trigger);
+      } catch {
+        logFailure('notifications', 'schedule-failed');
+        await status.patch(current => ({ ...current, planFailure: { at: nowIso(container.clock), reason: 'schedule-failed', count: 0, partial: null } }));
+        return { status: 'failed', reason: 'schedule-failed' };
+      }
+    });
     runners.set(container, known);
   }
   return known;

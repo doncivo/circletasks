@@ -1,3 +1,4 @@
+import { addDays } from './localDate';
 import { describe, expect, it } from 'vitest';
 import { makeEvent } from './eventTestKit';
 import type { QuietHours, Reminder, ReminderOffsetMin, ReminderTargetType, Routine, RoutinePause, Task } from './model';
@@ -47,6 +48,7 @@ function plan(over: Partial<NotificationPlanInput> = {}) {
 }
 
 const fires = (items: readonly PlannedItem[]): string[] => items.map((item) => item.fireAt);
+const daysAt = (from: string, count: number, time: string) => Array.from({ length: count }, (_, i) => `${addDays(asLocalDate(from), i)}T${time}`);
 const ids = (items: readonly PlannedItem[]): string[] => items.map((item) => item.id);
 const taskFire = (spaceId: SpaceId, date: string, time: string, offset = 0, now = '2027-01-01T00:00'): string[] => {
   const t = task({ spaceId, date: asLocalDate(date), time: asLocalTime(time) });
@@ -94,8 +96,8 @@ describe('changement d’heure Europe/Paris (critère 23)', () => {
     const routine = makeRoutine({ spaceId: PERSO, time: asLocalTime('02:30') });
     const r = reminder('routine', routine, 0);
     const at = (now: string) => sameInEveryZone(() => fires(plan({ routines: [routine], reminders: [r], now: asLocalDateTime(now) }).items));
-    expect(at('2027-03-28T00:00')).toEqual(['2027-03-28T02:30']);
-    expect(at('2027-10-31T00:00')).toEqual(['2027-10-31T02:30']);
+    expect(at('2027-03-28T00:00')).toEqual(daysAt('2027-03-28', 7, '02:30'));
+    expect(at('2027-10-31T00:00')).toEqual(daysAt('2027-10-31', 7, '02:30'));
   });
 
   it('23 : événement à 02:30 le 28 mars 2027 avec avance 0 : 02:30', () => {
@@ -231,14 +233,14 @@ describe('routines : pause, validation, quota (critères 12 et 13)', () => {
   it('13 : pause d’un jour (aujourd’hui) : demain ; pause commençant demain : aujourd’hui reste planifiée', () => {
     const routine = at('18:00');
     const r = reminder('routine', routine, 0);
-    expect(fires(plan({ routines: [routine], reminders: [r], routinePauses: [pause(routine, '2026-10-07', '2026-10-07')] }).items)).toEqual(['2026-10-08T18:00']);
+    expect(fires(plan({ routines: [routine], reminders: [r], routinePauses: [pause(routine, '2026-10-07', '2026-10-07')] }).items)).toEqual(daysAt('2026-10-08', 6, '18:00'));
     expect(fires(plan({ routines: [routine], reminders: [r], routinePauses: [pause(routine, '2026-10-08', null)] }).items)).toEqual(['2026-10-07T18:00']);
   });
 
   it('13 : pause supprimée (deletedAt) : sans effet', () => {
     const routine = at('18:00');
     const gone = { ...pause(routine, '2026-10-07', null), deletedAt: '2026-10-07T08:00:00.000Z' } as unknown as RoutinePause;
-    expect(fires(plan({ routines: [routine], reminders: [reminder('routine', routine, 0)], routinePauses: [gone] }).items)).toEqual(['2026-10-07T18:00']);
+    expect(fires(plan({ routines: [routine], reminders: [reminder('routine', routine, 0)], routinePauses: [gone] }).items)).toEqual(daysAt('2026-10-07', 7, '18:00'));
   });
 
   it('13 : quota atteint puis nouvelle semaine : rien jusqu’au lundi, le lundi la routine reprend', () => {
@@ -246,26 +248,26 @@ describe('routines : pause, validation, quota (critères 12 et 13)', () => {
     const r = reminder('routine', routine, 0);
     const logs = [makeLog(routine, '2026-10-05'), makeLog(routine, '2026-10-06')];
     // Mercredi 6 h (quota atteint) → lundi 12 ; le lundi 12 à 06:00 la semaine est neuve → le jour même.
-    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-07T06:00') }).items)).toEqual(['2026-10-12T07:00']);
-    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-12T06:00') }).items)).toEqual(['2026-10-12T07:00']);
+    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-07T06:00') }).items)).toEqual(daysAt('2026-10-12', 2, '07:00'));
+    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-12T06:00') }).items)).toEqual(daysAt('2026-10-12', 7, '07:00'));
     // Dimanche 11 (même semaine, quota atteint) → lundi.
-    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-11T06:00') }).items)).toEqual(['2026-10-12T07:00']);
+    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: logs, now: asLocalDateTime('2026-10-11T06:00') }).items)).toEqual(daysAt('2026-10-12', 6, '07:00'));
   });
 
   it('13 : quota de 1 atteint le lundi, validation supprimée : le quota n’est plus atteint', () => {
     const routine = at('07:00', { scheduleType: 'x_per_week', timesPerWeek: 1 });
     const r = reminder('routine', routine, 0);
     const now = asLocalDateTime('2026-10-07T06:00');
-    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: [makeLog(routine, '2026-10-05')], now }).items)).toEqual(['2026-10-12T07:00']);
+    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: [makeLog(routine, '2026-10-05')], now }).items)).toEqual(daysAt('2026-10-12', 2, '07:00'));
     const undone = makeLog(routine, '2026-10-05', { deletedAt: '2026-10-05T09:00:00.000Z' as never });
-    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: [undone], now }).items)).toEqual(['2026-10-07T07:00']);
+    expect(fires(plan({ routines: [routine], reminders: [r], routineLogs: [undone], now }).items)).toEqual(daysAt('2026-10-07', 7, '07:00'));
   });
 
   it('12 : routine Pro à 20:00 décalée au lendemain 08:00 quand now est entre les deux : l’occurrence du jour reste due', () => {
     const routine = makeRoutine({ spaceId: PRO, time: asLocalTime('20:00') });
     const r = reminder('routine', routine, 0);
     const items = plan({ routines: [routine], reminders: [r], now: asLocalDateTime('2026-10-07T21:00') }).items;
-    expect(items.map((item) => [item.id, item.fireAt])).toEqual([[`routine:${r.id}:2026-10-07`, '2026-10-08T08:00']]);
+    expect(items.map((item) => [item.id, item.fireAt])).toEqual(['2026-10-08T08:00', '2026-10-09T08:00', '2026-10-12T08:00', '2026-10-12T08:00', '2026-10-12T08:00', '2026-10-13T08:00', '2026-10-14T08:00'].map((fireAt, i) => [`routine:${r.id}:2026-10-${String(i + 7).padStart(2, '0')}`, fireAt]));
   });
 });
 
@@ -290,7 +292,7 @@ describe('égalités d’échéance et tri stable (critère 20)', () => {
     const b = plan({ tasks: [...tasks].reverse(), reminders: [...rs].reverse(), limit: 3 });
     expect(ids(a.items)).toEqual(expected);
     expect(b).toEqual(a);
-    expect(a.coverage).toEqual({ state: 'until', until: '2026-10-09T09:00' });
+    expect(a.coverage).toEqual({ state: 'until', until: NOW });
     expect(a.total).toBe(5);
   });
 
