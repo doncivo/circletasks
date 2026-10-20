@@ -1813,6 +1813,12 @@ L'échec est restauré au démarrage sans scan iCloud et montré par les phases 
 
 Rust conserve le segment évincé et le ferme avec le nombre déjà annoncé dans `own.json`. La lecture hydrate les segments nécessaires et respecte `closed` ; elle ne saute pas une fin manquante. La purge conserve ses règles de couverture, d'accusés, d'ancienneté et d'exclusion de la tête. Le banc couvre le refus avant écriture, l'écriture partielle sans indice, les dix cycles refusés, plusieurs lots, l'arrêt entre ajout et retrait, les lecteurs et vingt segments courts. Réponse préalable : aucune raison de télécharger avant d'écrire, analyse détaillée dans la fiche Y-IOS-07.
 
+### 35. Avenant Y-IOS-06 : présentation locale des interactions iOS (2026-10-20)
+
+`pickFolder` et `confirm` vérifient sur le fil principal le premier plan, l'absence d'interaction déjà réservée et un présentateur attaché sans transition. Une app inactive refuse avec `not-foreground` ; une interaction occupée ou une présentation impossible refuse avec `io`, sans écraser la demande précédente. Aucun code de protocole ni délai de choix utilisateur modifié.
+
+Le délégué du sélecteur répond une fois au choix, à l'annulation et à la fermeture interactive, puis libère la référence. La confirmation conserve son annulation au passage en arrière-plan. Les gardes de source sont vérifiées sous Windows ; la compilation Swift et les interactions UIKit restent à vérifier avec l'unique lot iPhone.
+
 ## Conséquences
 
 - **Dépendances** (validées par l'architecte) :

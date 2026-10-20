@@ -20,4 +20,6 @@ La référence du délégué doit être libérée après choix, annulation et fe
 
 ## Passes et preuves
 
-Product-owner consigné avant code. Preuves de source, correctif, QA et revue à compléter ; aucun statut « fait » revendiqué avant vérification appareil.
+Product-owner consigné avant code. Rouge `2060194` : les trois tests échouent sur l'absence de garde commune et de réponse unique après fermeture interactive (0/3). Après correctif : module `sync_bookmark`, **40/40 verts**, dont les trois preuves attendues. Journal local : `.codex-tmp/guards-green.log`. Aucun contrôle ne prétend exécuter UIKit sur Windows.
+
+Correctif : garde partagée sur le fil principal avant réservation de l'interaction, refus explicites avec les codes existants, délégué conservé jusqu'à réponse unique et libéré lors des deux annulations. La confirmation conserve son annulation en arrière-plan. Lint, typage, revue à froid, CI et mesure du bundle restent à consigner ; critère appareil 7 ouvert.
