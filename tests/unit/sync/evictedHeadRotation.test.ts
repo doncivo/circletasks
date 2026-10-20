@@ -191,4 +191,22 @@ describe('Y-IOS-07 : rotation locale et origine du refus', () => {
     expect(parsePublishRotation(raw)).toMatchObject({ segment: head.segment, code: 'folder-too-large' });
     expect((await d.data.repos.sync.readOutbox()).length).toBeGreaterThan(0);
   });
+
+  it('la borne protège aussi une cible persistée qui devient pleine', async () => {
+    const refused = { ...deps, platform: { ...d.platform, appendJournal: () => Promise.reject(unavailable()) } };
+    await publishOutbox(refused, head.epoch, head, head.segment);
+    const full = { ...deps, platform: { ...d.platform, appendJournal: () => Promise.reject(new SyncPlatformError('segment-full')) } };
+    expect((await publishOutbox(full, head.epoch, head, MAX_FILE_NUMBER)).error).toBe('folder-too-large');
+    expect(parsePublishRotation(await d.data.repos.sync.getMeta('publishRotation'))).toMatchObject({ segment: head.segment + 1, code: 'folder-too-large' });
+  });
+
+  it('une tête vide reprend sa cible persistée même si le maximum listé a augmenté', async () => {
+    const calls: number[] = [];
+    const empty = { ...head, segment: 0, record: 0, hlc: null };
+    const refused = { ...deps, platform: { ...d.platform, appendJournal: (r: { segment: number }) => { calls.push(r.segment); return Promise.reject(unavailable()); } } };
+    await publishOutbox(refused, head.epoch, empty, 1);
+    await publishOutbox(refused, head.epoch, empty, 4);
+    expect(calls).toEqual([2, 3, 3]);
+    expect(parsePublishRotation(await d.data.repos.sync.getMeta('publishRotation'))).toMatchObject({ segment: 3 });
+  });
 });
