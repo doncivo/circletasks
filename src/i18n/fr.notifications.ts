@@ -4,14 +4,6 @@
  */
 export const notificationsFr = {
   untitled: 'Sans titre',
-  body: {
-    atTime: 'À l’heure',
-    inAdvance: 'Dans {advance}',
-  },
-  advance: {
-    // Avances de N-02 : voir reminders.choice* ; « 1 semaine avant » n'existe que pour les événements (E-01).
-    week: '1 semaine',
-  },
   recap: {
     more: 'et {n} autres',
     morningTitle: 'Récapitulatif du matin',

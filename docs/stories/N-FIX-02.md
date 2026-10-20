@@ -113,6 +113,14 @@ Découpage : 0,75 + 0,5 + 1 + 0,5 + 0,25 = 3 h.
 
 ## Preuves (à remplir par l'agent)
 
+Passe product-owner consignée avant code. **Rouge `2b77799c` : 26/26 corps finaux en échec**, premier attendu `09:00 · Pro`, reçu `À l’heure` ; aucune erreur de compilation utilisée comme preuve. Bundle de ce commit : **57/57, 338 481 normalisés, 338 433 bruts**, marge **19 919**.
+
+Première passe qa-test : **420 tests / 41 fichiers verts**, couverture coupée, puis **43/43** sur les tests finaux du corps et de la description pure (tableau, avances, heures absentes des corps, espaces manquants, événements répétés, vrais candidats du planificateur, français/anglais, 12 h via le point commun de formatage). Les quatre natures passent une seule fois par la description commune du constructeur ; récapitulatif hors de ce chemin. Les deux specs e2e modifiées ont été listées puis exécutées : **9 parcours iPhone simulé verts**, deux cas PC réservés au projet PC par leurs gardes historiques. Aucun test instable désactivé, aucun délai ni timeout ajouté. Lint final, mesure, revue et CI complète restent requis avant clôture.
+
+Anciennes attentes → nouvelles attentes : `replanNotifications.test.ts`, deux corps « Dans 30 min » / « À l’heure » → **`09:00 · Perso`** pour les deux avances ; `notificationActions.test.ts`, répétition « À l’heure » → **`Reporté · 12:00`** (heure de la tâche, pas sonnerie 10:15) ; e2e N-01, « À l’heure » → **`10:00 · Pro`** ; e2e N-03, répétition « À l’heure » → **`Reporté · 10:00`**. Les autres champs et assertions sont conservés.
+
+Placement du catalogue : les quatre chaînes sont dans `fr.notificationBody.ts` / `en.notificationBody.ts` et le traducteur `notificationBodyText.ts`, chargés avec `notificationTexts.ts`, plutôt que dans le catalogue global. Cela applique la règle permanente de chargement à la demande et évite un coût positif au départ ; mêmes textes retenus, pas de décision fonctionnelle rouverte. La garde du départ vérifie ces modules et la chaîne « Reporté · {when} » hors du départ. Les anciennes fonctions et chaînes sont retirées.
+
 | Élément | Valeur |
 |---|---|
 | Départ de référence (octets gzip, seuil 358 400) | |

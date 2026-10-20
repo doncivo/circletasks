@@ -137,6 +137,7 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
       tasks: new Map(tasks.map((task) => [task.id, task])),
       routines: new Map(routines.map((routine) => [routine.id, routine])),
       events: new Map(events.map((event) => [event.id, event])),
+      spaces: new Map(spaces.map((space) => [space.id, space])),
     });
 
     // N-03 : les répétitions mortes ou passées sont retirées de la file (une répétition vivante coupée par le plafond reste).

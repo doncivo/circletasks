@@ -176,7 +176,7 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     expect((await h.db.data.repos.tasks.getById(task.id))?.status).toBe('done');
   });
 
-  it('critère 6 : « +15 min » planifie une répétition 15 min après la réponse, même texte, tâche et données inchangées, rien dans sync_outbox', async () => {
+  it('critère 6 : « +15 min » planifie une répétition 15 min après la réponse, heure de la cible, tâche et données inchangées, rien dans sync_outbox', async () => {
     const task = await seedTask();
     const rid = await reminderOf(h.container, task.id);
     await pass();
@@ -186,7 +186,7 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     source.push(line(h, `task:${rid}`, 'snooze15'));
     planned(await pass(h.container, 'action'));
     const snooze = lastRequests(h).find((request) => request.kind === 'snooze');
-    expect(snooze).toEqual({ id: `snooze:task:${rid}`, fireAt: '2026-10-08T10:15', kind: 'snooze', category: 'task', title: 'Appeler le médecin', body: 'À l’heure' });
+    expect(snooze).toEqual({ id: `snooze:task:${rid}`, fireAt: '2026-10-08T10:15', kind: 'snooze', category: 'task', title: 'Appeler le médecin', body: 'Reporté · 12:00' });
     expect(await h.db.data.repos.tasks.getById(task.id)).toEqual(before);
     expect(await h.db.data.repos.reminders.listLive()).toEqual(remindersBefore);
     expect(await outbox(h)).toBe(outboxBefore);

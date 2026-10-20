@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import type { PlannedItem } from '../../domain/notificationPlan';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as bodyDomain from '../../domain/notificationBody';
+import { makeEvent } from '../../domain/eventTestKit';
+import type { Reminder, Task } from '../../domain/model';
+import { planNotifications, type PlannedItem } from '../../domain/notificationPlan';
+import { DEFAULT_PRO_QUIET_HOURS } from '../../domain/quietHours';
 import { reminderFireAt } from '../../domain/recurrenceNext';
-import { asLocalDate } from '../../domain/types';
-import { setLocale } from '../../i18n';
-import { requestFor } from './notificationTexts';
+import { asEntityId, asLocalDate, asLocalDateTime, asLocalTime, type SpaceId } from '../../domain/types';
+import { ensureLocale, setLocale } from '../../i18n';
+import { setFormatPrefs } from '../../i18n/formatPrefs';
+import { notificationBodyFr } from '../../i18n/fr.notificationBody';
+import { notificationBodyEn } from '../../i18n/en.notificationBody';
+import { requestFor, requestsFor } from './notificationTexts';
 
 interface BodyCase {
   readonly kind?: 'task' | 'routine' | 'event' | 'snooze';
@@ -24,7 +31,7 @@ export function bodyFixture(input: BodyCase = {}) {
   const offsetMin = input.offset ?? 0;
   const targetId = '11000000-0000-4000-8000-000000000001';
   const reminderId = '22000000-0000-4000-8000-000000000001';
-  const spaceId = '10000000-0000-4000-8000-000000000001';
+  const spaceId = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
   const scheduledAt = reminderFireAt(asLocalDate(date), time, offsetMin);
   const item = {
     kind, originKind, id: `${kind}:${reminderId}:${date}`, reminderId, targetId, offsetMin, spaceId,
@@ -32,9 +39,9 @@ export function bodyFixture(input: BodyCase = {}) {
     scheduledAt, fireAt: input.fireAt ?? scheduledAt,
   } as unknown as PlannedItem;
   const lookup = {
-    tasks: new Map([[targetId, { title: 'Tâche', date, time, spaceId }]]),
-    routines: new Map([[targetId, { title: 'Routine', time, spaceId }]]),
-    events: new Map([[targetId, { title: 'Événement', startDate: date, startTime: input.allDay ? null : time, allDay: input.allDay ?? false, spaceId }]]),
+    tasks: new Map([[targetId, { title: 'Tâche', date: asLocalDate(date), time: asLocalTime(time), spaceId }]]),
+    routines: new Map([[targetId, { title: 'Routine', time: asLocalTime(time), spaceId }]]),
+    events: new Map([[targetId, { title: 'Événement', startDate: asLocalDate(date), startTime: input.allDay ? null : asLocalTime(time), allDay: input.allDay ?? false, spaceId }]]),
     spaces: input.space === null ? new Map<string, { name: string }>() : new Map([[spaceId, { name: input.space ?? 'Perso' }]]),
   };
   return { item, lookup };
@@ -68,11 +75,69 @@ const cases: readonly [string, BodyCase, string][] = [
 ];
 
 describe('N-FIX-02 : texte réellement lu sur la notification', () => {
-  beforeEach(() => setLocale('fr'));
+  beforeEach(() => { setLocale('fr'); setFormatPrefs({ timeFormat: '24h' }); });
+  afterEach(() => { vi.restoreAllMocks(); setLocale('fr'); setFormatPrefs({ timeFormat: '24h' }); });
   it.each(cases)('%s', (_, input, expected) => {
     const { item, lookup } = bodyFixture(input);
     const body = requestFor(item, lookup).body;
     expect(body).toBe(expected);
     expect(body).not.toMatch(/[{}()]|notifications\./);
+  });
+
+  it('l’heure suit le point de formatage commun en 12 h', () => {
+    setFormatPrefs({ timeFormat: '12h' });
+    const { item, lookup } = bodyFixture({ space: 'Pro' });
+    expect(requestFor(item, lookup).body).toBe('9:00 AM · Pro');
+  });
+
+  it('catalogue anglais chargé avec le corps, sans clé brute', async () => {
+    await ensureLocale('en');
+    setLocale('en');
+    const { item, lookup } = bodyFixture({ time: '20:00', date: '2026-09-22', fireAt: '2026-09-23T08:00' });
+    expect(requestFor(item, lookup).body).toBe('Tue, Sep 22 · 20:00 · Perso · shifted');
+  });
+
+  it('les quatre natures passent une seule fois par la description pure commune', () => {
+    const describeBody = vi.spyOn(bodyDomain, 'bodyParts');
+    for (const kind of ['task', 'routine', 'event', 'snooze'] as const) {
+      const { item, lookup } = bodyFixture({ kind });
+      requestFor(item, lookup);
+    }
+    expect(describeBody).toHaveBeenCalledTimes(4);
+    const { lookup } = bodyFixture();
+    requestFor({ kind: 'recap', id: 'recap:morning:2026-09-24', recapKind: 'morning', day: asLocalDate('2026-09-24'), fireAt: '2026-09-24T07:30' as PlannedItem['fireAt'], content: null }, lookup);
+    expect(describeBody).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([0, 30, 60, 1440, 10080])('heure de l’élément conservée après décalage et avance %s', offset => {
+    const { item, lookup } = bodyFixture({ date: '2026-09-22', time: '20:00', offset, fireAt: '2026-09-23T08:00', space: 'Pro' });
+    const body = requestFor(item, lookup).body;
+    expect(body).toBe('mar. 22 sept. · 20:00 · Pro · décalé');
+    expect(body).not.toContain('08:00');
+    if (item.kind !== 'recap' && item.kind !== 'snooze' && item.scheduledAt.slice(11) !== '20:00') expect(body).not.toContain(item.scheduledAt.slice(11));
+    expect(body.endsWith(' · décalé')).toBe(true);
+  });
+
+  it('catalogues de même forme, sans nombre ni pluriel automatique', () => {
+    expect(Object.keys(notificationBodyEn)).toEqual(Object.keys(notificationBodyFr));
+    expect(Object.values(notificationBodyFr).join(' ')).not.toMatch(/\{(?:n|count|number)\}|\bplural\b|\d/);
+  });
+
+  it('un plan réel conserve les heures des cibles pour tâche décalée, journée entière et répétition', () => {
+    const pro = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
+    const perso = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000002');
+    const task = { id: '11000000-0000-4000-8000-000000000001', spaceId: pro, title: 'Tâche', date: asLocalDate('2026-09-22'), time: asLocalTime('20:00'), status: 'todo', someday: false, deletedAt: null } as unknown as Task;
+    const event = makeEvent({ startDate: '2027-03-12', spaceId: perso, allDay: true });
+    const taskReminder = { id: '22000000-0000-4000-8000-000000000001', targetType: 'task', targetId: task.id, offsetMin: 30, deletedAt: null } as unknown as Reminder;
+    const eventReminder = { id: '22000000-0000-4000-8000-000000000002', targetType: 'event', targetId: event.id, offsetMin: 1440, deletedAt: null } as unknown as Reminder;
+    const plan = planNotifications({
+      now: asLocalDateTime('2026-09-22T18:00'), tasks: [task], routines: [], routineLogs: [], routinePauses: [], events: [event], reminders: [taskReminder, eventReminder],
+      spaces: [{ id: pro, quietHours: DEFAULT_PRO_QUIET_HOURS }, { id: perso, quietHours: [] }],
+      recaps: { morning: { enabled: false, time: asLocalTime('07:30') }, evening: { enabled: false, time: asLocalTime('21:00') } },
+      snoozes: [{ id: `snooze:task:${taskReminder.id}`, originId: `task:${taskReminder.id}`, fireAt: asLocalDateTime('2026-09-22T18:15') }],
+    });
+    expect(requestsFor(plan, { tasks: new Map([[task.id, task]]), routines: new Map(), events: new Map([[event.id, event]]), spaces: new Map([[pro, { name: 'Pro' }], [perso, { name: 'Perso' }]]) }).map(request => request.body)).toEqual([
+      'Reporté · 20:00', 'mar. 22 sept. · 20:00 · Pro · décalé', 'ven. 12 mars · Journée entière · Perso',
+    ]);
   });
 });

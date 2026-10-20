@@ -43,7 +43,7 @@ test.describe('N-01 — rappel à l’heure d’une tâche (iPhone, planificateu
 
   test('créer, modifier, terminer : requête, remplacement, annulation (critère 14)', async ({ page }, testInfo) => {
     await createTask(page, testInfo, { title: TITLE, time: '10:00' });
-    await expect.poll(() => taskRequests(page)).toEqual([expect.objectContaining({ title: TITLE, fireAt: '2026-09-23T10:00', body: 'À l’heure' })]);
+    await expect.poll(() => taskRequests(page)).toEqual([expect.objectContaining({ title: TITLE, fireAt: '2026-09-23T10:00', body: '10:00 · Pro' })]);
     const [created] = await taskRequests(page);
 
     // Modifier : une avance de 30 min s'ajoute, la requête de 10:00 garde son identifiant.
