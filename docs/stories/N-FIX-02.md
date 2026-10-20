@@ -1,8 +1,12 @@
 # N-FIX-02 — Corps de notification avec heure, espace et date : un constructeur unique testé sur le texte final
 
-Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B10), après N-TECH-02** (même dossier `src/features/reminders` et même budget de départ : jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **3 h** (audit B10), **alerte à Ali au-delà de 4,5 h (+50 %)** · Statut : fiche écrite, règle de l'heure et du décalage corrigée selon Ali le 2026-10-18, à développer
+Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B10), après N-TECH-02** (même dossier `src/features/reminders` et même budget de départ : jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **3 h** (audit B10), **alerte à Ali au-delà de 4,5 h (+50 %)** · Statut : en cours, passe product-owner du 2026-10-20 après fusion de N-TECH-02
 Correctif sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-18). Source : docs/audit-1.0.md, ligne B10. Règles de CLAUDE.md : les rappels sont émis sur l'iPhone uniquement ; textes dans `src/i18n`, heures en 24 h ; règles métier dans `src/domain`.
 Dépend de : N-01, N-03, N-TECH-02 (pour la marge de bundle, voir ci-dessous). Touche `src/features/reminders/notificationTexts.ts`, `replanNotifications.ts` (contenu du dictionnaire de recherche seulement), `src/i18n/fr.notifications.ts` et `en.notifications.ts`, un nouveau module de `src/domain`, et trois fichiers de tests existants. Ne touche ni le planificateur, ni `src/db`, ni Swift, ni Rust.
+
+## Passe product-owner du 2026-10-20
+
+Départ `main` `e64e0148`, PR #67 fusionnée après 48 contrôles verts et revue approuvée. Estimation 3 h actives, alerte 4,5 h. Appliquer les décisions existantes : heure de l'élément, jour si nécessaire, espace, décalage en dernier sans heure de sonnerie ; répétition sans espace supplémentaire, événements avec date et journée entière sans heure. Aucune décision rouverte. Test rouge sur `requestFor` avant code. Le planificateur reste inchangé. Le corps et son catalogue seront chargés avec le bloc des rappels pour maintenir un coût net non positif ; aucun seuil relevé. Mesure après chaque commit et après fusion sur main.
 
 ## Contexte
 
@@ -26,8 +30,8 @@ Constat (lignes vérifiées sur `main` c01e961b) :
 
 ## Bundle de départ (plafond inamovible)
 
-- Référence : **358 357 / 358 400 octets gzip** (`tests/bundle/startBundle.test.ts`, qui ne somme que les fichiers `.js` du graphe statique de `index.html`), marge **43 octets** ; l'audit du départ estime cette story à +100 à +300 octets.
-- `notificationTexts.ts` est dans le départ aujourd'hui (imports statiques `App.tsx:17` → `startup.ts:11` → `notificationRunner.ts:2` → `replanNotifications.ts:12` → `notificationTexts.ts`). `src/i18n/fr.notifications.ts` est inclus dans `fr.ts` : **les nouvelles chaînes françaises restent dans le départ** même si le code devient paresseux (le catalogue anglais, lui, est déjà à la demande).
+- Référence de reprise : **338 481 / 358 400 octets normalisés**, marge **19 919** (`main` `e64e0148`, après #67, 57/57). L'ancienne référence 358 357 est historique et ne sert plus de mesure de cette branche.
+- `notificationTexts.ts` et le planificateur sont désormais hors du départ grâce à N-TECH-02. Le catalogue du nouveau corps est chargé avec ce bloc, comme les autres catalogues à la demande du dépôt ; les anciennes chaînes inutilisées disparaissent. La mesure reste l'arbitre, coût net non positif, aucun plafond relevé.
 - **Condition d'entrée** : N-TECH-02 doit être fusionnée (ou la branche de N-FIX-02 construite dessus) **avec son levier** (`notificationRunner.ts` charge `replanNotifications`, donc `notificationTexts.ts` et le nouveau `notificationBody.ts`, par `import()`). Alors le code de cette story est hors du départ et seul le catalogue compte : 4 chaînes ajoutées (`line`, `dayTime`, `shifted`, `snoozed` : environ 61 caractères depuis que le décalage est « {line} · décalé » au lieu de « (prévu {from}) ») contre 3 retirées (`atTime`, `inAdvance`, `week`, environ 32 caractères et leurs clés), soit un net attendu de **+15 à +25 octets gzip** (au lieu de +20 à +30), à mesurer ; le nombre de chaînes ne change pas (4 ajoutées, 3 retirées), seule la plus longue raccourcit ; si ce net dépasse la marge restante, retirer d'abord du catalogue de notifications toute chaîne devenue inutile.
 - **Exigence : net <= 0 octet** par commit et pour la branche dès que la marge de N-TECH-02 le permet ; **mesure après chaque commit** (`npm run test:bundle`), valeur notée dans « Preuves ». Si le levier de N-TECH-02 n'a pas été livré, ou si le net reste > 0 : **arrêt et remontée à Ali** (paliers BUNDLE-01, docs/audits/2026-10-18-bundle-depart.md) ; aucun plafond relevé.
 

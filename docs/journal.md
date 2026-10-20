@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — N-TECH-02 fusionnée, ouverture N-FIX-02
+
+#67 fusionnée dans `main` `e64e0148`, tête `7b1b9779` : runs **39424065781 et 39424072422**, 48 contrôles verts, couverture complète, revue approuvée. Bundle sur main après fusion : **57/57, 338 481 normalisés, 338 433 bruts, marge 19 919**, gain 4 982. B9 clôturé côté code vérifié ; aucune preuve physique inventée.
+
+Passe product-owner N-FIX-02, estimation **3 h actives**, alerte **4,5 h** : décisions existantes appliquées, corps avec heure de l'élément et espace, date si nécessaire, décalage en dernier sans heure de sonnerie ; répétitions sans espace, journée entière sans heure. Nouveau catalogue à la demande avec le corps, net non positif. Avant code, **26 cas de texte final rouges** contre `requestFor` inchangé : premier cas attendu `09:00 · Pro`, reçu `À l’heure` ; répétitions, plages silencieuses, avances, événements et espace manquant aussi couverts. Le planificateur de N-TECH-02 reste inchangé.
+
 ## 2026-10-20 — N-TECH-02, mesures et preuves rouges
 
 Levier isolé `import()` de `replanNotifications` : départ 343 463 → 338 381 octets normalisés, gain 5 082, marge 20 019 ; six modules sortis de la garde, aucun ajouté. Brouillon retiré avant les tests rouges. `6246cc6b` : calcul pur et cas d'usage échouent chacun sur un rappel au lieu de sept ; `1be2b700` ajoute les bornes, l'équité et l'échec de chargement. Une fixture incomplète a empêché le build TypeScript de la première mesure intermédiaire : cast de fixture corrigé, aucun seuil ni test contourné. Correctif métier encore en cours.

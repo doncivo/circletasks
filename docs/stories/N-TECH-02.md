@@ -1,6 +1,6 @@
 # N-TECH-02 — Routines : fenêtre de 7 jours d'occurrences planifiées et plafond équitable des 64 notifications
 
-Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B9)**, avant N-FIX-02 (même dossier `src/features/reminders`, jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **5 h** (audit B9), **alerte à Ali si le travail dépasse 7,5 h (+50 %)** · Statut : en cours, passe product-owner du 2026-10-20 ; questions tranchées appliquées, mesure du levier avant logique métier
+Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B9)**, avant N-FIX-02 (même dossier `src/features/reminders`, jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **5 h** (audit B9), **alerte à Ali si le travail dépasse 7,5 h (+50 %)** · Statut : fait, code vérifié et fusionné par #67 le 2026-10-20
 Story technique, sans équivalent au PRD (le PRD lignes 581 et 728 parle déjà d'une « fenêtre glissante recalculée à chaque ouverture » : cette story la rend vraie pour les routines, aucun écart avec le PRD). Elle **remplace le critère 12 de N-TECH-01** (« un seul élément par avance : la prochaine occurrence »), décision 1 d'Ali du 2026-10-17 : « B9 : oui, je confirme la fenêtre de 7 jours » (docs/decisions.md, ligne du 2026-10-17 ; docs/audit-1.0.md, ligne B9).
 Dépend de : N-TECH-01, N-01, N-03 (livrés). Touche `src/domain/notificationPlan.ts` et ses tests, `src/features/reminders/notificationRunner.ts` (levier de bundle), les tests de `src/features/reminders`. Ne touche ni `src/db`, ni Swift, ni Rust.
 
@@ -111,6 +111,8 @@ Découpage : 0,5 + 1 + 1,5 + 1 + 0,5 + 0,5 de réserve de relecture = 5 h.
 - Clôture refusée si un critère manque : le product-owner vérifie les 25 critères avant « fait ».
 
 ## Preuves (à remplir par l'agent)
+
+Clôture vérifiée : #67 fusionnée dans `main` `e64e0148`, tête `7b1b9779`. Runs **39424065781 et 39424072422**, **48 contrôles verts**, suite complète avec couverture active, lint et typage verts, revue distincte approuvée ci-dessous. Bundle mesuré après fusion sur `main` : **57/57**, **338 481 octets normalisés**, 338 433 bruts, marge **19 919**, gain net **4 982** depuis `51c6eb07`. Aucun essai physique revendiqué.
 
 Mesures du 2026-10-20 : référence après `e576aba6`, **56/56, 343 463 octets normalisés**. Essai isolé, non conservé : seul import dynamique de `replanNotifications`, **338 381 octets**, gain **5 082**, marge **20 019**. La garde signale exactement six modules sortis (planificateur, actions domaine, récapitulatifs et leurs textes), sans module entrant ; ces sorties seront retirées de la liste lors du correctif réel, avec assertions hors départ. Aucun seuil changé.
 
