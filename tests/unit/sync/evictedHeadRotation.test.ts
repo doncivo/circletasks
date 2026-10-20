@@ -5,7 +5,8 @@ import { META, readJson } from '../../../src/sync/meta';
 import { SyncPlatformError } from '../../../src/platform/sync/types';
 import { toSyncError } from '../../../src/platform/sync/tauriSync';
 import type { SyncDeps } from '../../../src/sync/deps';
-import type { DeviceAck } from '../../../src/domain/sync/format';
+import { MAX_FILE_NUMBER, type DeviceAck } from '../../../src/domain/sync/format';
+import { parsePublishRotation } from '../../../src/domain/sync/publishRotation';
 import { armCrash } from '../../sim/syncCrash';
 import { SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 
@@ -177,6 +178,17 @@ describe('Y-IOS-07 : rotation locale et origine du refus', () => {
     const failed = { ...deps, platform: { ...d.platform, appendJournal: () => { calls += 1; return Promise.reject(unavailable()); } } };
     await expect(publishOutbox(failed, head.epoch, head, head.segment)).rejects.toThrow('disk full');
     expect(calls).toBe(1);
+    expect((await d.data.repos.sync.readOutbox()).length).toBeGreaterThan(0);
+  });
+
+  it('la limite des numéros ne produit ni cible invalide ni mémo illisible', async () => {
+    const names = d.folder.fileNames(d.id);
+    d.folder.setAvailability(d.id, `${head.epoch}/j-${String(head.segment).padStart(8, '0')}.ctj`, 'cloud');
+    const result = await publishOutbox(deps, head.epoch, head, MAX_FILE_NUMBER);
+    expect(result.error).toBe('folder-too-large');
+    expect(d.folder.fileNames(d.id)).toEqual(names);
+    const raw = await d.data.repos.sync.getMeta('publishRotation');
+    expect(parsePublishRotation(raw)).toMatchObject({ segment: head.segment, code: 'folder-too-large' });
     expect((await d.data.repos.sync.readOutbox()).length).toBeGreaterThan(0);
   });
 });
