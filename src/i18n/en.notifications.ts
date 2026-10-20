@@ -3,13 +3,6 @@ import type { Messages } from './types';
 /** English texts of reminder notifications and reminder status (N-01); same shape as `fr.notifications.ts`, checked by typing. */
 export const notificationsEn: Messages['notifications'] = {
   untitled: 'Untitled',
-  body: {
-    atTime: 'Now',
-    inAdvance: 'In {advance}',
-  },
-  advance: {
-    week: '1 week',
-  },
   recap: {
     more: 'and {n} more',
     morningTitle: 'Morning recap',

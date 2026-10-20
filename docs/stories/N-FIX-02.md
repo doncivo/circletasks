@@ -1,8 +1,12 @@
 # N-FIX-02 — Corps de notification avec heure, espace et date : un constructeur unique testé sur le texte final
 
-Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B10), après N-TECH-02** (même dossier `src/features/reminders` et même budget de départ : jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **3 h** (audit B10), **alerte à Ali au-delà de 4,5 h (+50 %)** · Statut : fiche écrite, règle de l'heure et du décalage corrigée selon Ali le 2026-10-18, à développer
+Module : M5 Rappels · Ordre de construction : palier 1.0, **étape 6 (B10), après N-TECH-02** (même dossier `src/features/reminders` et même budget de départ : jamais en parallèle) · Agent : **notifications** · Relecture : code-reviewer (après qa-test) · Estimation : **3 h** (audit B10), **alerte à Ali au-delà de 4,5 h (+50 %)** · Statut : en cours, passe product-owner du 2026-10-20 après fusion de N-TECH-02
 Correctif sans équivalent au PRD (écart à noter dans docs/decisions.md : ligne du 2026-10-18). Source : docs/audit-1.0.md, ligne B10. Règles de CLAUDE.md : les rappels sont émis sur l'iPhone uniquement ; textes dans `src/i18n`, heures en 24 h ; règles métier dans `src/domain`.
 Dépend de : N-01, N-03, N-TECH-02 (pour la marge de bundle, voir ci-dessous). Touche `src/features/reminders/notificationTexts.ts`, `replanNotifications.ts` (contenu du dictionnaire de recherche seulement), `src/i18n/fr.notifications.ts` et `en.notifications.ts`, un nouveau module de `src/domain`, et trois fichiers de tests existants. Ne touche ni le planificateur, ni `src/db`, ni Swift, ni Rust.
+
+## Passe product-owner du 2026-10-20
+
+Départ `main` `e64e0148`, PR #67 fusionnée après 48 contrôles verts et revue approuvée. Estimation 3 h actives, alerte 4,5 h. Appliquer les décisions existantes : heure de l'élément, jour si nécessaire, espace, décalage en dernier sans heure de sonnerie ; répétition sans espace supplémentaire, événements avec date et journée entière sans heure. Aucune décision rouverte. Test rouge sur `requestFor` avant code. Le planificateur reste inchangé. Le corps et son catalogue seront chargés avec le bloc des rappels pour maintenir un coût net non positif ; aucun seuil relevé. Mesure après chaque commit et après fusion sur main.
 
 ## Contexte
 
@@ -26,8 +30,8 @@ Constat (lignes vérifiées sur `main` c01e961b) :
 
 ## Bundle de départ (plafond inamovible)
 
-- Référence : **358 357 / 358 400 octets gzip** (`tests/bundle/startBundle.test.ts`, qui ne somme que les fichiers `.js` du graphe statique de `index.html`), marge **43 octets** ; l'audit du départ estime cette story à +100 à +300 octets.
-- `notificationTexts.ts` est dans le départ aujourd'hui (imports statiques `App.tsx:17` → `startup.ts:11` → `notificationRunner.ts:2` → `replanNotifications.ts:12` → `notificationTexts.ts`). `src/i18n/fr.notifications.ts` est inclus dans `fr.ts` : **les nouvelles chaînes françaises restent dans le départ** même si le code devient paresseux (le catalogue anglais, lui, est déjà à la demande).
+- Référence de reprise : **338 481 / 358 400 octets normalisés**, marge **19 919** (`main` `e64e0148`, après #67, 57/57). L'ancienne référence 358 357 est historique et ne sert plus de mesure de cette branche.
+- `notificationTexts.ts` et le planificateur sont désormais hors du départ grâce à N-TECH-02. Le catalogue du nouveau corps est chargé avec ce bloc, comme les autres catalogues à la demande du dépôt ; les anciennes chaînes inutilisées disparaissent. La mesure reste l'arbitre, coût net non positif, aucun plafond relevé.
 - **Condition d'entrée** : N-TECH-02 doit être fusionnée (ou la branche de N-FIX-02 construite dessus) **avec son levier** (`notificationRunner.ts` charge `replanNotifications`, donc `notificationTexts.ts` et le nouveau `notificationBody.ts`, par `import()`). Alors le code de cette story est hors du départ et seul le catalogue compte : 4 chaînes ajoutées (`line`, `dayTime`, `shifted`, `snoozed` : environ 61 caractères depuis que le décalage est « {line} · décalé » au lieu de « (prévu {from}) ») contre 3 retirées (`atTime`, `inAdvance`, `week`, environ 32 caractères et leurs clés), soit un net attendu de **+15 à +25 octets gzip** (au lieu de +20 à +30), à mesurer ; le nombre de chaînes ne change pas (4 ajoutées, 3 retirées), seule la plus longue raccourcit ; si ce net dépasse la marge restante, retirer d'abord du catalogue de notifications toute chaîne devenue inutile.
 - **Exigence : net <= 0 octet** par commit et pour la branche dès que la marge de N-TECH-02 le permet ; **mesure après chaque commit** (`npm run test:bundle`), valeur notée dans « Preuves ». Si le levier de N-TECH-02 n'a pas été livré, ou si le net reste > 0 : **arrêt et remontée à Ali** (paliers BUNDLE-01, docs/audits/2026-10-18-bundle-depart.md) ; aucun plafond relevé.
 
@@ -109,14 +113,28 @@ Découpage : 0,75 + 0,5 + 1 + 0,5 + 0,25 = 3 h.
 
 ## Preuves (à remplir par l'agent)
 
+Passe product-owner consignée avant code. **Rouge `2b77799c` : 26/26 corps finaux en échec**, premier attendu `09:00 · Pro`, reçu `À l’heure` ; aucune erreur de compilation utilisée comme preuve. Bundle de ce commit : **57/57, 338 481 normalisés, 338 433 bruts**, marge **19 919**.
+
+Première passe qa-test : **420 tests / 41 fichiers verts**, couverture coupée, puis **43/43** sur les tests finaux du corps et de la description pure (tableau, avances, heures absentes des corps, espaces manquants, événements répétés, vrais candidats du planificateur, français/anglais, 12 h via le point commun de formatage). Les quatre natures passent une seule fois par la description commune du constructeur ; récapitulatif hors de ce chemin. Les deux specs e2e modifiées ont été listées puis exécutées : **9 parcours iPhone simulé verts**, deux cas PC réservés au projet PC par leurs gardes historiques. Aucun test instable désactivé, aucun délai ni timeout ajouté. Lint final, mesure, revue et CI complète restent requis avant clôture.
+
+Anciennes attentes → nouvelles attentes : `replanNotifications.test.ts`, deux corps « Dans 30 min » / « À l’heure » → **`09:00 · Perso`** pour les deux avances ; `notificationActions.test.ts`, répétition « À l’heure » → **`Reporté · 12:00`** (heure de la tâche, pas sonnerie 10:15) ; e2e N-01, « À l’heure » → **`10:00 · Pro`** ; e2e N-03, répétition « À l’heure » → **`Reporté · 10:00`**. Les autres champs et assertions sont conservés.
+
+Placement du catalogue : les quatre chaînes sont dans `fr.notificationBody.ts` / `en.notificationBody.ts` et le traducteur `notificationBodyText.ts`, chargés avec `notificationTexts.ts`, plutôt que dans le catalogue global. Cela applique la règle permanente de chargement à la demande et évite un coût positif au départ ; mêmes textes retenus, pas de décision fonctionnelle rouverte. La garde du départ vérifie ces modules et la chaîne « Reporté · {when} » hors du départ. Les anciennes fonctions et chaînes sont retirées.
+
 | Élément | Valeur |
 |---|---|
-| Départ de référence (octets gzip, seuil 358 400) | |
-| Tableau (critères 1 à 16), rouge avant (commit, première assertion en échec) | |
-| Tableau, vert après (commit) | |
-| Départ après chaque commit | |
-| Tableau « ancienne attente → nouvelle attente » (critère 21) | |
-| Commandes locales et résultats | |
+| Départ de référence (octets gzip, seuil 358 400) | `e64e0148`, puis `2b77799c` : 338 481, marge 19 919, 57/57 |
+| Tableau (critères 1 à 16), rouge avant (commit, première assertion en échec) | `2b77799c` : 26/26 rouges ; attendu `09:00 · Pro`, reçu `À l’heure` |
+| Tableau, vert après (commit) | `1769d017` : tableau vert ; 43 tests finaux de corps et description verts |
+| Départ après chaque commit | `2b77799c` : 338 481, 57/57 ; `1769d017` : **338 443**, brut 338 378, marge **19 957**, **58/58 verts**, net **−38** ; mesure du commit documentaire suivant requise avant push |
+| Tableau « ancienne attente → nouvelle attente » (critère 21) | Détail ci-dessus : deux rappels à 09:00, répétition à 12:00, e2e à 10:00 ; assertions conservées |
+| Commandes locales et résultats | Module 420/41, compléments 43/2, couverture coupée ; lint global et typage verts ; specs N-01/N-03 listées, neuf parcours iPhone simulé verts, cas PC laissés à leur projet CI |
+
+## Passe code-reviewer du 2026-10-20
+
+**Approuvée**, après qa-test et relecture du diff à froid sur `1769d017`. Vérifiés : inversion de l'avance en dates civiles, date de l'occurrence de série pour une répétition, heure de la cible, journées entières sans 09:00 conventionnel, décalage en dernier, absence d'espace orphelin, quatre natures par le constructeur commun, récapitulatifs et Focus inchangés. Aucun accès supplémentaire à la base, seulement les espaces déjà lus ajoutés au dictionnaire ; aucun texte utilisateur dans le journal. Les anciennes fonctions et clés n'ont plus d'usage. Le nouveau corps et ses textes sont hors départ par garde de sources et marqueur de catalogue ; liste non étendue, net −38, seuils inchangés. Aucun constat bloquant restant dans le périmètre de code. La story reste **en validation** jusqu'à la suite complète avec couverture, fusion et mesure sur main.
+
+Complément de revue après CI sur `679dc441` : run `39428272029`, job `118646276478`, e2e iPhone 2/4, **159 verts / 1 rouge** sur I-02. Cause : compteur absolu de trois lectures supposant un ordre fixe entre premier passage, injection du profil et reprises ; la coalescence documentée et l'import différé rendent deux lectures correctes. Le test prend le compteur avant une reprise et exige une lecture nouvelle, en gardant toutes les assertions sur l'alerte et l'état visible. Aucun délai ni timeout ajouté, aucune relance automatique. **Neuf parcours I-02 verts** après correction, lint du fichier vert ; relecture de cette synchronisation approuvée. Bundle de `679dc441` avant son push : **58/58, 338 443**. Nouvelle suite complète requise sur le correctif du test.
 
 ## Écarts
 

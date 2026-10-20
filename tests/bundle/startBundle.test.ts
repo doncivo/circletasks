@@ -102,7 +102,7 @@ describe('bundle de départ (index.html)', () => {
     const messages = describeComparison(compareStartModules(actual, list), sizeOf);
     expect(messages, messages.join('\n')).toEqual([]);
     // Critère 23 : aucun des modules sortis par les paliers 1 et 2 (ni leurs feuilles) n'est dans le départ ni dans la liste.
-    for (const gone of ['src/features/reminders/replanNotifications.ts', 'src/domain/notificationPlan.ts', 'src/features/reminders/notificationTexts.ts', 'src/features/reminders/recapText.ts', 'src/domain/recap.ts', 'src/domain/notificationActions.ts', 'src/sync/publishRotation.ts', 'src/domain/sync/publishRotation.ts', 'src/sync/ownDeletion.ts', 'src/domain/sync/ownDeletion.ts', 'src/i18n/fr.syncOwnDeletion.ts', 'src/i18n/en.syncOwnDeletion.ts', 'src/features/sync/SyncDetailsOwnDeletionHost.tsx', 'src/features/tasks/TaskDetail.tsx', 'src/features/tasks/TaskDetail.css', 'src/features/settings/OnboardingHost.tsx', 'src/features/settings/OnboardingHost.css', 'src/features/search/SearchOverlay.tsx', 'src/features/focus/FocusHost.tsx', 'src/features/shortcuts/ShortcutsHelp.tsx', 'src/features/shortcuts/ShortcutsHelp.css', 'src/features/updater/UpdateBanner.tsx', 'src/features/updater/UpdateBanner.css', 'src/features/events/HolidayDetailHost.tsx', 'src/features/events/HolidayDetail.css']) {
+    for (const gone of ['src/domain/notificationBody.ts', 'src/i18n/notificationBodyText.ts', 'src/i18n/fr.notificationBody.ts', 'src/i18n/en.notificationBody.ts', 'src/features/reminders/replanNotifications.ts', 'src/domain/notificationPlan.ts', 'src/features/reminders/notificationTexts.ts', 'src/features/reminders/recapText.ts', 'src/domain/recap.ts', 'src/domain/notificationActions.ts', 'src/sync/publishRotation.ts', 'src/domain/sync/publishRotation.ts', 'src/sync/ownDeletion.ts', 'src/domain/sync/ownDeletion.ts', 'src/i18n/fr.syncOwnDeletion.ts', 'src/i18n/en.syncOwnDeletion.ts', 'src/features/sync/SyncDetailsOwnDeletionHost.tsx', 'src/features/tasks/TaskDetail.tsx', 'src/features/tasks/TaskDetail.css', 'src/features/settings/OnboardingHost.tsx', 'src/features/settings/OnboardingHost.css', 'src/features/search/SearchOverlay.tsx', 'src/features/focus/FocusHost.tsx', 'src/features/shortcuts/ShortcutsHelp.tsx', 'src/features/shortcuts/ShortcutsHelp.css', 'src/features/updater/UpdateBanner.tsx', 'src/features/updater/UpdateBanner.css', 'src/features/events/HolidayDetailHost.tsx', 'src/features/events/HolidayDetail.css']) {
       expect(actual.has(gone), gone).toBe(false);
       expect(list.groupes.some((group) => group.fichiers?.includes(gone)) || list.ajouts.some((addition) => addition.fichier === gone), gone).toBe(false);
     }
@@ -120,6 +120,14 @@ describe('bundle de départ (index.html)', () => {
   });
 
   // Y-FIX-04 : les textes de la fenêtre de choix après restauration ne sont dans aucun bloc de départ (catalogue à part, chargé avec elle).
+  it('N-FIX-02 : catalogue des corps de notification chargé avec le bloc des rappels', () => {
+    const marker = 'Reporté · {when}';
+    for (const chunk of startChunks().filter(chunk => chunk.file.endsWith('.js'))) {
+      expect(readFileSync(join(outDir, chunk.file), 'utf8').includes(marker), chunk.file).toBe(false);
+    }
+    expect(Object.values(manifest).some(chunk => chunk.file.endsWith('.js') && readFileSync(join(outDir, chunk.file), 'utf8').includes(marker))).toBe(true);
+  });
+
   it('les textes de la fenêtre de choix après restauration sont hors du départ', () => {
     const marker = 'Restauration : que faire de la synchronisation ?';
     const start = startChunks().filter((chunk) => chunk.file.endsWith('.js'));

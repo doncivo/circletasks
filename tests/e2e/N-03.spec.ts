@@ -69,7 +69,7 @@ test.describe('N-03 — actions de notification (iPhone, source injectée)', () 
     await pushAction(page, 'snooze15', request.id);
 
     // L'horloge de la page tourne depuis 09:00:00 : la réponse arrive quelques secondes après, et l'échéance est arrondie à la minute SUIVANTE.
-    await expect.poll(async () => (await requestsOfKind(page, 'snooze')).map((snooze) => [snooze.id, snooze.title, snooze.body, snooze.category])).toEqual([[`snooze:${request.id}`, TITLE, 'À l’heure', 'task']]);
+    await expect.poll(async () => (await requestsOfKind(page, 'snooze')).map((snooze) => [snooze.id, snooze.title, snooze.body, snooze.category])).toEqual([[`snooze:${request.id}`, TITLE, 'Reporté · 10:00', 'task']]);
     expect((await requestsOfKind(page, 'snooze'))[0]?.fireAt).toMatch(/^2026-09-23T09:1[56]$/);
     // La requête d'origine est inchangée, la tâche garde son heure et reste à faire.
     expect((await taskRequests(page)).map((r) => r.fireAt)).toEqual(['2026-09-23T10:00']);

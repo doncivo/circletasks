@@ -40,8 +40,8 @@ describe('replanNotifications : données, textes et limite (N-01 critères 7 et 
     planned(await replanNotifications(h.container, 'open'));
     const tasks = lastRequests(h).filter((request) => request.kind === 'task');
     expect(tasks).toEqual([
-      expect.objectContaining({ fireAt: '2026-10-09T08:30', title: 'Appeler le médecin', body: 'Dans 30 min' }),
-      expect.objectContaining({ fireAt: '2026-10-09T09:00', title: 'Appeler le médecin', body: 'À l’heure' }),
+      expect.objectContaining({ fireAt: '2026-10-09T08:30', title: 'Appeler le médecin', body: '09:00 · Perso' }),
+      expect.objectContaining({ fireAt: '2026-10-09T09:00', title: 'Appeler le médecin', body: '09:00 · Perso' }),
     ]);
   });
 

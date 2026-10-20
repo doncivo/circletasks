@@ -6,6 +6,8 @@ Ce fichier recense les décisions prises sans validation préalable d'Ali (consi
 
 docs/PRD.md n'est jamais modifié.
 
+Application du 2026-10-20 — N-FIX-02 : la décision d'Ali du 2026-10-18 est appliquée sans nouveau choix fonctionnel. Les anciens corps de l'ADR 0012 N1.3 / N3.6 sont remplacés par l'heure de l'élément, son espace et la date quand nécessaire ; « décalé » vient en dernier, sans heure de sonnerie ni parenthèse. Répétition : « Reporté · heure de la cible », sans espace supplémentaire ; journée entière sans heure. Les quatre textes sont chargés avec le constructeur plutôt que le catalogue global, conformément à la règle du départ. ADR 0012, avenant N-FIX-02 ; PRD inchangé.
+
 Les 32 décisions de l'ordre 1, tranchées par Ali le 2026-10-02, se trouvent dans docs/stories/_questions-ordre-1-a.md et _questions-ordre-1-b.md.
 
 | Date | Story | Question ou écart | Option retenue | Raison |
