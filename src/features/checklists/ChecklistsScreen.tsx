@@ -58,6 +58,7 @@ export function ChecklistsScreen() {
   const setCompact = useFeatureStore(checklistsStore, (s) => s.setCompact);
 
   const [editor, setEditor] = useState<'create' | 'edit' | null>(null);
+  const editorTitleRef = useRef<HTMLInputElement>(null);
   const [formError, setFormError] = useState<string | null>(null);
   /** Checklist dont le mode « Réorganiser » est actif (C-05) ; changer de checklist le quitte. */
   const [reorderingFor, setReorderingFor] = useState<ChecklistId | null>(null);
@@ -195,12 +196,13 @@ export function ChecklistsScreen() {
 
   const editorHost =
     editor && defaultSpaceId && (editor === 'create' || displayed) ? (
-      <ChecklistEditorHost label={editor === 'edit' ? t('checklists.sheet.editTitle') : t('checklists.sheet.newTitle')} onClose={closeEditor}>
+      <ChecklistEditorHost label={editor === 'edit' ? t('checklists.sheet.editTitle') : t('checklists.sheet.newTitle')} onClose={closeEditor} {...(editor === 'create' ? { initialFocusRef: editorTitleRef } : {})}>
         <ChecklistForm
           key={editor === 'edit' ? displayedId : 'new'}
           checklist={editor === 'edit' ? (displayed?.checklist ?? null) : null}
           spaces={spaces}
           initialSpaceId={defaultSpaceId}
+          titleRef={editorTitleRef}
           onSubmit={save}
           onClose={closeEditor}
           errorMessage={formError}

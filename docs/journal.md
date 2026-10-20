@@ -1,5 +1,23 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — CI-SEC-01 fusionnée, remise de C-FIX-01 sur main
+
+Deuxième CI de #70, run `39438885651`, job `118683162250` : I-02 vert ; Vitest DOM 1/3 rouge sur le bandeau du critère 12 (**798 verts, 1 rouge**). Le test précédent quittait le clic « Autoriser » au seul appel du faux, avant la fin du passage ; son nettoyage fermait la base et réutilisait le magasin global tandis que le runner pouvait encore écrire. Nettoyage corrigé : attendre la fin du passage courant par `pause()` dans `act`, avant démontage, remise à zéro du bandeau et fermeture ; le scénario du clic attend aussi son résultat visible. Aucun passage ajouté, délai, timeout ou retry changé. Baseline locale isolée 14/14, puis **19/19 tests DOM et runner verts** après correction ; les assertions immédiates du critère 12 sont conservées. Revue distincte approuvée sur l'ordre de nettoyage et la fin du geste ; lint, typage/bundle et nouvelle CI encore requis.
+
+Première CI de #70, run `39436501825`, job `118674781567` : I-02 autorisation refusée rouge (une alerte dans l'historique au lieu de zéro, 159 parcours verts). Cause : le test refusait l'autorisation après l'ouverture ; le runner initial pouvait déjà avoir capturé `granted`, puis lire la date injectée avant la reprise refusée. Reproduction locale isolée verte, cohérente avec cette course. Le scénario marqué `@permission-denied` configure maintenant le faux testé à sa création, avant toute première lecture, par un script d'initialisation propre au test ; l'assertion zéro et le texte refusé restent identiques. Aucun code applicatif, délai, timeout, retry ou saut ajouté. Après correction : **9 parcours I-02 iPhone verts**, cas PC toujours réservé à son projet. Revue distincte du complément approuvée : précondition du scénario établie avant le démarrage, sans vider l'historique ni affaiblir l'oracle ; lint, typage/bundle et nouvelle CI requis avant fusion.
+
+#69 fusionnée dans main `ea596996`, tête `99a445fe`, runs **39432599987 et 39432607833**, **48 contrôles verts**. Mesure sur main : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, coût nul. Clé updater réservée à la signature, revue approuvée ; publication réelle signée réservée à la livraison.
+
+C-FIX-01 rebasée avant premier push : rouge `e2bac0ec`, correctif `292e9e59`, revue `95a76c61` ; blob rouge identique, conflits documentaires conservant les preuves des deux stories précédentes. Contrôle ciblé et mesure avant push en cours, aucun essai physique revendiqué.
+
+## 2026-10-20 — ouverture C-FIX-01
+
+Pendant les validations de publication, passe product-owner C-FIX-01 sur le dossier indépendant des checklists : focaliser le titre au montage dans le geste d'ouverture, supprimer sa minuterie, conserver les pièges et la présentation existants. Estimation 2 h actives, alerte 3 h (total avec Y-IOS-06 maintenu à 5 h). Preuve synchrone écrite à 440, 393 et 1440 px avant correctif ; la montée du vrai clavier reste un essai de l'IPA, aucune preuve appareil revendiquée. Fusion après CI-SEC-01.
+
+C-FIX-01 rouge `ee2b51ab` : trois échecs synchrones, focus reçu sur « Fermer » au lieu du titre. La référence du titre est désormais donnée au piège de focus de son hôte en création, comme Q-05 ; la minuterie disparaît. Le test couvre aussi la restitution du focus et a refusé une première variante `autoFocus` qui capturait le mauvais élément de retour. Version par `initialFocusRef` : **3/3**, puis **91/91 tests du module**, lint global vert ; aucun texte ni changement de maquette. Typage, revue, remise sur main, bundle et CI encore requis, clavier physique réservé au lot IPA.
+
+C-FIX-01 : typage final vert après l'annotation React 18 `RefObject<HTMLInputElement>` ; revue distincte du diff approuvée côté code. La référence est stable, donnée au piège seulement à la création, et les deux sens du focus sont vérifiés sans attente. Remise sur main après CI-SEC-01, mesure et CI complète requises avant fusion ; la montée réelle du clavier garde son essai physique ouvert.
+
 ## 2026-10-20 — fusion de N-FIX-02, remise de CI-SEC-01 sur main
 
 #68 fusionnée dans `main` `f06bdee5`, tête `adbfd13f` : runs **39429974799 et 39429984825**, **48 contrôles verts** avec couverture, revue approuvée. Bundle sur main après fusion : **58/58, 338 443 normalisés, 338 378 bruts, marge 19 957**, net −38. B10 clôturé côté code vérifié ; essai réel du rappel décalé réservé à l'IPA.
