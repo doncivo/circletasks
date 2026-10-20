@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-20 — ouverture Y-IOS-06
+
+Passe product-owner des gardes natives, dossier indépendant du front : premier plan, interaction libre, présentateur attaché et sans transition ; délégué du sélecteur à réponse unique, annulation après fermeture interactive. Contrat, codes et commandes sans échéance conservés. Estimation 3 h actives, alerte 4,5 h (total C-FIX-01 + Y-IOS-06 : 5 h). Contrôles de source Rust écrits avant correctif ; ils ne remplacent ni la compilation Swift du lot unique ni les essais d'interface d'Ali. Fusion après C-FIX-01, aucun fichier utilisateur réel consulté.
+
 ## 2026-10-20 — CI-SEC-01 fusionnée, remise de C-FIX-01 sur main
 
 Deuxième CI de #70, run `39438885651`, job `118683162250` : I-02 vert ; Vitest DOM 1/3 rouge sur le bandeau du critère 12 (**798 verts, 1 rouge**). Le test précédent quittait le clic « Autoriser » au seul appel du faux, avant la fin du passage ; son nettoyage fermait la base et réutilisait le magasin global tandis que le runner pouvait encore écrire. Nettoyage corrigé : attendre la fin du passage courant par `pause()` dans `act`, avant démontage, remise à zéro du bandeau et fermeture ; le scénario du clic attend aussi son résultat visible. Aucun passage ajouté, délai, timeout ou retry changé. Baseline locale isolée 14/14, puis **19/19 tests DOM et runner verts** après correction ; les assertions immédiates du critère 12 sont conservées. Revue distincte approuvée sur l'ordre de nettoyage et la fin du geste ; lint, typage/bundle et nouvelle CI encore requis.

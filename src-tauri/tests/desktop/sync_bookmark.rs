@@ -32,6 +32,57 @@ const PLUGIN_LIB: &str = include_str!("../../plugins/folder-bookmark/src/lib.rs"
 const PLUGIN_BUILD: &str = include_str!("../../plugins/folder-bookmark/build.rs");
 const COMMANDS_IOS_RS: &str = include_str!("../../src/sync/commands_ios.rs");
 
+/// Bloc Swift équilibré : contrôles de contrat de présentation, pas une exécution de UIKit.
+fn swift_interaction_block(marker: &str) -> String {
+    let code = swift_code();
+    let start = code.find(marker).unwrap_or_else(|| panic!("bloc Swift absent : {marker}"));
+    let open = start + code[start..].find('{').expect("ouverture du bloc");
+    let mut depth = 0;
+    for (offset, ch) in code[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 { return code[start..open + offset + 1].to_owned(); }
+            }
+            _ => {}
+        }
+    }
+    panic!("bloc Swift non terminé : {marker}");
+}
+
+#[test]
+fn y_ios_06_01_shared_guard_checks_foreground_ownership_and_presenter() {
+    let guard = swift_interaction_block("private func interactionPresenter(");
+    for required in ["UIApplication.shared.applicationState != .active", "picker != nil", "pendingAlert != nil", "presenter.viewIfLoaded?.window", "presenter.isBeingDismissed", "presenter.isBeingPresented", "reject(invoke, .notForeground)", "reject(invoke, .io)"] {
+        assert!(guard.contains(required), "garde manquante : {required}");
+    }
+}
+
+#[test]
+fn y_ios_06_02_both_interactions_guard_before_claiming_or_presenting() {
+    for (marker, claim) in [("@objc public func pickFolder(", "self.picker = delegate"), ("@objc public func confirm(", "self.pendingAlert = alert")] {
+        let body = swift_interaction_block(marker);
+        let guard = body.find("self.interactionPresenter(invoke)").expect("garde partagée avant présentation");
+        assert!(body.find("DispatchQueue.main.async").expect("fil principal") < guard);
+        assert!(guard < body.find(claim).expect("interaction mémorisée"));
+        assert!(guard < body.find("presenter.present(").expect("présentation native"));
+    }
+}
+
+#[test]
+fn y_ios_06_03_interactive_dismissal_and_delegate_callbacks_answer_once() {
+    let delegate = swift_interaction_block("private final class PickerDelegate:");
+    assert!(delegate.contains("UIAdaptivePresentationControllerDelegate"));
+    assert!(delegate.contains("func presentationControllerDidDismiss("));
+    let answer = swift_interaction_block("private func answer(_ reply:");
+    assert!(answer.contains("guard !answered else"));
+    assert!(answer.find("answered = true").expect("réponse mémorisée") < answer.find("reply()").expect("callback"));
+    assert_eq!(delegate.matches("answer(onCancel)").count(), 2, "bouton et fermeture interactive");
+    let picker = swift_interaction_block("@objc public func pickFolder(");
+    assert!(picker.contains("controller.presentationController?.delegate = delegate"));
+}
+
 fn code<T>(result: Result<T, SyncError>) -> SyncCode {
     match result {
         Ok(_) => panic!("erreur attendue"),
