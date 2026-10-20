@@ -123,12 +123,16 @@ Placement du catalogue : les quatre chaînes sont dans `fr.notificationBody.ts` 
 
 | Élément | Valeur |
 |---|---|
-| Départ de référence (octets gzip, seuil 358 400) | |
-| Tableau (critères 1 à 16), rouge avant (commit, première assertion en échec) | |
-| Tableau, vert après (commit) | |
-| Départ après chaque commit | |
-| Tableau « ancienne attente → nouvelle attente » (critère 21) | |
-| Commandes locales et résultats | |
+| Départ de référence (octets gzip, seuil 358 400) | `e64e0148`, puis `2b77799c` : 338 481, marge 19 919, 57/57 |
+| Tableau (critères 1 à 16), rouge avant (commit, première assertion en échec) | `2b77799c` : 26/26 rouges ; attendu `09:00 · Pro`, reçu `À l’heure` |
+| Tableau, vert après (commit) | `1769d017` : tableau vert ; 43 tests finaux de corps et description verts |
+| Départ après chaque commit | `2b77799c` : 338 481, 57/57 ; `1769d017` : **338 443**, brut 338 378, marge **19 957**, **58/58 verts**, net **−38** ; mesure du commit documentaire suivant requise avant push |
+| Tableau « ancienne attente → nouvelle attente » (critère 21) | Détail ci-dessus : deux rappels à 09:00, répétition à 12:00, e2e à 10:00 ; assertions conservées |
+| Commandes locales et résultats | Module 420/41, compléments 43/2, couverture coupée ; lint global et typage verts ; specs N-01/N-03 listées, neuf parcours iPhone simulé verts, cas PC laissés à leur projet CI |
+
+## Passe code-reviewer du 2026-10-20
+
+**Approuvée**, après qa-test et relecture du diff à froid sur `1769d017`. Vérifiés : inversion de l'avance en dates civiles, date de l'occurrence de série pour une répétition, heure de la cible, journées entières sans 09:00 conventionnel, décalage en dernier, absence d'espace orphelin, quatre natures par le constructeur commun, récapitulatifs et Focus inchangés. Aucun accès supplémentaire à la base, seulement les espaces déjà lus ajoutés au dictionnaire ; aucun texte utilisateur dans le journal. Les anciennes fonctions et clés n'ont plus d'usage. Le nouveau corps et ses textes sont hors départ par garde de sources et marqueur de catalogue ; liste non étendue, net −38, seuils inchangés. Aucun constat bloquant restant dans le périmètre de code. La story reste **en validation** jusqu'à la suite complète avec couverture, fusion et mesure sur main.
 
 ## Écarts
 

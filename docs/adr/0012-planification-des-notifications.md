@@ -475,3 +475,16 @@ Journal technique : codes et nombres seulement.
 ## Renvoi I-06 (2026-10-09)
 
 Premier lancement d'une nouvelle version (réglage local `app.lastLaunchedVersion` changé) : le premier passage est demandé avec le déclencheur `'update'` (même passage complet que `open`, ajouté à `SIGNING_TRIGGERS`). Détail : ADR 0007, avenant I-06 point 6.
+
+## Avenant N-FIX-02 (2026-10-20) — heure de l'élément dans les corps
+
+Application de la décision d'Ali du 2026-10-18. Cet avenant remplace les corps « À l'heure » / « Dans {avance} » de N1.3 et le corps de l'avance repris par la répétition dans N3.6 ; titres, catégories, récapitulatifs et fin de Focus restent identiques.
+
+- Description pure `bodyParts` dans `src/domain/notificationBody.ts`, puis constructeur unique `notificationBody` dans `notificationTexts.ts`, appelé par les quatre natures de rappel.
+- L'heure est celle de l'élément : `scheduledAt + offsetMin` en dates civiles pour les rappels ; heure actuelle de la cible pour la répétition. Ni heure de sonnerie prévue ni heure effective dans le corps.
+- Date courte devant l'heure pour les événements, et pour les autres natures si le jour de l'élément diffère du jour de sonnerie. Événement journée entière : date et « Journée entière », aucune heure conventionnelle.
+- Corps ordinaire : heure/date, puis espace s'il est connu, puis « décalé » si la plage silencieuse a déplacé le rappel. Exemple : `mar. 22 sept. · 20:00 · Pro · décalé`, sans 19:30 ni 08:00. Aucun séparateur orphelin si l'espace manque.
+- Répétition : `Reporté · 14:00`, sans espace ni décalage ; la date suit la même règle, occurrence de série conservée. Les formats passent par `formatDayLabel` et le point commun `formatTime`.
+- Les quatre chaînes fr/en sont chargées avec le bloc des rappels (`*.notificationBody.ts`, `notificationBodyText.ts`), hors du départ. Les fonctions `reminderBody` / `advanceLabel` et les trois anciennes chaînes sont supprimées. Aucun nouveau module dans le départ, budget net non positif.
+
+Preuves : tableau de 26 textes finaux rouge sur `2b77799c`, puis constructeur et description verts ; tests du vrai plan, des avances, de l'espace absent, des événements répétés, de l'anglais et du format horaire. Détail et validations dans `docs/stories/N-FIX-02.md`.
