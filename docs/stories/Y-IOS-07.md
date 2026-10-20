@@ -85,7 +85,7 @@ Réponse de Codex, passe product-owner du **2026-10-20**, avant tout code : **au
 
 11. **Étant donné** les cas existants `segment-full` et `segment-mismatch`, **alors** leur comportement est inchangé (même compteur `attempt < 2`, mêmes numéros de segment) : les tests existants de `publisher.ts` passent sans modification d'attente.
 12. **Alors** : `CT_TEST_WORKERS=1 npx vitest run src/sync src/platform/sync src/features/sync tests/sim tests/unit/sync --coverage.enabled=false` vert ; `cd src-tauri && cargo test --test desktop --features test-hooks -- sync_` vert ; lint et typage verts ; aucun `skip`, délai, retry ni test allongé ; **CI « suite verte » sur la branche** avant fusion.
-13. **Alors** le **bundle de départ est mesuré** : `tests/bundle/startBundle.test.ts` lancé avant tout push (état de départ : 358 045 octets gzip, marge de 355 octets sur le seuil de 358 400, soit 349,67 Ko sur 350 : **aucune marge**). La mesure (en octets) est notée dans la fiche. Le texte de l'avertissement et son composant d'affichage sont chargés à la demande ou rangés dans un bloc déjà hors départ ; si le départ dépasse, les leviers connus sont appliqués avant le push (mémoire projet « Bundle de départ saturé »).
+13. **Alors** le **bundle de départ est mesuré** avant tout push : référence de reprise `095c5e4a`, **342 924 octets normalisés**, marge 15 476 sur **358 400**, plafond inchangé. La mesure est notée dans la fiche. Tout bloc ou texte nouveau hors premier affichage reste à la demande ; aucune extension injustifiée de la liste du départ.
 14. **Alors** le texte de l'avertissement vit dans `src/i18n` (français, 24 h), jamais en dur, et reste sous un nom de motif de synchro existant si c'est possible.
 
 ### Documentation
@@ -137,6 +137,18 @@ Réponse de Codex, passe product-owner du **2026-10-20**, avant tout code : **au
 | Élément | Valeur |
 |---|---|
 | Scénario 6 rouge avec le code actuel | `ad3ae641`, run CI `39386547885` : trois échecs cloud-pending sur trois cycles |
-| Scénario 6 vert après correctif | commit et run : *à compléter* |
-| Bundle de départ (octets gzip, seuil 358 400) | *à compléter* |
+| Scénario 6 vert après correctif | `43d2d299`, QA locale verte ; CI finale encore requise |
+| Bundle de départ (octets gzip, seuil 358 400) | **343 463 normalisés, 343 425 bruts, marge 14 937**, 56/56 ; liste du départ inchangée |
 | Réponse « raison technique de faire l'inverse » | consignée avant le code, commit `6da1939f` ; aucune raison de télécharger |
+
+## Passes de QA et de revue du 2026-10-20
+
+Passe module : `0dcf2434`, puis correctif de revue `43d2d299`. L'indice `appendBeforeWrite` est réservé au refus de lecture locale avant tout octet ; une écriture partielle ne le porte pas. La cible et son hlc sont persistés ; dix cycles refusés gardent la même cible. L'intention d'ajout et sa résolution au redémarrage protègent le retrait de la file. Aucune hydratation ajoutée au chemin d'écriture, aucun format iCloud changé.
+
+Passe QA : **2 331 tests verts sur 196 fichiers** du module, couverture coupée (669,31 s) ; puis **368 tests Rust `sync_` verts**, aucun nouvel ignore. E2e iPhone simulé sur le correctif relu : **1/1 vert, 22,9 s** ; l'indice traverse le client RPC, l'ajout ouvre le segment suivant et chaque saisie est publiée une fois. Les cas couvrent aussi lecture sans trou, `closed`, vingt segments courts, conservation avant accusé et purge après lecture, jamais la tête.
+
+Passe code-reviewer distincte : diff complet relu depuis `origin/main`, puis corrections relues. Gardes renforcées : (a) borne des numéros avant mémorisation d'une cible, y compris après `segment-full` ; (b) écriture et effacement du mémo indépendants du bloc de lecture à la demande ; (c) tête vide reprenant la cible persistée même si le maximum du listing augmente. Tests rouges de revue `607099b7` (trois échecs) et `1ef30588` (reprise et borne), correctif `43d2d299` ; **81 tests ciblés verts sur neuf fichiers** après correction. Le compteur historique des deux tentatives full/mismatch est conservé. Un mémo d'une autre époque ne choisit pas la cible courante et est effacé au succès courant. Les erreurs de stockage et les mémos illisibles remontent.
+
+**Revue du code approuvée** ; contrôles finaux et CI complète avec couverture obligatoires avant fusion. Les observations physiques restent dans les essais du lot IPA ; aucune preuve sur appareil réel revendiquée.
+
+Contrôles finaux sur le correctif relu : lint et typage verts, e2e iPhone 1/1, bundle 56/56 (343 463 normalisés, 343 425 bruts, écart 38/100). Scan des fichiers suivis sans secret détecté. CI complète encore requise avant fusion.
