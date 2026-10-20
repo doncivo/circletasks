@@ -8,7 +8,7 @@ import { revivedDone } from './forget';
 import { isStrictHlc } from '../domain/sync/format';
 import { SYNC_TABLES, isPurgeable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
-import { syncErrorCodeOf, type DeviceScan } from '../platform/sync/types';
+import type { DeviceScan } from '../platform/sync/types';
 import { CARRY_HELD_MARK, applyOps } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
@@ -156,8 +156,10 @@ function ownSnapshotEligible(covers: Record<string, unknown> | undefined, covera
   return coversForgotten(map, coverage.master, coverage.ackers) === null;
 }
 
+const ownDeletionModule = () => import('./ownDeletion');
+
 export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise<void> {
-  const { data, platform, logger } = deps;
+  const { data, logger } = deps;
   const nowMs = deps.clock.nowMs();
   const devices = knownDevices(input.rows, logger);
   const horizon = purgeHorizon(devices, deps.deviceId, nowMs, input.revived ?? []);
@@ -183,12 +185,12 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
   );
   if (removable.length > 0) {
     deps.deadline?.check('delete-own');
-    try {
-      await platform.deleteOwn(removable.map((n) => ({ epoch: input.epoch, kind: 'j' as const, n })));
+    const { code } = await (await ownDeletionModule()).deleteOwnTracked(deps, removable.map((n) => ({ epoch: input.epoch, kind: 'j' as const, n })));
+    if (code === null) {
       logger.log('segments-purged', { count: removable.length });
-    } catch (error) {
+    } else {
       // Journalisé (aucun échec silencieux) ; retentée au cycle suivant.
-      logger.log('delete-own-failed', { kind: 'j', code: syncErrorCodeOf(error) });
+      logger.log('delete-own-failed', { kind: 'j', code });
     }
   }
 
@@ -197,12 +199,12 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
   const allMoved = readers.every((r) => input.accepted.get(r.deviceId)?.epoch === input.epoch);
   if (older.length > 0 && allMoved && input.keepOldEpochs !== true) {
     deps.deadline?.check('delete-own');
-    try {
-      await platform.deleteOwn(older.map((e) => ({ epoch: e.epoch, kind: 'epoch' as const })));
+    const { code } = await (await ownDeletionModule()).deleteOwnTracked(deps, older.map((e) => ({ epoch: e.epoch, kind: 'epoch' as const })));
+    if (code === null) {
       logger.log('old-epochs-deleted', { count: older.length });
-    } catch (error) {
+    } else {
       // Journalisé (aucun échec silencieux) ; retentée au cycle suivant.
-      logger.log('delete-own-failed', { kind: 'epoch', code: syncErrorCodeOf(error) });
+      logger.log('delete-own-failed', { kind: 'epoch', code });
     }
   }
 

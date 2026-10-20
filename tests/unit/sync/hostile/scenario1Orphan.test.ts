@@ -51,7 +51,7 @@ describe('Y-TECH-03 scénario 1 : instantané orphelin évincé, première suppr
 });
 
 describe('Y-TECH-03 scénario 1 : faux en mode historique (critère 19 c, critère 14 côté TypeScript)', () => {
-  it('mode historique : le substitut reste malgré la suppression, le bug du 8 octobre se reproduit (réarmé et « déjà parti » à chaque cycle)', async () => {
+  it('mode historique : le substitut reste, le mémo est gardé et l’échec est visible à chaque cycle', async () => {
     const session = await orphanSession(devices);
     const { b } = session;
     const obs = await playOrphanScenario(session, planNamed('scenario-1-orphelin-historique'), statusLine);
@@ -62,7 +62,9 @@ describe('Y-TECH-03 scénario 1 : faux en mode historique (critère 19 c, critè
     // Le moteur n'a aucun moyen de le voir autrement : la suppression répond « rien supprimé », jamais un faux succès au journal.
     expect(events(b, 'orphan-epoch-deleted')).toBe(0);
     expect(events(b, 'orphan-epoch-already-gone')).toBe(3);
-    expect(events(b, 'orphan-epoch-relisted')).toBe(3);
+    // Y-IOS-02-FIX-01 : le mémo n'est plus effacé quand aucune suppression n'a eu lieu.
+    expect(events(b, 'orphan-epoch-relisted')).toBe(1);
+    expect(obs.cycles.every((c) => c.warnings.includes('own-delete-failed') && !c.line.includes('À jour'))).toBe(true);
   });
 
   it('mode correct (plugin actuel, Y-IOS-02-FIX-02) : la suppression du vrai nom emporte le substitut', async () => {

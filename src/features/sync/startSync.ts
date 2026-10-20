@@ -96,6 +96,7 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'awaiting-other-devices':
     case 'carry-held':
     case 'carry-report':
+    case 'own-delete-failed':
       return warningText(trouble.code);
   }
 }

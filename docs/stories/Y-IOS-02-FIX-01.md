@@ -1,10 +1,18 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
-Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : à faire (décision d'Ali du 2026-10-10)
+Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : en cours (2026-10-19) ; preuves rouges consignées, QA locale et revue finale en cours ; CI et essai appareil requis avant clôture
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD ; ajoute un avertissement de plus à l'écran de Détails et aux bandeaux A-09.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 (bandeaux), Y-10-FIX-01 (aucune dépendance de code, mais même écran : fusionner dans l'ordre de la phase). Ne bloque aucune autre story.
 
 ## Contexte
+
+### Passe product-owner du 2026-10-19 — périmètre étendu autorisé
+
+Début de reprise après `main` `5d7bb1a4`. Estimation du périmètre étendu : **4 à 6 h**, arrêt et alerte à **9 h**. Statut courant : en cours, aucune validation revendiquée. Les décisions déjà prises restent appliquées : écrivain unique, format inchangé, publication et lecture non bloquées par l'entretien, aucune lecture iCloud pour écrire.
+
+Aux critères historiques s'ajoutent B5 réduit (`delete-own-failed`, segments, instantanés et anciennes époques) et les défauts 2 et 3 connus du banc Y-TECH-03 : un ancien instantané qui revient après une suppression acceptée doit produire un échec durable visible et être retenté sans attendre une nouvelle création d'instantané ; un substitut qui reste malgré une réponse sans suppression ne doit plus permettre « À jour ». Ces preuves sont établies sur le banc, sans données réelles.
+
+Le suivi local conserve la preuve des suppressions demandées et des échecs au redémarrage. Les échecs ne disparaissent qu'au succès ou à la confirmation de l'absence ; une disparition temporaire du listing ne doit pas faire oublier qu'un fichier revenu avait déjà été supprimé. Aucune reprise automatique supplémentaire en dehors des cycles existants. Les critères d'interface s'appliquent aux deux familles d'échecs avec cause traduite, dernier essai et action manuelle. Les essais physiques de clôture seront regroupés après publication de l'IPA : jusque-là, le statut sera « code vérifié, essai appareil en attente ».
 
 Constat de la séance iPhone 0.3.0 (2026-10-10) : après l'abandon de son époque orpheline, le fichier `s-00000001.cts` de l'ancienne époque de l'iPhone est **resté** dans `devices/<iPhone>/e0001-<iPhone>/` du dossier iCloud. La suppression (`retryOrphanDeletion` de `src/sync/orphanEpoch.ts`) a échoué ; le moteur journalise `orphan-epoch-delete-failed` avec son code et la retente à chaque cycle, **mais rien n'est montré à l'utilisateur**. Or tant que ce fichier existe, `canPublish` (`src/domain/sync/epoch.ts`, `listedFiles`) refuse la publication, et l'iPhone n'affiche que « Cet appareil n'a pas encore publié son état : vos autres appareils ne voient pas ses modifications », **sans dire pourquoi**. C'est un blocage durable sans cause visible, contraire à la règle d'Ali « aucun échec silencieux » (mémoire projet : tout blocage durable visible dans l'app, pas seulement dans les logs).
 
@@ -65,6 +73,8 @@ Tests : Vitest (moteur sur faux `SyncFs` et horloge injectée, écran avec Testi
 - D1 — **Point ouvert tranché** : pas de « Supprimer moi-même » ni de bouton de suppression côté PC. Le texte donne le **chemin exact** du dossier à vérifier dans l'app Fichiers (recommandation d'Ali), sans lien ni suppression par l'app : cohérent avec la règle d'écrivain unique, sans surface de suppression nouvelle, et la suppression manuelle dans Fichiers reste une action de l'utilisateur. Le chemin affiché reste fait d'identifiants, jamais d'un chemin système ni du nom d'un fichier. À valider par Ali avec la story.
 - D2 — Une seule clé de `sync_meta` (`orphanDeleteFailure`), effacée à la résolution, comme `forgetFailure` : même schéma que Y-10, aucune table nouvelle.
 
+Avenant du 2026-10-19 au périmètre autorisé : `orphanDeleteFailure` garde ce rôle pour l'orpheline ; `ownDeleteFailure` couvre les autres suppressions et `ownDeletionReceipts` conserve les références demandées, y compris après une absence temporaire. Ces trois valeurs restent locales dans la table existante, sans migration ni format publié nouveau. Aucun changement de décision produit.
+
 ## Fichiers
 
 `src/sync/orphanEpoch.ts` (`retryOrphanDeletion`) et `src/sync/meta.ts` (clé) ; `src/sync/engine.ts` (lecture dans `status()`) ; `src/platform/sync/types.ts` (champ de `SyncStatus`) ; `src/features/sync/syncText.ts` (cause traduite, réutilisée) ; `src/features/sync/SyncDetailsScreen.tsx` ou composant dédié de Détails ; `src/domain/syncBanners.ts` (une ligne) ; `src/i18n/{fr,en}*` (section de synchro) ; tests `tests/unit/sync/**`, tests d'écran et `tests/e2e/parcours/` (parcours iPhone de synchro).
@@ -77,6 +87,15 @@ Tests : Vitest (moteur sur faux `SyncFs` et horloge injectée, écran avec Testi
 3. sync-icloud puis ios-mobile : e2e `iphone` (échec simulé, avertissement, nouvelle tentative, résolution, redémarrage) ; qa-test ; code-reviewer ; product-owner vérifie critère par critère et clôt.
 
 ## Vérifications manuelles d'Ali (iPhone, ordre 5)
+
+### Passes de QA et de revue du 2026-10-19
+
+- Preuves rouges : `4d1d9bfd` (scénario 4 historique, deux échecs), `69e8a188` (substitut persistant et retour d'instantané, cycles du banc explicitement avancés), `429921e6` (bandeau absent pendant le premier cycle après restauration).
+- Preuves vertes : `6ef9ac6a` pour le moteur, la persistance et l'interface ; `0f838da6` pour le bandeau au démarrage. QA ciblée sans couverture : 142 tests verts sur 15 fichiers, puis 32 tests verts sur les deux fichiers de persistance et de bandeaux après le dernier correctif. E2e `iphone` sur `0f838da6` : 1/1 vert, 11,1 s, cause, dossier, bouton occupé et résolution.
+- Revue distincte : diff complet relu depuis `origin/main`, puis seconde lecture des chemins de stockage, de restauration et d'entretien. Les exceptions du stockage remontent ; l'interruption ne crée pas d'échec ; un reçu ne donne aucun droit de suppression supplémentaire ; les critères d'éligibilité restent ceux du moteur. Aucun changement de format, de migration, de Rust ni de `canPublish`. Le signal restauré est présent même pendant le premier cycle. Composant et catalogues dédiés à la demande, assertion hors départ ajoutée. **Revue du code approuvée**, sous réserve des contrôles finaux et de la CI complète obligatoire.
+- Le critère 18 reste ouvert jusqu'à l'essai physique du lot IPA ; aucune clôture « fait » revendiquée.
+- Contrôles finaux avant push : lint et typage verts ; bundle **55/55**, **342 977 octets normalisés**, 342 917 bruts, marge 15 423 sur 358 400, garde d'écart 60/100. Aucun seuil modifié, aucun module ajouté à la liste du départ. CI complète avec couverture encore requise avant fusion.
+- Première CI de #65 (`39276679969`, `3b0ee1f3`) : garde du formateur horaire et liste exhaustive des avertissements rouges. Usage du formateur commun corrigé, huitième avertissement ajouté à l'attente à sa priorité prévue ; 6 et 8 tests ciblés verts, lint des fichiers modifiés et typage verts, correction relue et approuvée. Dernier bundle **55/55, 342 924 normalisés, 342 871 bruts, marge 15 476**. Aucun seuil modifié, aucune relance du même code pour masquer l'échec.
 
 1. Cas réel de la séance 0.3.0 : provoquer ou retrouver un iPhone dont l'ancienne époque (`s-00000001.cts`) n'a pas pu être supprimée ; ouvrir Réglages > Synchronisation > Détails : l'avertissement rouge nomme la cause traduite, l'heure du dernier essai et le dossier `devices` à vérifier ; le bandeau est visible sur les écrans principaux.
 2. Vérifier dans l'app Fichiers que le chemin indiqué est bien celui du fichier resté ; le supprimer à la main : « Réessayer maintenant » ou le cycle suivant fait disparaître l'avertissement et l'iPhone publie (« Cet appareil n'a pas encore publié son état » disparaît).

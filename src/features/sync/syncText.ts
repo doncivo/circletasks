@@ -59,7 +59,7 @@ export function ownPlatform(status: Pick<SyncStatus, 'devices'>): 'windows' | 'i
   return detectOs() === 'ios' ? 'ios' : 'windows';
 }
 
-function errorText(code: string | null | undefined, platform: 'windows' | 'ios' = 'windows'): string {
+export function errorText(code: string | null | undefined, platform: 'windows' | 'ios' = 'windows'): string {
   switch (code) {
     case 'folder-unreachable':
       // iPhone : signet perdu ou dossier déplacé : le dossier est à choisir de nouveau (bouton « Choisir le dossier » de Réglages).
@@ -214,7 +214,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'idle':
       // Jamais « À jour » tant que cet appareil n'a pas publié son état, que des modifications reçues restent inappliquées ou qu'un autre
       // appareil a des fichiers illisibles (Y-FIX-03, ADR 0011 §31).
-      if (status.warnings?.some((code) => code === 'publish-blocked' || code === 'received-unapplied' || code === 'awaiting-other-devices' || code === 'carry-held' || code === 'carry-report') || status.devices.some((d) => !d.self && d.status === 'corrupt')) return t('sync.status.incomplete');
+      if (status.warnings?.some((code) => code === 'own-delete-failed' || code === 'publish-blocked' || code === 'received-unapplied' || code === 'awaiting-other-devices' || code === 'carry-held' || code === 'carry-report') || status.devices.some((d) => !d.self && d.status === 'corrupt')) return t('sync.status.incomplete');
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
 }
@@ -235,6 +235,8 @@ export function resetRequiredLine(reset: Pick<NonNullable<SyncStatus['reset']>, 
 /** Y-TECH-02 : texte d'un avertissement du scan (bandeau et section AVERTISSEMENTS des détails, une seule formulation). */
 export function warningText(code: SyncWarningCode): string {
   switch (code) {
+    case 'own-delete-failed':
+      return t('sync.status.incomplete');
     case 'nonce-budget':
       return t('sync.status.warnNonceBudget');
     case 'folder-large':

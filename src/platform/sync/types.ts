@@ -9,6 +9,7 @@
  */
 
 import type { ReintegrationFailure } from '../../domain/sync/compat';
+import type { OwnDeleteFailure } from '../../domain/sync/ownDeletion';
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import type { RestoreOption } from '../../domain/sync/epoch';
 import type { DeviceStateStatus } from '../../domain/sync/ownState';
@@ -501,6 +502,8 @@ export interface SyncDeviceStatus {
 }
 
 export interface SyncStatus {
+  /** Y-IOS-02-FIX-01 : échecs de suppression persistants (absence = aucun). */
+  readonly ownDelete?: readonly OwnDeleteFailure[];
   readonly phase: SyncPhase;
   readonly lastSyncAt: IsoDateTime | null;
   /** Nom du dossier (`SyncFolderInfo.label`, jamais un chemin) ; le libellé affiché est composé par l'interface avec `folderKind`. */

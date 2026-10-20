@@ -62,7 +62,7 @@ const SCAN_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan
  * échec de son enregistrement : interdit « À jour » (la ligne d'état dit « Synchro incomplète : voir les avertissements »), reste jusqu'à « J'ai vu » ; remplace `carry-reattached` de Y-FIX-04, dont la
  * notice reste écrite mais ne lève plus rien seule). Placés avant ceux du scan (les données d'abord).
  */
-export const SYNC_WARNINGS = ['carry-held', 'carry-report', ...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
+export const SYNC_WARNINGS = ['carry-held', 'carry-report', ...SCAN_WARNINGS, 'own-delete-failed', 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
 export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
 /**
  * Y-FIX-02 (ADR 0011 §30) : cause nommée jointe à `publish-blocked` dans `warnings` (texte de la section AVERTISSEMENTS de Détails, catalogue à
@@ -253,6 +253,8 @@ export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice>
   readonly warnings?: readonly SyncStatusWarning[] | null | undefined;
   /** Y-TECH-02 : une lecture de l'état local par le service a échoué (§19 point 7), facultatif. */
   readonly stateUnreadable?: boolean | undefined;
+  /** Échec restauré au démarrage, y compris pendant le premier cycle encore en cours. */
+  readonly ownDelete?: readonly { readonly code: SyncErrorCode }[];
 }
 
 /** Arrivée d'un nouvel appareil arrêtée par un échec (`sync_meta.join`, Y-06) : gardée par le moteur jusqu'à la réussite. */
@@ -363,7 +365,8 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
   if (reset && reset.role !== 'required' && (reset.step !== 'superseded' || stoppedReset(reset)) && reset.step !== 'done') troubles.push({ code: 'reset-progress', reset });
   if (reset?.reminder) troubles.push({ code: 'reset-reminder', reset });
   // Y-TECH-02 : avertissements du scan (une valeur inconnue, d'une version plus récente, est ignorée : ce n'est qu'un avertissement).
-  for (const code of new Set(shown.warnings ?? [])) if (isSyncWarning(code)) troubles.push({ code });
+  const warnings = [...(shown.warnings ?? []), ...((status.ownDelete?.length ?? 0) > 0 ? ['own-delete-failed' as const] : [])];
+  for (const code of new Set(warnings)) if (isSyncWarning(code)) troubles.push({ code });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));
 
   return {
