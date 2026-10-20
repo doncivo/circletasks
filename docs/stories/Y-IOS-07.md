@@ -152,3 +152,5 @@ Passe code-reviewer distincte : diff complet relu depuis `origin/main`, puis cor
 **Revue du code approuvée** ; contrôles finaux et CI complète avec couverture obligatoires avant fusion. Les observations physiques restent dans les essais du lot IPA ; aucune preuve sur appareil réel revendiquée.
 
 Contrôles finaux sur le correctif relu : lint et typage verts, e2e iPhone 1/1, bundle 56/56 (343 463 normalisés, 343 425 bruts, écart 38/100). Scan des fichiers suivis sans secret détecté. CI complète encore requise avant fusion.
+
+CI initiale de #66 sur `20ec6508` : le run `39392116661` échoue sur le test SEC-01 de limitation des journaux SQL (20 lignes contre 10 à la frontière d'une minute). Le test supposait la rafale contenue dans une minute réelle. Horloge du journal injectée sous `test-hooks`, avec restauration et verrou existant ; dix lignes dans la minute figée, puis une ligne et le résumé des 991 refus après avance simulée. Aucun seuil ni timeout modifié, aucun test désactivé ou relancé à l'identique. **804 tests Rust verts en parallélisme normal**, correction relue et approuvée ; nouvelle CI complète obligatoire avant fusion.

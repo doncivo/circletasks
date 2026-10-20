@@ -281,7 +281,46 @@ pub fn line_of(entry: &LogEntry) -> String {
 // Heure
 // ------------------------------------------------------------------------------------------------------------------------------
 
+#[cfg(feature = "test-hooks")]
+static TEST_NOW: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
+
+/// Horloge du journal pour les tests d'intégration. Tenir `support::applog_dir_lock()` pendant toute sa durée : le débit et le dossier
+/// sont partagés par le processus, donc tous ses écrivains doivent observer la même minute. Restauration même en cas de panique.
+#[cfg(feature = "test-hooks")]
+pub struct TestClock {
+    previous: u64,
+    _not_send: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+#[cfg(feature = "test-hooks")]
+impl TestClock {
+    pub fn set(&mut self, now: u64) {
+        assert_ne!(now, u64::MAX);
+        TEST_NOW.store(now, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[cfg(feature = "test-hooks")]
+impl Drop for TestClock {
+    fn drop(&mut self) {
+        TEST_NOW.store(self.previous, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[cfg(feature = "test-hooks")]
+pub fn clock_for_tests(now: u64) -> TestClock {
+    assert_ne!(now, u64::MAX);
+    TestClock { previous: TEST_NOW.swap(now, std::sync::atomic::Ordering::SeqCst), _not_send: std::marker::PhantomData }
+}
+
 fn now_secs() -> u64 {
+    #[cfg(feature = "test-hooks")]
+    {
+        let now = TEST_NOW.load(std::sync::atomic::Ordering::SeqCst);
+        if now != u64::MAX {
+            return now;
+        }
+    }
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 

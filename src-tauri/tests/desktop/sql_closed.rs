@@ -34,6 +34,9 @@ async fn sqlx_create(url: &str) {
 #[test]
 fn sec01_14_refusals_are_logged_with_a_stable_code_and_bursts_are_bounded() {
     let _log_dir = crate::support::applog_dir_lock();
+    // Le test peut commencer juste avant xx:xx:00 : une rafale à l'horloge réelle aurait alors légitimement 20 lignes.
+    const MINUTE: u64 = 1_791_446_400;
+    let mut clock = circletasks_lib::applog::clock_for_tests(MINUTE + 59);
     install_sql_refusal_hook();
     let logs_root = scratch();
     let logs = logs_root.path().join("logs");
@@ -60,12 +63,23 @@ fn sec01_14_refusals_are_logged_with_a_stable_code_and_bursts_are_bounded() {
     // Exactement 10 lignes par minute et par code (RATE_PER_MINUTE) ; le résumé `log` / `suppressed` du reste est écrit à la minute suivante
     // (testé par `i04_a_burst_of_the_same_entry_is_limited_to_10_per_minute_then_summarized` dans applog.rs).
     assert_eq!(attach_lines, 10, "1 001 refus ATTACH : 10 lignes, pas 1 001");
+    assert!(refused.iter().all(|e| e.at == circletasks_lib::applog::iso_of(MINUTE + 59)), "toute la rafale dans une seule minute injectée");
     // Ni texte SQL, ni chemin, ni alias dans le fichier du journal.
     let raw: String = std::fs::read_dir(&logs).unwrap().map(|f| std::fs::read_to_string(f.unwrap().path()).unwrap()).collect();
     for forbidden in ["ATTACH", "secret_alias", "secret-destination", "writable_schema", "VACUUM"] {
         assert!(!raw.contains(forbidden), "le journal contient {forbidden:?}");
     }
     assert!(refused.iter().all(|e| e.detail.is_empty()), "aucun texte dynamique");
+    // Avance simulée, sans attente : la minute suivante rend un créneau et résume les 991 refus supprimés.
+    clock.set(MINUTE + 60);
+    runtime().block_on(async {
+        let db = open(dir.path()).await;
+        assert!(db.execute(attach, vec![]).await.is_err());
+        db.close().await;
+    });
+    let next = read_entries(&logs, 500).unwrap();
+    assert_eq!(next.iter().filter(|e| e.scope == "sql-refused" && e.code == "attach").count(), 11);
+    assert!(next.iter().any(|e| e.scope == "log" && e.code == "suppressed" && e.detail == "sql-refused attach" && e.n == Some(991)));
 }
 
 /// Câblage : le crochet est posé au début de `run` (avant le plugin) et avant l'enregistrement tardif du plugin (iPhone, tests).
