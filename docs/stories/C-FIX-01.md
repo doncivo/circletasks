@@ -1,6 +1,6 @@
 # C-FIX-01 — Focus du titre de checklist dans le geste d'ouverture
 
-Module : checklists et iOS · Palier 1.0 · Estimation **2 h actives** (avec Y-IOS-06, total 5 h), alerte au-delà de **3 h** · Statut : en cours, passe product-owner du 2026-10-20.
+Module : checklists et iOS · Palier 1.0 · Estimation **2 h actives** (avec Y-IOS-06, total 5 h), alerte au-delà de **3 h** · Statut : code vérifié et fusionné #70 (44441dbe), critère physique 6 ouvert.
 
 ## Passe product-owner
 
@@ -16,6 +16,8 @@ Constat déjà porté à l'audit 1.0 : `ChecklistForm` attend un `setTimeout(0)`
 6. Après compilation unique du lot, essai d'Ali sur l'iPhone : ouvrir une nouvelle checklist → clavier immédiatement visible et titre actif, taper puis créer → champ « Nouvel élément » actif ; ajouter plusieurs éléments → champ de saisie visible avec le clavier. Ce critère physique reste ouvert tant qu'Ali ne l'a pas vérifié ; aucune simulation ne sera présentée comme une preuve du clavier iOS.
 
 ## Passes et preuves
+
+Clôture du code : #70 fusionnée dans main **`44441dbe`**, tête `6f2a66be`, runs **39468511359 et 39468517620**, **48 contrôles verts** avec couverture complète. Lint, typage et revue distincte approuvés, y compris les corrections d'initialisation et de nettoyage des tests. Mesure sur main après fusion : **58/58, 338 443 normalisés, 338 387 bruts, marge 19 957**, coût nul. Le critère physique 6 reste ouvert : ne pas déclarer le clavier iOS vérifié avant le lot IPA.
 
 Complément DOM : run rouge `39438885651`, job `118683162250`, critère 12 de RemindersStatus (798 verts, 1 rouge). Le passage lancé par le clic précédent doit finir avant fermeture de la base et réutilisation du bandeau global : attente du résultat du geste et `pause()` du runner avant nettoyage. **19/19 tests DOM et runner verts**, assertions de disparition du bandeau et du détail inchangées ; revue du complément approuvée, aucun délai ni timeout ajouté. Nouvelle CI complète requise.
 

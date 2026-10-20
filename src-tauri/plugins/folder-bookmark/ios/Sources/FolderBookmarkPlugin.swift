@@ -153,21 +153,32 @@ struct ConfirmArgs: Decodable {
 
 // MARK: - Sélecteur de dossier
 
-private final class PickerDelegate: NSObject, UIDocumentPickerDelegate {
+private final class PickerDelegate: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
   let onPick: ([URL]) -> Void
   let onCancel: () -> Void
+  private var answered = false
 
   init(onPick: @escaping ([URL]) -> Void, onCancel: @escaping () -> Void) {
     self.onPick = onPick
     self.onCancel = onCancel
   }
 
+  private func answer(_ reply: () -> Void) {
+    guard !answered else { return }
+    answered = true
+    reply()
+  }
+
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-    onPick(urls)
+    answer { self.onPick(urls) }
   }
 
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-    onCancel()
+    answer(onCancel)
+  }
+
+  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+    answer(onCancel)
   }
 }
 
@@ -624,17 +635,35 @@ class FolderBookmarkPlugin: Plugin {
     }
   }
 
+  private func interactionPresenter(_ invoke: Invoke) -> UIViewController? {
+    if UIApplication.shared.applicationState != .active {
+      reject(invoke, .notForeground)
+      return nil
+    }
+    if picker != nil || pendingAlert != nil {
+      reject(invoke, .io)
+      return nil
+    }
+    guard var presenter = manager.viewController else {
+      reject(invoke, .io)
+      return nil
+    }
+    while let next = presenter.presentedViewController {
+      presenter = next
+    }
+    guard presenter.viewIfLoaded?.window != nil,
+      !presenter.isBeingDismissed, !presenter.isBeingPresented else {
+      reject(invoke, .io)
+      return nil
+    }
+    return presenter
+  }
+
   /// Sélecteur de dossier (`UIDocumentPickerViewController`, dossiers seulement). La racine d'iCloud Drive choisie : `CircleTasks` y est
   /// créé puis lié (règle du PC, section 6.1).
   @objc public func pickFolder(_ invoke: Invoke) {
     DispatchQueue.main.async {
-      guard var presenter = self.manager.viewController else {
-        self.reject(invoke, .io)
-        return
-      }
-      while let next = presenter.presentedViewController {
-        presenter = next
-      }
+      guard let presenter = self.interactionPresenter(invoke) else { return }
       let delegate = PickerDelegate(
         onPick: { urls in
           self.picker = nil
@@ -656,6 +685,7 @@ class FolderBookmarkPlugin: Plugin {
       controller.allowsMultipleSelection = false
       controller.modalPresentationStyle = .formSheet
       presenter.present(controller, animated: true, completion: nil)
+      controller.presentationController?.delegate = delegate
     }
   }
 
@@ -1197,17 +1227,7 @@ class FolderBookmarkPlugin: Plugin {
       return
     }
     DispatchQueue.main.async {
-      if UIApplication.shared.applicationState != .active || self.pendingAlert != nil {
-        self.reject(invoke, .notForeground)
-        return
-      }
-      guard var presenter = self.manager.viewController else {
-        self.reject(invoke, .io)
-        return
-      }
-      while let next = presenter.presentedViewController {
-        presenter = next
-      }
+      guard let presenter = self.interactionPresenter(invoke) else { return }
       var answered = false
       let answer: (Bool) -> Void = { confirmed in
         if answered {

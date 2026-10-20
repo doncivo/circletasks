@@ -1,5 +1,13 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### CI-SEC-01 et C-FIX-01 — suivi des fusions du 2026-10-20
+
+Clé updater hors du build : **#69 fusionnée** (`ea596996`), 48 CI verts et revue approuvée, banc de signature réel à clé jetable vérifié ; signature de livraison encore requise. Focus de checklist : **#70 fusionnée** (`44441dbe`), 48 CI verts sur `6f2a66be`, preuves rouge/verte et revue approuvées ; clavier réel encore ouvert. Bundle sur main après chacune : **58/58, 338 443 normalisés, marge 19 957**, coût nul. Aucune clôture physique inventée.
+
+### Y-IOS-06 — suivi du correctif des gardes natives (2026-10-20)
+
+Trois contrôles de source rouges `546bee4e`, puis correctif `f535596f` : garde commune sur le fil principal pour premier plan, interaction libre et présentateur attaché sans transition ; choix et annulations du sélecteur répondent une fois. Module Rust **40/40**, lint, typage et revue distincte approuvés. CI complète et mesure du bundle encore requises avant fusion ; compilation Swift et essais UIKit réservés à l'unique lot iPhone. Ce constat n'est pas clos sur appareil.
+
 ### B8 — constat complémentaire de revue du 2026-10-19
 
 R1 a bloqué la première revue de T-TECH-01 à l'étape 4 : le nettoyage retirait sa clé de suivi dès un passage stable, avant réception des modifications distantes. **Ce qu'Ali voyait : une tâche terminée sur l'autre appareil restait dans la Corbeille, tandis que son doublon « à faire » restait affiché.** Test rouge `0bf4b029` : `recurrenceDedupTwoDevices.test.ts`, « revue R1 » (5 verts, 1 rouge, attendu X `done`, reçu Y `todo`). **Correctif vérifié localement** (`dbb8297b`, durci par `97ddab43` avant rebase) : suivi persistant jusqu'aux accusés et à la lecture complète des journaux ; seules les suppressions attribuées au nettoyage peuvent être rétablies. 293 tests ciblés, lint, typage et bundle/garde 51/51 verts ; revue finale approuvée dans la fiche. Clôture B8 après fusion de #63 (`66bf7786`) : suite complète avec couverture et tous les contrôles verts sur `2bfca264` (39262885779 / 39262896766), revue approuvée dans la fiche.

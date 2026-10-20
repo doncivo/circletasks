@@ -243,7 +243,12 @@ fn y_ios_02_13_swift_alert_uses_cancel_style_and_preferred_action_without_any_la
     assert!(confirm.contains("UIAlertAction(title: input.cancel, style: .cancel)"));
     assert!(confirm.contains("UIAlertAction(title: input.confirm, style: .default)"));
     assert!(confirm.contains("alert.preferredAction = cancelAction"));
-    assert!(confirm.contains("UIApplication.shared.applicationState != .active"));
+    let presenter = &swift[swift.find("private func interactionPresenter(_ invoke: Invoke)").expect("garde commune de présentation")..];
+    let presenter = &presenter[..presenter.find("@objc public func pickFolder(").unwrap()];
+    assert!(presenter.contains("UIApplication.shared.applicationState != .active"));
+    assert!(presenter.contains("reject(invoke, .notForeground)"));
+    let checked = confirm.find("guard let presenter = self.interactionPresenter(invoke) else { return }").expect("refus avant présentation");
+    assert!(checked < confirm.find("UIAlertController(").unwrap());
     assert!(swift.contains("UIApplication.didEnterBackgroundNotification") && swift.contains("answer(false)"));
 }
 

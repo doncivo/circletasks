@@ -1,6 +1,6 @@
 # CI-SEC-01 — Clé updater réservée à la signature de l'installeur
 
-Module : publication et sécurité · Palier 1.0 · Estimation **3 h actives**, alerte au-delà de **4,5 h** · Statut : en cours, passe product-owner du 2026-10-20.
+Module : publication et sécurité · Palier 1.0 · Estimation **3 h actives**, alerte au-delà de **4,5 h** · Statut : fait côté code vérifié et fusionné le 2026-10-20, PR #69 ; signature réelle de livraison à vérifier lors de la publication.
 
 ## Passe product-owner
 
@@ -19,6 +19,8 @@ Le workflow Windows transmet aujourd'hui la clé updater et son mot de passe à 
 9. Lint, typage, revue consignée et suite complète avec couverture verte avant fusion ; bundle avant push puis sur main après fusion, plafond inchangé, aucun coût front attendu.
 
 ## Passes et preuves
+
+Clôture du code : #69 fusionnée dans main `ea596996`, tête `99a445fe`, runs **39432599987 et 39432607833**, **48 contrôles verts** avec couverture complète, lint et typage ; revue distincte approuvée. Avant push puis sur main : **58/58 bundle, 338 443 normalisés, 338 378 bruts, marge 19 957**, coût nul. Les étapes ci-dessous conservent la chronologie et les preuves rouges ; la signature de l'installeur publié reste une preuve de livraison, distincte du banc à clé jetable déjà vert.
 
 Product-owner : périmètre ci-dessus approuvé pour implémentation, aucune décision rouverte. Tests rouges, agent du module, qa-test, revue et CI à consigner au fur et à mesure. Aucun statut « fait » à ce stade.
 
