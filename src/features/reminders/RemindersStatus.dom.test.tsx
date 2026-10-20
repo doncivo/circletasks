@@ -31,6 +31,10 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     useNavigationStore.getState().navigate({ tab: 'settings', screen: 'reminders' });
   });
   afterEach(async () => {
+    // Les clics déclenchent un passage asynchrone : le terminer avant de fermer sa base et de réutiliser le bandeau global.
+    await act(async () => {
+      if (h !== null) await getNotificationRunner(h.container).pause();
+    });
     cleanup();
     vi.unstubAllGlobals();
     useNavigationStore.setState(INITIAL_NAVIGATION);
@@ -135,6 +139,7 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     const banner = document.querySelector('.ct-status-banner') as HTMLElement;
     fireEvent.click(banner.querySelector('button') as HTMLButtonElement);
     await waitFor(() => expect(h?.fake.calls.filter((call) => call.type === 'requestPermission')).toHaveLength(1));
+    await waitFor(() => expect(document.querySelector('.ct-status-banner')).toBeNull());
   });
 
   it('critère 12 : échec de planification : bandeau « Les rappels n’ont pas pu être planifiés » et détail (code, nombres) dans Réglages ; « Voir » ouvre Réglages > Rappels', async () => {
