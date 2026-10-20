@@ -70,12 +70,7 @@ export function createTauriNotificationActionSource(
   };
   return {
     registerActionTypes: async (types) => {
-      await run('register_action_types', { types: types.map((type) => ({
-          id: type.id,
-          actions: type.actions.map((action) => ({ id: action.id, title: action.title, foreground: action.foreground })),
-          ...(type.hiddenPreviewsBodyPlaceholder === undefined ? {} : { hiddenPreviewsBodyPlaceholder: type.hiddenPreviewsBodyPlaceholder }),
-        })),
-      });
+      await run('register_action_types', { types: types.map((type) => ({ id: type.id, actions: type.actions.map((action) => ({ id: action.id, title: action.title, foreground: action.foreground })) })) });
     },
     drain: async () => parseDrain(await run('drain')),
     ack: async ({ lines, writeFailures }) => {
