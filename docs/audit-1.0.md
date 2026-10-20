@@ -1,8 +1,12 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### CI-SEC-01 et C-FIX-01 — suivi des fusions du 2026-10-20
+
+Clé updater hors du build : **#69 fusionnée** (`ea596996`), 48 CI verts et revue approuvée, banc de signature réel à clé jetable vérifié ; signature de livraison encore requise. Focus de checklist : **#70 fusionnée** (`44441dbe`), 48 CI verts sur `6f2a66be`, preuves rouge/verte et revue approuvées ; clavier réel encore ouvert. Bundle sur main après chacune : **58/58, 338 443 normalisés, marge 19 957**, coût nul. Aucune clôture physique inventée.
+
 ### Y-IOS-06 — suivi du correctif des gardes natives (2026-10-20)
 
-Trois contrôles de source rouges `2060194`, puis correctif `c2586009` : garde commune sur le fil principal pour premier plan, interaction libre et présentateur attaché sans transition ; choix et annulations du sélecteur répondent une fois. Module Rust **40/40**, lint, typage et revue distincte approuvés. CI complète et mesure du bundle encore requises avant fusion ; compilation Swift et essais UIKit réservés à l'unique lot iPhone. Ce constat n'est pas clos sur appareil.
+Trois contrôles de source rouges `546bee4e`, puis correctif `f535596f` : garde commune sur le fil principal pour premier plan, interaction libre et présentateur attaché sans transition ; choix et annulations du sélecteur répondent une fois. Module Rust **40/40**, lint, typage et revue distincte approuvés. CI complète et mesure du bundle encore requises avant fusion ; compilation Swift et essais UIKit réservés à l'unique lot iPhone. Ce constat n'est pas clos sur appareil.
 
 ### B8 — constat complémentaire de revue du 2026-10-19
 
