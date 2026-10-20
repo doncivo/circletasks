@@ -54,8 +54,11 @@ test.describe('I-02 — alerte avant expiration (iPhone, profil et planificateur
     const [first] = await signing(page, (hooks) => hooks.alert.scheduled);
     expect(first).toMatchObject({ instant: Date.parse('2026-10-13T07:00:00Z'), title: 'CircleTasks va expirer' });
     expect(first?.body).toContain('expiration prévue le mer. 14 oct. à 09:00');
+    // Le premier profil peut avoir été lu après expireAt, pendant le démarrage différé.
+    // Vérifier une lecture nouvelle après la reprise, pas trois passages absolus : les reprises en rafale sont coalescées.
+    const readsBeforeResume = await signing(page, (hooks) => hooks.source.reads);
     await resume(page);
-    await expect.poll(() => signing(page, (hooks) => hooks.source.reads)).toBeGreaterThanOrEqual(3);
+    await expect.poll(() => signing(page, (hooks) => hooks.source.reads)).toBeGreaterThan(readsBeforeResume);
     expect(await signing(page, (hooks) => hooks.alert.scheduled.length)).toBe(1);
 
     await openSettings(page);

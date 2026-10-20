@@ -134,6 +134,8 @@ Placement du catalogue : les quatre chaînes sont dans `fr.notificationBody.ts` 
 
 **Approuvée**, après qa-test et relecture du diff à froid sur `1769d017`. Vérifiés : inversion de l'avance en dates civiles, date de l'occurrence de série pour une répétition, heure de la cible, journées entières sans 09:00 conventionnel, décalage en dernier, absence d'espace orphelin, quatre natures par le constructeur commun, récapitulatifs et Focus inchangés. Aucun accès supplémentaire à la base, seulement les espaces déjà lus ajoutés au dictionnaire ; aucun texte utilisateur dans le journal. Les anciennes fonctions et clés n'ont plus d'usage. Le nouveau corps et ses textes sont hors départ par garde de sources et marqueur de catalogue ; liste non étendue, net −38, seuils inchangés. Aucun constat bloquant restant dans le périmètre de code. La story reste **en validation** jusqu'à la suite complète avec couverture, fusion et mesure sur main.
 
+Complément de revue après CI sur `679dc441` : run `39428272029`, job `118646276478`, e2e iPhone 2/4, **159 verts / 1 rouge** sur I-02. Cause : compteur absolu de trois lectures supposant un ordre fixe entre premier passage, injection du profil et reprises ; la coalescence documentée et l'import différé rendent deux lectures correctes. Le test prend le compteur avant une reprise et exige une lecture nouvelle, en gardant toutes les assertions sur l'alerte et l'état visible. Aucun délai ni timeout ajouté, aucune relance automatique. **Neuf parcours I-02 verts** après correction, lint du fichier vert ; relecture de cette synchronisation approuvée. Bundle de `679dc441` avant son push : **58/58, 338 443**. Nouvelle suite complète requise sur le correctif du test.
+
 ## Écarts
 
 (aucun à ce jour)
