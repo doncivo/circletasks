@@ -126,6 +126,8 @@ describe('Y-IOS-02-FIX-02 : état réel de la séance (critère 16)', () => {
     expect(b.logger.entries[relisted]?.detail).toEqual({ epoch: ORPHAN.slice(0, 14) });
     expect(b.folder.devices.get(b.id)?.epochs.has(ORPHAN) ?? false).toBe(false);
     expect((await b.platform.scan({ keep: [] })).devices.find((d) => d.deviceId === b.id)?.state?.epoch).toBe(PC_EPOCH);
+    expect(await b.data.repos.sync.getMeta('orphanEpoch')).not.toBeNull();
+    await b.cycle(); // Le moteur observe lui-même l'absence au scan suivant.
     expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
     syncFolders(devices);
     await a.cycle();
@@ -167,6 +169,8 @@ describe('Y-IOS-02-FIX-02 : état réel de la séance (critère 16)', () => {
     await b.cycle();
     expect(events(b, 'orphan-epoch-deleted')).toBe(1);
     expect(b.folder.devices.get(b.id)?.epochs.has(ORPHAN) ?? false).toBe(false);
+    expect(await b.data.repos.sync.getMeta('orphanEpoch')).not.toBeNull();
+    await b.cycle(); // Confirmation d'absence avant résolution de la cause persistée.
     expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
   });
 

@@ -2,6 +2,8 @@
 
 ### B5 — inventaire avant correction et estimation révisée
 
+**Mise à jour du 2026-10-21, prioritaire** : 5 h approuvées par Ali comme périmètre réel. Rouge propre obligatoire, suspect non prouvé reporté sans correction (inventaire et limite consignés). `86eeadc0` poussé, nouveaux rouges **9dba2a9e**, correctif **f987edef**. Quatre chemins supplémentaires prouvés : entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple ; **49/49 ciblés**, scénario complet renforcé **1/1**, lint, typage et revue du code verts. Contrats d'absence confirmée **41/41** après renforcement des anciens oracles. QA élargie, CI complète et fusion encore requises ; critère physique ouvert. Bundle du correctif **58/58**, aucune modification des seuils. Les arrêts historiques suivants sont levés.
+
 Inventaire dans `docs/audits/2026-10-20-effacement-erreurs.md`, communiqué avant correction : effacements prématurés dans les suppressions, reprises et Rappels Apple ; Focus et autres transitions explicitement à prouver. Deux nouveaux rouges exécutés, **2 échecs / 18 succès**, couverture coupée ; rouge initial `016dbd04` conservé. **Non corrigé**. Estimation du complément généralisé 2 h → 5 h (+150 %), arrêt au commit selon le cas 3 d'Ali. #71 fusionnée (`dc14badf`), 48 CI verts et revue consignée, bundle main **58/58, 338 413 normalisés, marge 19 987** ; UIKit physique ouvert. Aucun feu vert de livraison.
 
 ### CI-SEC-01 et C-FIX-01 — suivi des fusions du 2026-10-20

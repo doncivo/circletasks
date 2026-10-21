@@ -12,7 +12,7 @@ Preuves avant correctif : **`9dba2a9e`**, avec les rouges antérieurs `016dbd04`
 - **Rappels Apple** : `appleFailureKinds.test.ts`, passage complet interrompu par son échéance ; `appleListsSafety.test.ts`, réparation et détachement de listes après erreur du magasin. Correctif : passage partiel conserve la cause, réparation n'efface que `lists-setting-invalid`, dans la mise à jour sérialisée.
 - **B5 initial et lot partiel** : `mixedOldEpochDeletion.test.ts` et `ownDeletionPersistence.test.ts`. Correctif : compteur global insuffisant pour effacer les causes d'une époque ou d'un lot incomplet ; absence confirmée ou suppression complète d'un lot de fichiers individuels résout la cause. Heure et code antérieurs conservés dans le cas partiel, y compris au redémarrage.
 
-QA ciblée après correctif : **49/49**, couverture coupée. QA élargie, lint, typage, revue distincte et CI complète restent à consigner avant fusion ; ce point ne déclare pas la story terminée.
+QA ciblée après correctif : **49/49**, couverture coupée. Scénario complet renforcé **1/1** jusqu'à la résolution réelle, contrats d'absence **41/41**, banc hostile **72/72**. Lint global, typage et revue distincte verts. QA élargie : 2251 verts / 8 échecs, six anciens oracles ensuite corrigés et deux timeouts de restauration pendant concurrence locale avec le build ; fichier inchangé exécuté seul, **8/8**, mêmes 5000 ms, aucun retry automatique. Cause et correction d'orchestration au journal. La suite complète avec couverture reste à valider en CI ; ce point ne déclare pas la story terminée.
 
 ### Suspects non prouvés — après la 1.0, aucun changement de code
 

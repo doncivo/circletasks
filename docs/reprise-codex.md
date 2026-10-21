@@ -1,6 +1,16 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
-## Point prioritaire — inventaire B5 et arrêt sur estimation
+## Point prioritaire — reprise du 2026-10-21, B5 en QA
+
+Après chaque compaction : relire AGENTS.md, CLAUDE.md et ce point. Ali approuve 5 h comme périmètre réel, sans dérive, et demande de continuer jusqu'à REL-03 ; seuls les quatre cas d'arrêt convenus s'appliquent. Chemin corrigé = rouge propre préalable ; suspect non prouvé = inventaire avec limite, après 1.0, aucun correctif aveugle.
+
+Branche active **`y-ios-02-fix-01-partiel`**, worktree `.claude/worktrees/rel-02-audit`. **`86eeadc0` poussé** après bundle 58/58 et scan secrets 0 candidat. Nouveaux rouges dédiés **`9dba2a9e`**, correctif **`f987edef`** : reçus de suppression, entretien orphelin, oubli partiel, reprise par tranches, lecture Apple interrompue et deux réparations de listes. **49/49 ciblés**, scénario de cycle complet renforcé **1/1**, lint global et typage verts. Test explicite : cause conservée après cycle partiel et redémarrage puis effacée après suppression réelle et scan de confirmation. Revue distincte du code approuvée dans la fiche, aucune clôture avant CI complète.
+
+QA élargie terminée : **2251 verts / 8 échecs**, 206 fichiers. Six anciens oracles de résolution immédiate sont renforcés pour attendre l'absence confirmée ; **41/41** tests de contrat et **72/72** du banc hostile verts. Deux timeouts de restauration (5000 ms) pendant concurrence avec le build bundle : orchestration locale corrigée, fichier inchangé exécuté seul, **8/8 en 11,34 s**, même délai. Lint global, typage et revue du code verts ; bundle du correctif **58/58**. Les résultats composés ne sont pas revendiqués comme une suite complète locale verte : celle-ci reste obligatoire en CI. Logs dans `.codex-tmp/`. Aucun timeout augmenté, skip ni relance automatique. Aucun changement de Focus, requestAccess, acquittements ou autres suspects non prouvés. Prochaines actions : contrôles finaux, push/PR, attendre tous les CI verts, fusion `--merge`, mesure main, puis N-IOS-FIX-01.
+
+Main **`dc14badf`**, #71 fusionnée ; mesure main 338 413 normalisés / 338 339 bruts, marge 19 987. Après B5 : rebase et validation de la branche existante **`n-ios-apercus`** (préparation `c068df93`, non publiée ; `.codex-tmp/` non suivi à conserver), annexes, IPA unique via Actions, REL-01 à REL-03. Critères physiques ouverts : B5 18, clavier, UIKit, aperçus, `%`, I-06 A1 à A10. Aucun nouveau build iPhone ni nettoyage de worktree.
+
+## Historique — inventaire B5 et arrêt sur estimation
 
 Relire AGENTS.md, CLAUDE.md et ce point après chaque compaction. Ali a levé l'arrêt sur le défaut B5 et demandé l'inventaire des effacements persistés avant correction. Travail actif : branche `y-ios-02-fix-01-partiel`, worktree `.claude/worktrees/rel-02-audit`. Rouge original `016dbd04` conservé, copie `b441548a` ; aucun correctif de production appliqué.
 
