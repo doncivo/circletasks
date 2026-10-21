@@ -16,6 +16,8 @@ Préparer les contrôles indépendants pendant la CI du lot, puis conclure sur l
 
 ## Préparation déjà vérifiée
 
+Audit du candidat 1.0.0 consolidé dans `docs/audits/2026-10-21-lot-1.0.md` : source dcde7edc et arbre vérifié, 48 CI verts de #76, npm frais zéro avis, audits Rust/garde RSA et performance verts, bundle main 338 476 marge 19 924. Revue documentaire approuvée sur ces preuves ; Swift/publication en cours, réception physique, accessibilité native et signature PC restent ouverts. Ce constat remplace les états historiques ci-dessous sans déclarer la livraison conforme avant ses preuves finales.
+
 Actualisation du 2026-10-21 : l'ancien « npm 0 avis » ci-dessous est historique. Nouvel audit rouge **72154cc0**, Vite 8.3.2 affecté par trois avis publiés dans la base le 20 octobre ; correction minimale 8.3.3 et audit vert code 0. Détails et revue dans `docs/audits/2026-10-21-npm-vite.md`. Lint/typage/bundle et CI finale requis ; audit de livraison et appareil restent ouverts. Le B5 décrit historiquement ci-dessous est désormais corrigé et fusionné #72, avec ses rouges propres.
 
 Sur les dépendances du lot avant version finale : `npm audit` **0 avis**, code 0 ; empreinte des entrées de dépendances du lockfile (hors paquet racine) `6e47521b0f7a4a08e23fa968f4599613c5406e328dc6347d9bd0b14958c02fa4`. RUSTSEC-2023-0071 : exception documentée dans docs/dettes.md, dépendance de sqlx-mysql non compilée ; garde CI « rsa jamais compilé » conservée, arbre Windows local vide. Ces constats ne remplacent pas la validation finale du lot.
