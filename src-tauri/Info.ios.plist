@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDisplayName</key>
+	<string>CircleTasks A9 arrêt</string>
 	<!-- Fusionné par Tauri dans l'Info.plist généré (tauri ios init). Chaque clé de permission est déclarée dans
 	     scripts/ios/plist-contract.json par le lot du plugin qui la demande (ADR 0007, avenant I-01). -->
 	<!-- Y-IOS-02 (ADR 0011 §23 point 2) : scan du QR d'association par barcode-scanner. CAP-IOS-01 (ADR 0015 §4.2) : la même clé sert au choix

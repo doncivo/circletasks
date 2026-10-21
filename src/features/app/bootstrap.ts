@@ -86,7 +86,26 @@ export async function bootstrapDatabase(
         },
         () => logFailure('db', 'pre-migration-list-unreadable'),
       ),
-      afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined),
+      afterApply: async (db, report) => {
+        await (async () => {
+
+  if (['paused', 'resuming'].includes(localStorage.getItem('ct.a9.interruption') ?? '')) {
+    localStorage.setItem('ct.a9.interruption', 'resuming');
+    return;
+  }
+  if (localStorage.getItem('ct.a9.interruption') === 'completed') return;
+  const versions = await db.select('SELECT MAX(version) AS version FROM schema_migrations');
+  if (report.currentVersion !== 19 || report.applied.length !== 1 || report.applied[0] !== 19 || versions[0]?.version !== 19) {
+    throw Object.assign(new Error('A9 interruption requires schema 18 before first launch'), { name: 'A9InvalidBaseline' });
+  }
+  localStorage.setItem('ct.a9.interruption', 'paused');
+  await new Promise(() => { /* Le processus est arrêté physiquement, jamais par un minuteur. */ });
+
+        })();
+        await reintegrateAfterMigration(db, options.clock);
+        localStorage.setItem('ct.a9.interruption', 'completed');
+        logFailure('db', 'A9InterruptionAfterApplyReturned');
+      },
       onSchemaRead: ({ current }) => {
         schemaVersion = current;
       },

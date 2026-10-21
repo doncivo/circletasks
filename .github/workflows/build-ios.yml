@@ -286,7 +286,7 @@ jobs:
   # porte RELEASES_TOKEN, sans approbation manuelle (décision d'Ali du 2026-10-07).
   publish:
     needs: ios
-    if: startsWith(github.ref, 'refs/tags/ios-v') && (github.event_name == 'push' || inputs.publish == true)
+    if: ${{ false }} # I-06 A9 : publication interdite pour les builds de laboratoire
     runs-on: ubuntu-latest
     environment: releases
     permissions:
