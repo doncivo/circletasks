@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### N-IOS-CHK-01 — protocole natif, pas de résultat présumé (2026-10-21)
+
+Fiche écrite avant la séance : `%`, `50 %` et `%u` dans le titre ; nom d'espace temporaire `50 % %u` pour exercer aussi le corps natif, puis restauration du nom et des aperçus. Aucune correction à l'aveugle des clés de localisation. Le guide conserve les cinq cas déjà cassés en tête et ajoute les douze parcours fonctionnels, avec limites des simulations, vérifications étalées et I-06 explicites. Statut **préparation vérifiée, appareil non testé** ; aucun feu vert 1.0 fondé sur ce document seul.
+
 ### N-IOS-FIX-01 — reprise des aperçus masqués (2026-10-20)
 
 **Mise à jour du 2026-10-21** : B5 #72 fusionnée dans **1eac03fd**, 48 CI verts, preuve rouge 016dbd04, bundle main **338 458**, marge **19 942** ; physique 18 ouvert. N-IOS-FIX-01 remise sur ce main, rouge **05e70a80** / correctif **8b25ac25** (blobs identiques aux preuves), **345 tests du module**, lint, typage et revue du code verts. Bundle final, CI complète puis compilation Swift et appareil restent requis. Aucun statut « fait » pour un essai non exécuté.
@@ -149,3 +153,7 @@ Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, déc
 ## Annexe : rapports détaillés
 
 Les onze rapports détaillés (tableaux fichier:ligne, scénarios, corrections) sont dans `docs/audits/2026-10-16/` ; ce document en est la consolidation dédoublonnée. Domaines : sécurité (8 constats), données (18), code/ADR (29), iOS (13 + 28 points non testables sans appareil), synchro (14), QA (28 + parcours PRD), notifications (15), métier (20), architecture (20 + 8 ADR à écrire), écrans 393 (34), accessibilité (24).
+# État du lot avant compilation
+
+N-IOS-FIX-01 #74 fusionnée dans main 454778a9 : 48 CI verts, revue approuvée ; bundle main 338 479 normalisés, marge 19 921. Compilation Swift et appareil ouverts. Guide complet montré à Ali avant compilation, incluant sauvegarde iCloud, SideStore et matrice REL-01 ; aucun contrôle physique clos par la documentation.
+
