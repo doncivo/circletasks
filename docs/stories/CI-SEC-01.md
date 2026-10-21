@@ -14,6 +14,8 @@ Passe module : `cargo update --precise` pour chacun des deux paquets ; diff limi
 
 Passe code-reviewer distincte : diff du lockfile relu à froid et comparé aux versions corrigées des deux avis ; **revue du correctif approuvée côté code**. Plages de dépendances inchangées, aucune montée globale, garde RSA et isolation de la clé de signature conservées. Aucun coût front attendu ; bundle avant push et mesure main à consigner. La story n'est pas close sur la seule mise à jour du verrou.
 
+Contrôle Rust local **vert** : `cargo check --locked --tests --features test-hooks`, 9 min 03 s, avec les deux versions corrigées effectivement vérifiées. Lint global et typage verts. Le premier bundle local accuse deux gardes de chemins de la fenêtre d'association : la jonction `node_modules` vers un autre worktree rend ses sources extérieures à la liste blanche. Cause et correction : enlever seulement cette jonction après contrôle du lien et de sa cible interne au dépôt, copier les dépendances dans le worktree ; aucun changement des tests, listes ou seuils. Mesure représentative à refaire avant push, sans relance automatique. L'audit de sécurité final reste attendu en CI.
+
 Module : publication et sécurité · Palier 1.0 · Estimation **3 h actives**, alerte au-delà de **4,5 h** · Statut : fait côté code vérifié et fusionné le 2026-10-20, PR #69 ; signature réelle de livraison à vérifier lors de la publication.
 
 ## Passe product-owner
