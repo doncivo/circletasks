@@ -1,6 +1,6 @@
 # REL-02 — Audits de livraison 1.0
 
-Module : sécurité, performance, accessibilité · Estimation **3 h actives**, alerte à **4,5 h** · Statut : audit préparé ; reprise du complément B5 autorisée le 2026-10-21 (5 h, preuves propres obligatoires), validation finale après les fusions du lot. Aucune conformité finale revendiquée.
+Module : sécurité, performance, accessibilité · Estimation **3 h actives**, alerte à **4,5 h** · Statut : audit automatique consigné, IPA publiée et vérifiée ; **appareil et signature PC ouverts**. Aucune conformité finale revendiquée. L'avenant B5 de 5 h est historique, corrigé et fusionné #72.
 
 ## Passe product-owner — 2026-10-20
 
@@ -15,6 +15,8 @@ Préparer les contrôles indépendants pendant la CI du lot, puis conclure sur l
 5. Revue distincte, lint, typage et suite complète avec couverture avant clôture ; docs/backlog.md, docs/audit-1.0.md et docs/journal.md actualisés au niveau des preuves.
 
 ## Préparation déjà vérifiée
+
+Audit du candidat 1.0.0 consolidé dans `docs/audits/2026-10-21-lot-1.0.md` : source dcde7edc et arbre vérifié, 48 CI verts de #76, npm frais zéro avis, audits Rust/garde RSA et performance verts, bundle main 338 476 marge 19 924. Revue documentaire approuvée sur ces preuves ; compilation Swift et publication IPA effectivement vertes dans 39605174348, métadonnées et empreinte vérifiées. Réception physique, accessibilité native et signature PC restent ouvertes. Ce constat remplace les états historiques ci-dessous sans déclarer la livraison conforme avant ses preuves finales.
 
 Actualisation du 2026-10-21 : l'ancien « npm 0 avis » ci-dessous est historique. Nouvel audit rouge **72154cc0**, Vite 8.3.2 affecté par trois avis publiés dans la base le 20 octobre ; correction minimale 8.3.3 et audit vert code 0. Détails et revue dans `docs/audits/2026-10-21-npm-vite.md`. Lint/typage/bundle et CI finale requis ; audit de livraison et appareil restent ouverts. Le B5 décrit historiquement ci-dessous est désormais corrigé et fusionné #72, avec ses rouges propres.
 

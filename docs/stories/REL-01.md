@@ -1,6 +1,6 @@
 # REL-01 — Recette des douze parcours clés
 
-Module : QA de livraison · Statut : préparation pendant les CI du lot, aucune clôture revendiquée · Estimation **2 h actives**, alerte **3 h** ; les essais physiques sont séparés.
+Module : QA de livraison · Statut : automatisation intégrée #78 ; **recette physique ouverte** · Estimation **2 h actives**, alerte **3 h** ; les essais physiques sont séparés.
 
 ## Passe product-owner — 2026-10-21
 
@@ -18,6 +18,8 @@ Référence immuable : PRD §8, douze parcours de bout en bout sur PC et mobile 
 6. QA ciblée, lint, typage et revue distincte ; suite complète avec couverture en CI, bundle avant push et après fusion. Aucun statut « fait » ni livraison finale sur une seule préparation.
 
 ## Preuves
+
+Automatisation intégrée : **#78 fusionnée dans c5fc22ee**, tête **241daa87**, **48 contrôles verts** (39607713371 / 39607884918), couverture active, lint/typage et revue approuvée. J02 composé inclus dans les parcours PC/iPhone de la CI. Diff vérifié de la source applicative entre ios-v1.0.0 et main : vide ; aucun second build iPhone nécessaire. Le guide indique maintenant les preuves automatiques intégrées. **Recette physique encore ouverte** : aucune réception native, manipulation iCloud, caméra ou interaction UIKit déclarée passée.
 
 Lot iPhone effectivement publié : run **39605174348**, jobs ios et publish verts, un seul build. IPA 1.0.0/build 1.0.0, identifiant conservé, minimum 18.0, **7 356 430 octets** ; SHA-256 **d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057** concordant entre téléchargement, asset GitHub et source SideStore. Contrat Info.plist cinq plugins et contrôle source verts ; seuls les avertissements historiques de la version 0.1.0 restent, son entrée est conservée. Guide actualisé avec les preuves réelles ; réception physique toujours ouverte.
 

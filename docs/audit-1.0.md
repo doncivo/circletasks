@@ -6,7 +6,7 @@ Fiche écrite avant la séance : `%`, `50 %` et `%u` dans le titre ; nom d'espac
 
 ### REL-01 — preuve de recette à compléter (2026-10-21)
 
-Le README des parcours n'est plus exact pour J10/J11, qui existent. La chaîne J02 complète n'a pas de spec dédiée : N-01 et N-03 couvrent des étapes isolées. Fiche PO et test composé en préparation, sans modification de production ni panne affirmée. Validation en simulation et réception réelle iPhone distinguées ; aucune conformité finale sur cette préparation seule.
+Constat initial de REL-01 : README en retard pour J10/J11 et absence de chaîne J02 dédiée. Ce manque de preuve est désormais traité par **#78**, fusionnée dans c5fc22ee après **48 CI verts**, sans modification applicative. Les douze parcours ont leurs preuves automatiques ; réception réelle iPhone et frontières natives du guide restent ouvertes. Aucune conformité finale déduite de la simulation.
 
 ### N-IOS-FIX-01 — reprise des aperçus masqués (2026-10-20)
 
@@ -171,5 +171,9 @@ N-IOS-FIX-01 #74 fusionnée dans main 454778a9 : 48 CI verts, revue approuvée ;
 
 # Preuve de publication de l'IPA candidate
 
-Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source dcde7edc ; IPA, taille, SHA-256, version/build et identifiant vérifiés contre asset, source et Info.plist exporté. Guide complet montré avant compilation, sauvegarde iCloud et séquence SideStore explicites. Les preuves physiques restent ouvertes ; J02 composé est vert localement sur les dépendances finales, CI d'intégration attendue. Publication ne vaut pas recette 1.0 terminée.
+Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source dcde7edc ; IPA, taille, SHA-256, version/build et identifiant vérifiés contre asset, source et Info.plist exporté. Guide complet montré avant compilation, sauvegarde iCloud et séquence SideStore explicites. Les preuves physiques restent ouvertes ; J02 composé est intégré par #78 après CI complète verte. Publication ne vaut pas recette 1.0 terminée.
+
+# Audit consolidé du candidat publié
+
+Voir `docs/audits/2026-10-21-lot-1.0.md` : source et arbre, CI, audits de dépendances, performance, couverture, bundle et publication IPA reliés à leurs preuves. Aucun verdict final sur l'appareil ; I-06 A6 différé et A9 natif non exécuté restent explicites. Automatisation #78 intégrée ; signature/publication PC et preuves physiques à terminer. Aucun statut « fait » sur les vérifications physiques absentes.
 
