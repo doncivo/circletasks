@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-21 — préparation N-IOS-CHK-01 et guide du lot
+
+Branche de protocole séparée depuis N-IOS-FIX-01, préparée pendant sa CI, publication après sa fusion. Fiche des pourcentages : titres littéraux et corps via renommage temporaire d'un espace existant (ES-01), restauration du nom et des aperçus ; aucun code corrigé sans preuve native. Guide conservant les cinq régressions en tête, puis annexes, douze parcours et I-06 A1–A10 ; attentes réelles sur plusieurs jours et limites de simulation explicites. Relecture QA et revue distincte approuvées pour le protocole, pas pour le résultat physique. 1 h prévue, alerte 1,5 h. Aucun nouveau build iPhone, données réelles jamais consultées par Codex.
+
 ## 2026-10-20 — reprise N-IOS-FIX-01 sur la branche existante
 
 ### Finalisation sur main B5 — 2026-10-21
@@ -320,4 +324,8 @@ Ce journal compte une ligne par story livrée ou par décision notable : date, s
 # REL-03 — préparation de l'unique IPA du lot
 
 Guide complet montré à Ali avant compilation depuis la branche N-IOS-CHK-01, PR #75 ; sauvegarde locale et sauvegarde iCloud distinguées, SideStore détaillé et douze parcours REL-01 répartis sans rejeu manuel inutile. Préparation 1.0.0 : cinq fichiers de version synchronisés sans changement de dépendance, notes extraites et 75 contrôles release/SideStore verts. Revue distincte approuvée sur la préparation. Aucun tag, build iOS ou publication exécuté à ce stade ; CI complète et intégration du guide restent préalables. Guides PC corrigés selon les décisions déjà prises : mise à jour uniquement par bannière, environnement releases sans approbation humaine. Vérifications physiques et REL-01/REL-02/REL-03 encore ouverts.
+
+# N-IOS-CHK-01 — séance préparée avant compilation
+
+Guide complet présenté à Ali avant tout build : vérification iCloud indépendante de la copie locale, SideStore détaillé, cinq régressions en tête des essais, traces d'écart et distinction des douze parcours automatiques / frontières natives. Pas de rejeu manuel des routines sur trois jours. A6 à deux jours et A9 natif restent ouverts. #74 fusionnée après 48 contrôles verts et revue ; mesure main en cours. Aucun résultat d'appareil inventé.
 

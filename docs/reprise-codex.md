@@ -1,5 +1,9 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Priorité — guide montré avant compilation
+
+#74 fusionnée, main 454778a9, tête ad28cd48 avec 48 contrôles verts et revue consignée. Branche active n-ios-chk-01 dans le worktree ci-sec-01-audit-20261021 : guide de séance montré à Ali, sauvegarde locale/iCloud distinguée, SideStore détaillé, matrice REL-01 sans rejeu inutile. Protocole physique non exécuté. Finir lint/typage, bundle, secrets, PR/CI/fusion et mesure main. Puis préparer version et notes de l'IPA unique, compiler et publier sans redemander. A6 à deux jours et A9 natif restent ouverts. REL-01 préparée dans rel-01-1-0, commit 96a034d9 à rejouer seul sur main selon l'instruction ci-dessous. Aucun build iPhone encore lancé.
+
 ## Point prioritaire du 2026-10-21 — B5 fusionné, N-IOS-FIX-01 en publication
 
 Après chaque compaction, relire AGENTS.md, CLAUDE.md et ce point ; il prévaut sur les historiques. Main **1eac03fd**, #72 fusionnée après les 48 CI verts de la tête **2b4315a7**, runs **39556430486 / 39556432201**, revue approuvée ; bundle main **58/58, 338 458 normalisés, 338 392 bruts, marge 19 942**. B5 code corrigé sur les seuls chemins prouvés, physique 18 ouvert ; suspects non prouvés inventoriés après 1.0. TLS #73 également fusionnée et auditée (9baff642, f1eb69f4, 48 CI verts) ; signature réelle de livraison encore ouverte.

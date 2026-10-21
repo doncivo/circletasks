@@ -30,6 +30,8 @@ Le texte de remplacement est une information de catégorie (iOS ne le lit que l�
 
 ## Passes de reprise et preuves
 
+Clôture code du 2026-10-21 : PR #74 fusionnée dans main **454778a9**, tête **ad28cd48**, **48 contrôles CI verts** (39559200571 / 39559206397), couverture active et revue consignée. Branche distante historique rattachée après vérification d'équivalence de son patch ; aucun force-push, arbre testé inchangé. Bundle sur main **58/58, 338 479 normalisés, 338 411 bruts, marge 19 921**. Compilation Swift et rendu physique restent ouverts jusqu'au lot iPhone.
+
 QA locale du 2026-10-20 : **48 tests ciblés**, puis **344 tests / 24 fichiers rappels et adaptateurs**, couverture coupée ; **9 contrôles Rust du contrat notification_actions**, lint global et typage verts. Le test de frontière JS → natif est rouge sur `1ed328c3` (adaptateur d'avant la story, texte absent), puis **19/19 verts** après rétablissement du champ facultatif, dont l'ancien appel sans champ. Lint du nouveau test vert. Le commit rouge reconstruit explicitement l'adaptateur de main pour isoler la perte de champ ; il ne constate pas une nouvelle régression de main.
 
 Les trois textes de catégorie et la ligne d'aide sont isolés dans `notificationPreviewsText` et ses catalogues fr/en, chargés avec les modules de notifications et de réglages, gardés hors du départ. Aucun titre utilisateur dans les textes de remplacement, aucun `%`, aucun changement de catégorie des récapitulatifs ou de fin de Focus. Revue distincte, bundle, CI complète et compilation Swift encore requis ; le résultat visuel réel sur l'écran verrouillé reste ouvert jusqu'à l'IPA.
