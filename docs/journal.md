@@ -351,3 +351,7 @@ Tag ios-v1.0.0 sur dcde7edc après #76, 48 CI verts et mesure main 58/58, 338 47
 
 Audit documentaire : source iPhone dcde7edc, arbre de #76 identique à main et 48 CI verts, couverture 80 % et seuil bundle inchangés. npm frais zéro avis ; audits Rust, garde RSA non compilé, performance et fumée du binaire verts. Compilation/publication iPhone 39605174348 vertes, SHA-256 et métadonnées concordantes. Relecture distincte approuvée sur ces preuves, sans conformité physique présumée. J02 est en intégration #78 ; réception, clavier, UIKit, aperçus, pourcentages et I-06 restent ouverts, signature/publication PC également. Aucun nouveau correctif fonctionnel ni seuil modifié.
 
+# REL-01 — automatisation intégrée, recette physique ouverte
+
+#78 fusionnée dans c5fc22ee après les 48 contrôles verts de 241daa87 (39607713371 / 39607884918), revue et couverture active. J02 complet est désormais intégré ; le guide ne le présente plus comme une CI à faire. Sources de l'application et dépendances identiques à ios-v1.0.0, donc aucun second build. Aucun succès natif déduit des navigateurs simulés ; mesure main en cours, audit documentaire à intégrer, retour appareil toujours requis.
+

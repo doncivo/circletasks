@@ -56,12 +56,12 @@ Cette section s'exécute après S4, avant les régressions. Préparer A1/A2 dans
 
 ## Douze parcours fonctionnels — REL-01
 
-Les projets Playwright `pc` et `iphone` sont des navigateurs : ils prouvent les parcours applicatifs, pas le matériel. J01, J03 à J09 et J12 sont présents en CI ; J10/J11 utilisent des services simulés. Le J02 composé est vert localement, mais sa PR et sa CI d'intégration restent à faire. Ne pas rejouer les opérations déjà prouvées : seuls les compléments ci-dessous nécessitent l'iPhone. REL-01 reste ouvert tant que ses frontières natives n'ont pas été observées.
+Les projets Playwright `pc` et `iphone` sont des navigateurs : ils prouvent les parcours applicatifs, pas le matériel. Les douze parcours ont leurs preuves automatiques ; J02 est intégré par #78 après 48 contrôles CI verts (39607713371 / 39607884918). J02, J10 et J11 utilisent des services simulés. Ne pas rejouer les opérations déjà prouvées : seuls les compléments ci-dessous nécessitent l'iPhone. REL-01 reste ouvert tant que ses frontières natives n'ont pas été observées.
 
 | Parcours | Déjà automatisé | Ce qui reste sur ton iPhone → attendu ; quoi noter si écart |
 | --- | --- | --- |
 | J01 Accueil / espaces | J01 + ES-01, premier lancement neuf simulé | **A4 seulement** : conservation après mise à jour → mêmes données et espaces ; noter élément/réglage différent. Aucune désinstallation pour refaire l'accueil. |
-| J02 Tâche PC / rappel / Fait | Chaîne composée verte localement, notification et transport simulés ; intégration CI à terminer | **A5/A6**, une seule fois → réception native puis action Fait propagée au PC ; noter heures, action et états. |
+| J02 Tâche PC / rappel / Fait | Chaîne composée intégrée et verte en CI ; notification et transport simulés | **A5/A6**, une seule fois → réception native puis action Fait propagée au PC ; noter heures, action et états. |
 | J03 Semaine | J03 : création et déplacements | **Rien à refaire** à la main. |
 | J04 Routine trois jours | J04 : validations, dates et compteurs | **Rien à refaire sur trois jours** ; réception native d'une routine par régression 12. |
 | J05 Mensuelle | J05 : occurrence suivante et terminaison | **Rien à refaire** ; régression 6 pour le complément iCloud réel. |
