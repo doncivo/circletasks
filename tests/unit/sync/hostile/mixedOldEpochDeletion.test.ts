@@ -45,4 +45,13 @@ it('REL-02 : une suppression partielle ne dit pas À jour quand un substitut anc
   const line = statusLine(retried, a.clock.nowMs());
   const persistedFailure = await a.data.repos.sync.getMeta('ownDeleteFailure');
   expect(line, JSON.stringify({ line, ownDelete: retried.ownDelete ?? [], pending: retried.pendingFiles, persistedFailure, left })).not.toContain('À jour');
+  expect(JSON.parse(persistedFailure ?? 'null')).toMatchObject({ epoch: OLD, code: 'io' });
+  await a.restart();
+  expect(await a.data.repos.sync.getMeta('ownDeleteFailure')).toBe(persistedFailure);
+  a.folder.disarmFaults();
+  await a.cycle();
+  expect(a.folder.fileNames(a.id)).not.toContain(left);
+  const confirmed = await a.cycle();
+  expect(await a.data.repos.sync.getMeta('ownDeleteFailure')).toBeNull();
+  expect(statusLine(confirmed, a.clock.nowMs())).toContain('À jour');
 });

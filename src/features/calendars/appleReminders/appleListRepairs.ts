@@ -27,7 +27,7 @@ export async function detachUnlisted(container: AppContainer): Promise<number> {
     await applyRemoteChanges(container, { tables: new Set(['task']), ids: new Map([['task', new Set(touched)]]) });
     await state.addNotice({ kind: 'detached', count: touched.size });
   }
-  await state.clearFailure();
+  await state.patchStatus((current) => current.failure?.code === 'lists-setting-invalid' ? { ...current, failure: null } : current);
   return touched.size;
 }
 
@@ -39,7 +39,7 @@ export async function resetLists(container: AppContainer): Promise<void> {
     const readable = parseAppleLists(await container.data.repos.settings.get('appleReminders.lists'));
     await container.data.repos.settings.set('appleReminders.lists', readable);
     await state.reload();
-    await state.clearFailure();
+    await state.patchStatus((current) => current.failure?.code === 'lists-setting-invalid' ? { ...current, failure: null } : current);
   } catch {
     logFailure('apple-reminders', 'lists-reset-failed');
     await state.fail('settings-unreadable');

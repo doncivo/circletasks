@@ -456,8 +456,8 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
       // Retenues : celles « absentes de Rappels » ne sont réévaluées que par un passage complet ; celles des suppressions vers Rappels, à chaque envoi évalué.
       held: [...(caps === null ? current.held.filter((entry) => entry.send !== true) : held), ...(sendHeld ?? current.held.filter((entry) => entry.send === true))],
       notices: notes,
-      // Un passage complet a tout lu : il efface tout échec. Un `push` ne lit pas les listes : il n'efface que les échecs d'écriture et ne masque pas un échec de lecture.
-      failure: failureAfter(current.failure, full, sendCode, now),
+      // Une lecture interrompue garde la cause. Un `push` ne résout que les échecs d'écriture, jamais ceux de lecture.
+      failure: partial && sendCode === null ? current.failure : failureAfter(current.failure, full, sendCode, now),
     };
   });
   // Le compteur publié dit aussi (pour le PC) que des suppressions attendent la confirmation de l'utilisateur.

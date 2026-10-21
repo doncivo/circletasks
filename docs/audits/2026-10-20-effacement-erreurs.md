@@ -1,5 +1,30 @@
 # B5 — inventaire des effacements d'erreurs persistées
 
+## Reprise du 2026-10-21 — décision et périmètre prouvé
+
+Ali approuve **5 h** : périmètre réel, pas une dérive. Il exige un rouge propre à chaque chemin corrigé ; un suspect non prouvé est conservé pour après la 1.0. `86eeadc0` a été poussé sur `origin/y-ios-02-fix-01-partiel` après bundle **58/58** et contrôle des secrets **0 candidat**.
+
+Preuves avant correctif : **`9dba2a9e`**, avec les rouges antérieurs `016dbd04` et `86eeadc0`. L'essai initial de l'oubli a capturé sa cause trop tard (la façade lance deux cycles) ; corrigé avant toute modification fonctionnelle pour garder les refus jusqu'à la bascule explicite vers `complete: false`. Les deux réparations Apple sont testées séparément. Aucun délai, timeout allongé, relance automatique ou test désactivé.
+
+- **Entretien orphelin** : `ownDeletionPersistence.test.ts`, compteur 1 pour une époque listant deux instantanés ; intention et cause effacées à tort. Correctif : le scan suivant confirme l'absence avant de retirer l'intention.
+- **Oubli partiel** : `forgetQa.test.ts`, refus durable, puis `deleted: 1, complete: false` ; cause effacée à tort. Correctif limité à la garde `complete` pour cette cible et cette étape.
+- **Reprise par tranches** : `pairing/join.test.ts`, interruption puis lectures de la base pendant la reprise ; cause effacée avant la transaction finale. Correctif : conserver la cause à l'ouverture et dans chaque transaction de tranche ; effacement final conservé.
+- **Rappels Apple** : `appleFailureKinds.test.ts`, passage complet interrompu par son échéance ; `appleListsSafety.test.ts`, réparation et détachement de listes après erreur du magasin. Correctif : passage partiel conserve la cause, réparation n'efface que `lists-setting-invalid`, dans la mise à jour sérialisée.
+- **B5 initial et lot partiel** : `mixedOldEpochDeletion.test.ts` et `ownDeletionPersistence.test.ts`. Correctif : compteur global insuffisant pour effacer les causes d'une époque ou d'un lot incomplet ; absence confirmée ou suppression complète d'un lot de fichiers individuels résout la cause. Heure et code antérieurs conservés dans le cas partiel, y compris au redémarrage.
+
+QA ciblée après correctif : **49/49**, couverture coupée. QA élargie, lint, typage, revue distincte et CI complète restent à consigner avant fusion ; ce point ne déclare pas la story terminée.
+
+### Suspects non prouvés — après la 1.0, aucun changement de code
+
+- `abandonOrphan/state-mismatch` : le test historique exige l'annulation de l'entretien ; pas de scénario indépendant prouvant que la cible reste effectivement supprimable après ce refus. Bloqueur : distinguer annulation légitime et échec encore actif sans inventer un état impossible de la plateforme.
+- `joinFromSnapshot`, branches sans candidat/sans application : la lecture des journaux peut remplacer la reprise d'instantané. Bloqueur : pas de preuve d'une opération restant réellement en échec après cette alternative. Seules les tranches du scénario rouge sont modifiées.
+- `requestAccess` Apple : pas de preuve isolant une erreur encore active de la réussite du passage complet lancé ensuite par le coordinateur. Bloqueur : établir cette frontière sans accuser le succès de la reprise ; le chemin n'est pas modifié.
+- Écritures Apple retenues ou sender absent : le seul rouge ici concerne la lecture interrompue, pas ces cas. Bloqueur : distinguer retenue volontaire, absence de travail et véritable opération échouée encore due ; aucun changement dédié.
+- Focus : absence de preuve d'effacement d'une erreur d'une session encore active par une autre session. Bloqueur : fermeture et annulation résolvent volontairement la notification de la session close selon F-04 critère 15 ; ne pas modifier cette décision sans scénario accusateur.
+- Réinitialisation, réassociation, modes d'association et signature sans autorisation : lecture seule ; aucun rouge dédié ni correction. Bloqueur : établir des erreurs de la même opération encore actives, et non des contextes remplacés/résolus. Les acquittements explicites restent également inchangés.
+
+L'inventaire historique ci-dessous garde les hypothèses initiales ; ce point prévaut sur ses injonctions de correction et sur l'ancien arrêt d'estimation.
+
 Recensement statique avant correction, demandé par Ali le 2026-10-20. Périmètre : code de production TypeScript, Rust et plugins Swift ; rechercher aussi les remplacements d'état et suppressions de clés, pas seulement `failure: null`. Les états React/Zustand non persistés, doubles mémoire et initialisations sans erreur antérieure ne sont pas des effacements persistés. Aucun correctif fonctionnel appliqué à ce stade.
 
 ## Effacements prématurés à corriger ensemble

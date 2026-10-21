@@ -83,7 +83,7 @@ export async function retryOrphanDeletion(deps: SyncDeps, ownScan: DeviceScan | 
   deps.deadline?.check('delete-own');
   const { deleted, code } = await deleteOwnTracked(deps, [{ epoch: left.epoch, kind: 'epoch' }], true);
   if (code === null) {
-    if (deleted > 0) await writeJson(repos, META.orphanEpoch, null);
+    // Le compteur ne prouve pas la disparition de toute l'époque : le prochain scan confirme l'absence.
     // `orphan-epoch-deleted` seulement si un fichier a été retiré. Zéro ne prouve pas l'absence iCloud : le mémo reste et l'échec est visible,
     // même si l'événement historique `orphan-epoch-already-gone` indique qu'aucun fichier local n'a été retiré.
     if (deleted > 0) logger.log('orphan-epoch-deleted', { epoch: left.epoch });

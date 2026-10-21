@@ -80,12 +80,14 @@ export async function deleteOwnTracked(deps: SyncDeps, files: readonly OwnFileRe
     code = syncErrorCodeOf(error);
   }
   const at = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
+  const complete = files.every((file) => file.kind !== 'epoch') && deleted === files.length;
   for (const file of files) {
     const key = ownDeletionKey(file);
     const row = byKey.get(key) as OwnDeletionReceipt;
-    // Zéro suppression avec un fichier listé, ou un retour déjà observé : attendre la confirmation d'absence au scan suivant.
-    const failureCode = code ?? (deleted === 0 || (row.accepted && row.failure?.code === 'cloud-pending') ? 'cloud-pending' : null);
-    byKey.set(key, { ...row, accepted: (code === null && deleted > 0) || row.accepted, failure: failureCode ? { epoch: row.epoch, kind: row.kind, orphan: row.orphan, code: failureCode, at } : null });
+    // Le compteur agrégé ne prouve pas le succès d'une époque ou d'un lot partiel ; sa cause attend la confirmation d'absence.
+    const keep = code === null && row.failure !== null && (!complete || (row.accepted && row.failure.code === 'cloud-pending'));
+    const failureCode = code ?? (deleted === 0 ? 'cloud-pending' : null);
+    byKey.set(key, { ...row, accepted: (code === null && deleted > 0) || row.accepted, failure: keep ? row.failure : failureCode ? { epoch: row.epoch, kind: row.kind, orphan: row.orphan, code: failureCode, at } : null });
   }
   await save(deps, [...byKey.values()]);
   return { deleted, code };

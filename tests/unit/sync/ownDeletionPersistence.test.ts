@@ -49,6 +49,8 @@ describe('Y-IOS-02-FIX-01 : persistance et erreurs de suppression', () => {
     await deleteOwnTracked({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.reject(new SyncPlatformError('vault-unavailable')) } }, [{ epoch: EPOCH, kind: 'epoch' }], true);
     expect(await readOwnDeleteFailures(device.data.repos)).toMatchObject([{ code: 'vault-unavailable', at: new Date(device.clock.nowMs()).toISOString() }]);
     await deleteOwnTracked({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.resolve(1) } }, [{ epoch: EPOCH, kind: 'epoch' }], true);
+    expect(await readOwnDeleteFailures(device.data.repos)).toMatchObject([{ code: 'vault-unavailable' }]);
+    await observeOwnDeletions(deps, null, false);
     expect(await readOwnDeleteFailures(device.data.repos)).toEqual([]);
     expect(await device.data.repos.sync.getMeta('orphanDeleteFailure')).toBeNull();
     expect(await device.data.repos.sync.getMeta('ownDeletionReceipts')).not.toBeNull();

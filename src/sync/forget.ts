@@ -367,7 +367,7 @@ export async function runForgetDeletions(
     try {
       const result = await deps.platform.forget.deleteFiles(target);
       deps.logger.log('forgotten-delete', { device: target, deleted: result.deleted, complete: result.complete });
-      await clearFailure(repos, target, ['delete']);
+      if (result.complete) await clearFailure(repos, target, ['delete']);
       next.set(target, { deviceId: target, state: result.complete ? 'done' : 'deleting', waitingFor: null });
     } catch (error) {
       await recordFailure(deps, target, 'delete', syncErrorCodeOf(error));
