@@ -4,7 +4,7 @@ Statut : candidats PC et iPhone 1.0.0 publiés et vérifiés ; A9 préalable et 
 
 Publication PC : run **39616432734** vert ; EXE téléchargé sans exécution, signature Ed25519 et version signée 1.0.0 valides ; SHA-256 **b303d07a077bc6c5dfe021090af9c7d73f3dd91bdcb34d7568dd188d7ed7ede2**, conforme à l'asset GitHub. L'endpoint public `releases/latest/download/latest.json` sert 1.0.0 avec la signature du fichier téléchargé. Mise à jour d'Ali uniquement par la bannière, aucun installeur lancé à la main. La publication des candidats ne clôt pas la recette.
 
-**A9 bloque désormais la livraison 1.0**, décision confirmée d'Ali après constat du changement 18 vers 19. Voir `docs/stories/I-06-A9.md` et `docs/essais-iphone-a9.md`. Les deux builds instrumentés sont privés, sans publication SideStore, et ne remplacent pas le candidat correct ; aucun résultat physique encore acquis.
+**A9 bloque désormais la livraison 1.0**, décision confirmée d'Ali après constat du changement 18 vers 19. Voir `docs/stories/I-06-A9.md` et `docs/essais-iphone-a9.md`. Les deux builds instrumentés sont réservés aux essais, sans publication SideStore, et ne remplacent pas le candidat correct ; aucun résultat physique encore acquis.
 
 ## Passe product-owner
 
@@ -21,3 +21,13 @@ Bundle final avant push de l'intégration : **58/58, 338 476 normalisés, 338 43
 QA préparatoire : contrat de version `v1.0.0` et notes extraites avec succès ; **75 tests / 4 fichiers** des outils release/SideStore verts, couverture coupée. Diff des cinq fichiers de version relu séparément : seules les six occurrences de la version racine changent, aucune dépendance mise à jour. Guides PC corrigés pour retirer le recours à l'installeur quand la bannière manque et l'ancienne attente d'approbation humaine. Revue distincte de la préparation approuvée ; lint, typage et mesure finale en cours, CI complète requise avant fusion. Ne pas confondre cette préparation avec REL-03 livré.
 
 Contrat de version et extraction des notes ; tests des outils de publication et SideStore ciblés sans couverture ; lint, typage, revue distincte ; bundle avant push et après fusion, scan secrets, CI complète. Compilation Swift et publication réelles restent ouvertes jusqu'au run iOS vert. Signature Windows, manifeste updater et guides de livraison seront vérifiés séparément ; sur PC aucune mise à jour par installeur manuel.
+
+## REL-03 : séance A9 prête, preuve physique attendue (2026-10-21)
+
+#80 fusionnée dans main 2398e8e2 après 48 CI verts de d67692ae (39638601218 / 39638593312). Deux builds A9 réussis, artefacts téléchargés et vérifiés : afterapply 39637333456 et interruption 39637672577. Contrat des cinq plugins, version/build 1.0.0, identifiant fr.circletasks.planner et minimum 18.0 conformes.
+
+Paquet A9-seance-4-IPA.zip : 29 328 763 octets ; SHA-256 e8b7d51a8d129a9b4e203ff047daca4bb51d403e155ef7c138cd8aa3db9d880a, identique au digest GitHub. Quatre IPA internes relues et hachées depuis le ZIP : chacune concorde avec son empreinte ; deux guides, mémo et SHA256SUMS inclus, huit entrées. Brouillon non publié a9-20261021-cff59f5c ; aucun ajout à la source SideStore publique (blob 5a8af39e2a3f10209bf965f131ca1483b95dcd39 inchangé).
+
+Guide et paquet transmis à Ali ; créneau physique de 60 à 75 minutes. A9 reste **non exécuté sur appareil** et bloque la livraison. Après A9 restent les frontières natives du guide et le verdict final REL-01/REL-02/REL-03. A6b : « vérifié en usage après la 1.0 », futur, non fait, non bloquant. Aucun worktree supprimé.
+
+Passe QA de remise : les quatre entrées IPA ont été hachées depuis le ZIP, puis le digest de l'asset GitHub comparé à celui du ZIP local ; toutes les vérifications concordent. Mesure après fusion #80 et avant push de cette consignation : 58/58, 338 476 normalisés, 338 433 bruts, marge 19 924 ; typage exécuté par le build de cette mesure. Passe code-reviewer distincte : **revue de remise approuvée**, diff limité aux preuves, aux liens, aux statuts et à un commentaire du générateur ; aucun code applicatif ni comportement d'injection modifié. CI complète de la branche exigée avant intégration de cette consignation ; aucune clôture des essais physiques par déduction.

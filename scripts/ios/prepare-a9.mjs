@@ -1,5 +1,5 @@
 /* global localStorage, process, console */
-// I-06 A9 : instrumentation réservée aux branches de build privées, jamais aux tags publiés.
+// I-06 A9 : instrumentation des branches de laboratoire, jamais des tags de livraison.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
