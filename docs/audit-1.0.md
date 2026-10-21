@@ -4,6 +4,10 @@
 
 Fiche écrite avant la séance : `%`, `50 %` et `%u` dans le titre ; nom d'espace temporaire `50 % %u` pour exercer aussi le corps natif, puis restauration du nom et des aperçus. Aucune correction à l'aveugle des clés de localisation. Le guide conserve les cinq cas déjà cassés en tête et ajoute les douze parcours fonctionnels, avec limites des simulations, vérifications étalées et I-06 explicites. Statut **préparation vérifiée, appareil non testé** ; aucun feu vert 1.0 fondé sur ce document seul.
 
+### REL-01 — preuve de recette à compléter (2026-10-21)
+
+Le README des parcours n'est plus exact pour J10/J11, qui existent. La chaîne J02 complète n'a pas de spec dédiée : N-01 et N-03 couvrent des étapes isolées. Fiche PO et test composé en préparation, sans modification de production ni panne affirmée. Validation en simulation et réception réelle iPhone distinguées ; aucune conformité finale sur cette préparation seule.
+
 ### N-IOS-FIX-01 — reprise des aperçus masqués (2026-10-20)
 
 **Mise à jour du 2026-10-21** : B5 #72 fusionnée dans **1eac03fd**, 48 CI verts, preuve rouge 016dbd04, bundle main **338 458**, marge **19 942** ; physique 18 ouvert. N-IOS-FIX-01 remise sur ce main, rouge **05e70a80** / correctif **8b25ac25** (blobs identiques aux preuves), **345 tests du module**, lint, typage et revue du code verts. Bundle final, CI complète puis compilation Swift et appareil restent requis. Aucun statut « fait » pour un essai non exécuté.
@@ -164,4 +168,8 @@ Le résultat npm historique est remplacé par le rouge 72154cc0 : Vite 8.3.2 aff
 # État du lot avant compilation
 
 N-IOS-FIX-01 #74 fusionnée dans main 454778a9 : 48 CI verts, revue approuvée ; bundle main 338 479 normalisés, marge 19 921. Compilation Swift et appareil ouverts. Guide complet montré à Ali avant compilation, incluant sauvegarde iCloud, SideStore et matrice REL-01 ; aucun contrôle physique clos par la documentation.
+
+# Preuve de publication de l'IPA candidate
+
+Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source dcde7edc ; IPA, taille, SHA-256, version/build et identifiant vérifiés contre asset, source et Info.plist exporté. Guide complet montré avant compilation, sauvegarde iCloud et séquence SideStore explicites. Les preuves physiques restent ouvertes ; J02 composé est vert localement sur les dépendances finales, CI d'intégration attendue. Publication ne vaut pas recette 1.0 terminée.
 
