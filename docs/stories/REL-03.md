@@ -1,6 +1,10 @@
 # REL-03 — Préparation et publication du lot 1.0
 
-Statut : préparation de l'IPA candidate ; livraison et essais physiques ouverts. Estimation préparation/publication : 2 h actives, alerte 3 h ; temps des runners et essais d'Ali distincts.
+Statut : candidats PC et iPhone 1.0.0 publiés et vérifiés ; A9 préalable et recette physique ouverts, livraison non prononcée. Estimation préparation/publication : 2 h actives, alerte 3 h ; temps des runners et essais d'Ali distincts. A9 : périmètre séparé explicitement autorisé à 6 h, fiche I-06-A9.
+
+Publication PC : run **39616432734** vert ; EXE téléchargé sans exécution, signature Ed25519 et version signée 1.0.0 valides ; SHA-256 **b303d07a077bc6c5dfe021090af9c7d73f3dd91bdcb34d7568dd188d7ed7ede2**, conforme à l'asset GitHub. L'endpoint public `releases/latest/download/latest.json` sert 1.0.0 avec la signature du fichier téléchargé. Mise à jour d'Ali uniquement par la bannière, aucun installeur lancé à la main. La publication des candidats ne clôt pas la recette.
+
+**A9 bloque désormais la livraison 1.0**, décision confirmée d'Ali après constat du changement 18 vers 19. Voir `docs/stories/I-06-A9.md` et `docs/essais-iphone-a9.md`. Les deux builds instrumentés sont privés, sans publication SideStore, et ne remplacent pas le candidat correct ; aucun résultat physique encore acquis.
 
 ## Passe product-owner
 

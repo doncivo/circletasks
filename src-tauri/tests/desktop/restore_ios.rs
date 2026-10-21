@@ -849,6 +849,64 @@ fn i06_update_restore_is_a_local_rollback_without_any_sync_marker() {
     assert_eq!(fs::read(&marker).unwrap(), before);
 }
 
+/// Sous-processus de la preuve A9 : exit sans Drop, après le vrai COMMIT SQLite et avant tout afterApply.
+#[test]
+fn i06_a9_child_exits_after_committed_schema_19() {
+    let Some(path) = std::env::var_os("CT_A9_CRASH_DATABASE") else { return; };
+    let conn = Connection::open(path).unwrap();
+    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+    conn.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+    conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let source = include_str!("../../../src/db/migrations/0019_epoch_carry_report.ts");
+    let sql = source.lines().find(|line| line.trim_start().starts_with("\"CREATE TABLE epoch_carry_report")).unwrap()
+        .trim().strip_prefix('"').unwrap().strip_suffix("\",").unwrap();
+    conn.execute(sql, []).unwrap();
+    conn.execute("INSERT INTO schema_migrations VALUES (19)", []).unwrap();
+    conn.execute_batch("COMMIT").unwrap();
+    // Le fichier WAL reste récupérable par SQLite ; pas de fermeture propre ni d'exécution du traitement final.
+    std::process::exit(83);
+}
+
+#[test]
+fn i06_a9_committed_19_survives_process_exit_and_native_rollback_recovers_18() {
+    use circletasks_lib::backup::check_backup_file;
+    use circletasks_lib::startup_gate::restore_local_rollback;
+    let dir = scratch();
+    let database = dir.path().join(DB_FILE);
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let name = "circletasks-pre-migration-v0018-to-v0019-20261021T163000Z.db";
+    make_db(&database, Some("true"));
+    {
+        let conn = Connection::open(&database).unwrap();
+        conn.execute("UPDATE schema_migrations SET version = 18", []).unwrap();
+        conn.execute("INSERT INTO task (title) VALUES ('A9 conserver cette tâche')", []).unwrap();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").unwrap();
+    }
+    fs::copy(&database, backups.join(name)).unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "restore_ios::i06_a9_child_exits_after_committed_schema_19", "--nocapture"])
+        .env("CT_A9_CRASH_DATABASE", &database)
+        .status().unwrap();
+    assert_eq!(status.code(), Some(83), "arrêt abrupt au point voulu, jamais test ignoré");
+    assert_eq!(check_backup_file(&database, 19).unwrap(), 19);
+    assert_eq!(check_backup_file(&database, 18).unwrap_err().code, "newer-schema");
+    {
+        let conn = Connection::open(&database).unwrap();
+        assert_eq!(conn.query_row("PRAGMA integrity_check", [], |r| r.get::<_, String>(0)).unwrap(), "ok");
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM epoch_carry_report", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+    }
+    let outcome = restore_local_rollback(dir.path(), name, "20261021T170000Z", NO_FAIL).unwrap();
+    assert_eq!(outcome.schema_version, 18);
+    assert_eq!(outcome.marker, "skipped");
+    assert!(outcome.safety_copy.is_some());
+    assert_eq!(check_backup_file(&database, 18).unwrap(), 18);
+    let conn = Connection::open(&database).unwrap();
+    assert_eq!(conn.query_row("SELECT title FROM task", [], |r| r.get::<_, String>(0)).unwrap(), "A9 conserver cette tâche");
+    assert_eq!(conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='epoch_carry_report'", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+    assert_eq!(lock_value(&database).as_deref(), Some("true"));
+}
+
 #[test]
 fn i06_local_rollback_is_chosen_by_the_command_flag_after_the_sql_guard() {
     let source = include_str!("../../src/backup.rs");

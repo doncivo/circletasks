@@ -1,0 +1,43 @@
+# A9 — sortir d'une ouverture interrompue après le commit 19
+
+**Commencer seulement après confirmation des deux artefacts vérifiés.** A9 bloque la livraison 1.0 ; budget total 6 h, alerte à 9 h, travail, compilation et séance physique suivis séparément. Prévoir **60 à 75 minutes sur l'iPhone**. Ce protocole ne demande jamais de supprimer CircleTasks ni d'effacer l'iPhone.
+
+Compilations demandées, résultat à vérifier avant séance : [exception après commit, run 39637333456](https://github.com/doncivo/circletasks/actions/runs/39637333456), source `1226f203` ; [interruption réelle, run 39637672577](https://github.com/doncivo/circletasks/actions/runs/39637672577), source `2560945a`. Ces références identifient les demandes de build ; elles ne prétendent pas que la compilation ou l'essai physique ont réussi.
+
+## Ce que chaque preuve couvre
+
+- **Cas réel prioritaire :** le build `interruption` suspend volontairement le traitement juste après le commit de la migration 19 et avant `afterApply`. Il ne tue pas l'app lui-même. Ali tue le processus depuis le sélecteur iOS. La réouverture doit reprendre le traitement, sans refaire la migration et sans perdre les données.
+- **Cas de laboratoire complémentaire :** le build `afterapply` exécute le vrai traitement puis lève `A9AfterApplyCommitted19`. La base est en 19, l'ouverture échoue, la sauvegarde proposée est celle faite en 18. L'action de restauration utilise la vraie commande Rust. Dans ce build seulement, la relance automatique après restauration est neutralisée pour laisser le temps de réinstaller 0.3.3 et de prouver que la base restaurée est utilisable en 18.
+- Les deux IPA de test conservent l'identifiant de CircleTasks ; les installer **par-dessus** depuis les fichiers dans SideStore, même compte de signature. Elles ne sont pas ajoutées à la source SideStore publique. L'IPA correcte 1.0.0 reste disponible pour sortir du laboratoire. Une pause ou une erreur attendue dans un build A9 ne vaut jamais succès de la recette ordinaire.
+
+Ordre pratique : exception/restauration, retour vérifié en 18, puis interruption réelle. Cet ordre fournit deux départs en 18 sans supprimer l'app ni restaurer tout l'iPhone ; il ne change pas la priorité de la preuve réelle.
+
+## Préparation dans la version 0.3.3
+
+1. Effectuer **S1 à S4 du [guide principal](essais-iphone.md)** → sauvegarde locale récente et sauvegarde iCloud confirmée ; **sinon noter** l'étape, l'heure et le message, ne pas installer de build A9.
+2. Vérifier « À propos » → **0.3.3** ; **sinon noter** la version et s'arrêter. Ne jamais essayer de rétrograder une base 19 pour fabriquer le départ en 18.
+3. Créer une tâche « A9 témoin [heure] » avec une note et une checklist, noter les éléments visibles, le filtre et le thème, faire des captures, puis refaire S1 → état de référence et copie locale datés après la création ; **sinon noter** les différences et rester sur 0.3.3.
+4. Télécharger dans Fichiers les deux IPA privées à fournir, l'[IPA 0.3.3 déjà publiée](https://github.com/doncivo/circletasks-releases/releases/download/ios-v0.3.3/CircleTasks.ipa) et l'[IPA correcte 1.0.0](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.0/CircleTasks.ipa) → quatre fichiers identifiés ; **sinon noter** lequel manque, ne pas commencer. Les empreintes des IPA privées seront inscrites ici après compilation.
+5. Fermer CircleTasks ; garder le PC au repos et ne rien modifier sur un autre appareil pendant A9. Installer les fichiers avec le réseau nécessaire à SideStore, puis passer l'iPhone en mode avion **avant d'ouvrir CircleTasks**, Wi-Fi effectivement coupé → aucune écriture de la séance envoyée à iCloud ; **sinon noter** toute ouverture en ligne ou synchronisation et s'arrêter pour évaluer l'état avant de continuer.
+
+## Exception après commit et restauration native
+
+6. Dans SideStore, importer l'IPA privée **afterapply** par-dessus CircleTasks, puis ouvrir hors ligne → écran d'échec, étape **« fin des migrations (réintégration des champs de synchro) »** (`afterApply`), erreur **A9AfterApplyCommitted19**, schéma de base **19**, schéma de l'app **19**, sauvegarde nommée `circletasks-pre-migration-v0018-to-v0019-…db` ; **sinon copier le détail**, capturer et s'arrêter. `A9InvalidBaseline` signifie que le départ attendu n'est pas obtenu, jamais un essai réussi.
+7. Toucher « Copier le détail », conserver le texte et une capture, puis **« Restaurer la sauvegarde d'avant la mise à jour »**, confirmer **« Restaurer »** → restauration aboutie et **« Données restaurées. Relancez CircleTasks : fermez l'app puis rouvrez-la. »** ; **sinon noter** le message et le code, ne pas supprimer l'app et ne pas multiplier les manipulations. La relance est volontairement arrêtée par ce build après la vraie restauration.
+8. **Ne pas toucher Réessayer et ne pas rouvrir le build de test.** Depuis SideStore, installer l'IPA **0.3.3 par-dessus**, puis ouvrir hors ligne → l'app s'ouvre, tâche témoin, note, checklist, autres données, filtre et thème identiques aux captures ; **sinon noter** les différences et s'arrêter. Cette ouverture prouve physiquement la sortie vers une base compatible 18.
+
+## Cas réel : processus tué après commit, avant la fin du traitement
+
+9. Fermer 0.3.3 et installer l'IPA privée **interruption** par-dessus. Ouvrir hors ligne → ouverture maintenue en cours ; après les 15 secondes du diagnostic existant, étape **« fin des migrations (réintégration des champs de synchro) »** (`afterApply`) affichée ; **sinon copier le détail**, noter le comportement et s'arrêter. Ce blocage est la barrière de test après commit, pas une lenteur à accepter dans le candidat.
+10. Sans toucher « Réessayer », ouvrir le sélecteur d'apps iOS et **balayer CircleTasks pour terminer réellement le processus**, puis rouvrir hors ligne → ouverture normale, aucune erreur durable nouvelle, données témoins intactes et réglages préservés ; **sinon noter** délai, message, code et captures, s'arrêter. Une simple mise en arrière-plan n'est pas une preuve de processus tué.
+11. Exporter le journal **depuis l'app**, conserver le fichier pour Ali/Codex → ligne technique **A9InterruptionAfterApplyReturned** après la réouverture, aucune nouvelle erreur de réintégration ; **sinon noter** l'absence ou les erreurs. Ce marqueur prouve le retour du callback ; les preuves automatiques vérifient aussi qu'un champ réellement en attente est traité à la reprise, pas seulement qu'une page s'affiche.
+12. Installer 0.3.3 par-dessus la base maintenant en 19, ouvrir hors ligne → refus explicite « base plus récente », sans proposer de restauration automatique ni présenter une liste vide comme si les données étaient perdues ; **sinon copier le détail** et s'arrêter. Installer ensuite l'**IPA correcte 1.0.0** par-dessus → accès normal aux mêmes données ; **sinon noter** ce qui manque et s'arrêter. Ne jamais désinstaller pour contourner ce refus.
+13. Vérifier « À propos » **1.0.0**, comparer tâche, note, checklist et réglages, puis vérifier les erreurs dans Réglages → candidat correct, données conservées, aucune panne de laboratoire active ; **sinon capturer et garder l'app sans autre manipulation**. Reprendre ensuite le guide principal à l'étape adaptée ; ne pas répéter les sauvegardes/restaurations déjà prouvées ni appeler A1–A10 « faits » par déduction.
+
+## Sortie de secours et compte rendu
+
+Si le build interruption reste en erreur après réouverture, conserver le diagnostic et installer **l'IPA correcte 1.0.0 par-dessus, sans désinstallation** : elle ne contient aucune barrière ni injection A9. Elle sait ouvrir le schéma 19. **Si elle ne rend pas l'accès attendu, s'arrêter et transmettre les constats** ; ne pas supposer la récupération réussie, ne pas revenir à 0.3.3 sur une base 19, ne pas restaurer tout l'iPhone sans analyse.
+
+Pour chaque ligne : heure, IPA employée, résultat, capture/diagnostic en cas d'écart. Envoyer les résultats des étapes 6–13 et le journal exporté. Ne pas transmettre une base personnelle pour prouver ces contrôles. **A9 reste non exécuté tant que ces résultats physiques manquent.**
+
+A6b : **« vérifié en usage après la 1.0 »**, vérification future non exécutée, non bloquante et jamais « fait ». Ne pas avancer l'horloge.

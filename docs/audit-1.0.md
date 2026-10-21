@@ -177,3 +177,13 @@ Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source
 
 Voir `docs/audits/2026-10-21-lot-1.0.md` : source et arbre, CI, audits de dépendances, performance, couverture, bundle et publication IPA reliés à leurs preuves. Aucun verdict final sur l'appareil ; I-06 A6 différé et A9 natif non exécuté restent explicites. Automatisation #78 intégrée ; signature/publication PC et preuves physiques à terminer. Aucun statut « fait » sur les vérifications physiques absentes.
 
+
+
+## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
+
+Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds privés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
+
+Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle intercepte ses erreurs. L’exception injectée est un cas de laboratoire ; la preuve prioritaire concerne un vrai processus arrêté avec commit SQLite acquis. Le retour normal en 19 après relance et le rollback de sauvegarde vers 18 sont deux sorties différentes, prouvées séparément.
+
+
+A9 : deux compilations privées demandées avec publication interdite : exception 39637333456 (1226f203), interruption 39637672577 (2560945a). Les deux bundles instrumentés sont verts 58/58, respectivement 338709 et 338717 normalisés ; le candidat reste 338476. Les branches de laboratoire ne seront jamais fusionnées ; les tests normaux qui accusent l’injection ne sont ni sautés ni assouplis. PR80 pour les preuves et le guide sans injection candidate, attendre sa CI complète. Artefacts et physique encore à vérifier.

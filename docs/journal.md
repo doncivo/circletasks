@@ -355,3 +355,13 @@ Audit documentaire : source iPhone dcde7edc, arbre de #76 identique à main et 4
 
 #78 fusionnée dans c5fc22ee après les 48 contrôles verts de 241daa87 (39607713371 / 39607884918), revue et couverture active. J02 complet est désormais intégré ; le guide ne le présente plus comme une CI à faire. Sources de l'application et dépendances identiques à ios-v1.0.0, donc aucun second build. Aucun succès natif déduit des navigateurs simulés ; mesure main en cours, audit documentaire à intégrer, retour appareil toujours requis.
 
+
+
+## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
+
+Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds privés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
+
+Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle intercepte ses erreurs. L’exception injectée est un cas de laboratoire ; la preuve prioritaire concerne un vrai processus arrêté avec commit SQLite acquis. Le retour normal en 19 après relance et le rollback de sauvegarde vers 18 sont deux sorties différentes, prouvées séparément.
+
+
+A9 : deux compilations privées demandées avec publication interdite : exception 39637333456 (1226f203), interruption 39637672577 (2560945a). Les deux bundles instrumentés sont verts 58/58, respectivement 338709 et 338717 normalisés ; le candidat reste 338476. Les branches de laboratoire ne seront jamais fusionnées ; les tests normaux qui accusent l’injection ne sont ni sautés ni assouplis. PR80 pour les preuves et le guide sans injection candidate, attendre sa CI complète. Artefacts et physique encore à vérifier.
