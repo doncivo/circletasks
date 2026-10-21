@@ -347,3 +347,7 @@ Préparation remise sur dcde7edc sans modifier le guide de séance montré avant
 
 Tag ios-v1.0.0 sur dcde7edc après #76, 48 CI verts et mesure main 58/58, 338 476 normalisés, marge 19 924. Un seul run **39605174348**, ios et publish verts. IPA téléchargée dans le dépôt : **7 356 430 octets**, SHA-256 **d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057**, concordance asset/source ; Info.plist exporté de l'IPA : version et build 1.0.0, identifiant conservé, minimum iOS 18.0. Contrats source et permissions verts. Anciennes versions conservées ; avertissements de métadonnées manquantes de l'entrée 0.1.0 laissée intacte. Guide montré avant build puis enrichi du résultat réel, lien transmis à Ali. Aucun essai physique déclaré passé, aucun second build lancé.
 
+# REL-02 — audit consolidé du candidat publié
+
+Audit documentaire : source iPhone dcde7edc, arbre de #76 identique à main et 48 CI verts, couverture 80 % et seuil bundle inchangés. npm frais zéro avis ; audits Rust, garde RSA non compilé, performance et fumée du binaire verts. Compilation/publication iPhone 39605174348 vertes, SHA-256 et métadonnées concordantes. Relecture distincte approuvée sur ces preuves, sans conformité physique présumée. J02 est en intégration #78 ; réception, clavier, UIKit, aperçus, pourcentages et I-06 restent ouverts, signature/publication PC également. Aucun nouveau correctif fonctionnel ni seuil modifié.
+

@@ -173,3 +173,7 @@ N-IOS-FIX-01 #74 fusionnée dans main 454778a9 : 48 CI verts, revue approuvée ;
 
 Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source dcde7edc ; IPA, taille, SHA-256, version/build et identifiant vérifiés contre asset, source et Info.plist exporté. Guide complet montré avant compilation, sauvegarde iCloud et séquence SideStore explicites. Les preuves physiques restent ouvertes ; J02 composé est vert localement sur les dépendances finales, CI d'intégration attendue. Publication ne vaut pas recette 1.0 terminée.
 
+# Audit consolidé du candidat publié
+
+Voir `docs/audits/2026-10-21-lot-1.0.md` : source et arbre, CI, audits de dépendances, performance, couverture, bundle et publication IPA reliés à leurs preuves. Aucun verdict final sur l'appareil ; I-06 A6 différé et A9 natif non exécuté restent explicites. Signature/publication PC et intégration de recette #78 à terminer. Aucun statut « fait » sur les vérifications physiques absentes.
+
