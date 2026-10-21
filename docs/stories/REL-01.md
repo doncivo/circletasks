@@ -1,6 +1,6 @@
 # REL-01 — Recette des douze parcours clés
 
-Module : QA de livraison · Statut : préparation pendant les CI du lot, aucune clôture revendiquée · Estimation **2 h actives**, alerte **3 h** ; les essais physiques sont séparés.
+Module : QA de livraison · Statut : automatisation intégrée #78 ; **recette physique ouverte** · Estimation **2 h actives**, alerte **3 h** ; les essais physiques sont séparés.
 
 ## Passe product-owner — 2026-10-21
 

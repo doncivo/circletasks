@@ -1,6 +1,6 @@
 # REL-02 — Audits de livraison 1.0
 
-Module : sécurité, performance, accessibilité · Estimation **3 h actives**, alerte à **4,5 h** · Statut : audit préparé ; reprise du complément B5 autorisée le 2026-10-21 (5 h, preuves propres obligatoires), validation finale après les fusions du lot. Aucune conformité finale revendiquée.
+Module : sécurité, performance, accessibilité · Estimation **3 h actives**, alerte à **4,5 h** · Statut : audit automatique consigné, IPA publiée et vérifiée ; **appareil et signature PC ouverts**. Aucune conformité finale revendiquée. L'avenant B5 de 5 h est historique, corrigé et fusionné #72.
 
 ## Passe product-owner — 2026-10-20
 
