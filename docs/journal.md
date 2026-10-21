@@ -359,9 +359,17 @@ Audit documentaire : source iPhone dcde7edc, arbre de #76 identique à main et 4
 
 ## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
 
-Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds privés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
+Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds de test non publiés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
 
 Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle intercepte ses erreurs. L’exception injectée est un cas de laboratoire ; la preuve prioritaire concerne un vrai processus arrêté avec commit SQLite acquis. Le retour normal en 19 après relance et le rollback de sauvegarde vers 18 sont deux sorties différentes, prouvées séparément.
 
 
-A9 : deux compilations privées demandées avec publication interdite : exception 39637333456 (1226f203), interruption 39637672577 (2560945a). Les deux bundles instrumentés sont verts 58/58, respectivement 338709 et 338717 normalisés ; le candidat reste 338476. Les branches de laboratoire ne seront jamais fusionnées ; les tests normaux qui accusent l’injection ne sont ni sautés ni assouplis. PR80 pour les preuves et le guide sans injection candidate, attendre sa CI complète. Artefacts et physique encore à vérifier.
+A9 : deux compilations de test demandées avec publication interdite : exception 39637333456 (1226f203), interruption 39637672577 (2560945a). Les deux bundles instrumentés sont verts 58/58, respectivement 338709 et 338717 normalisés ; le candidat reste 338476. Les branches de laboratoire ne seront jamais fusionnées ; les tests normaux qui accusent l’injection ne sont ni sautés ni assouplis. PR80 pour les preuves et le guide sans injection candidate, attendre sa CI complète. Artefacts et physique encore à vérifier.
+
+## REL-03 : séance A9 prête, preuve physique attendue (2026-10-21)
+
+#80 fusionnée dans main 2398e8e2 après 48 CI verts de d67692ae (39638601218 / 39638593312). Deux builds A9 réussis, artefacts téléchargés et vérifiés : afterapply 39637333456 et interruption 39637672577. Contrat des cinq plugins, version/build 1.0.0, identifiant fr.circletasks.planner et minimum 18.0 conformes.
+
+Paquet A9-seance-4-IPA.zip : 29 328 763 octets ; SHA-256 e8b7d51a8d129a9b4e203ff047daca4bb51d403e155ef7c138cd8aa3db9d880a, identique au digest GitHub. Quatre IPA internes relues et hachées depuis le ZIP : chacune concorde avec son empreinte ; deux guides, mémo et SHA256SUMS inclus, huit entrées. Brouillon non publié a9-20261021-cff59f5c ; aucun ajout à la source SideStore publique (blob 5a8af39e2a3f10209bf965f131ca1483b95dcd39 inchangé).
+
+Guide et paquet transmis à Ali ; créneau physique de 60 à 75 minutes. A9 reste **non exécuté sur appareil** et bloque la livraison. Après A9 restent les frontières natives du guide et le verdict final REL-01/REL-02/REL-03. A6b : « vérifié en usage après la 1.0 », futur, non fait, non bloquant. Aucun worktree supprimé.

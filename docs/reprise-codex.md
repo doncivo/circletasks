@@ -1,13 +1,12 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
-## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
+## Priorité : A9 prêt pour la séance physique
 
-Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds privés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
+Relire AGENTS.md et CLAUDE.md après compaction. Main 2398e8e2, #80 fusionnée après 48 CI verts de d67692ae ; preuves : 13 tests ciblés et 4 Rust, bundle main 58/58. Deux IPA A9 vérifiées ; paquet et guide transmis, A9 physique non exécuté, livraison 1.0 bloquée jusqu'à sa preuve. Branche active rel-03-a9-seance, worktree n-ios-apercus, consignation des artefacts en cours de PR/CI. Les branches instrumentées i-06-a9-build-afterapply (1226f203) et i-06-a9-build-interruption (2560945a) ne doivent jamais être fusionnées. Deux compilations seulement : 39637333456 / 39637672577, toutes deux réussies ; aucune compilation à relancer pour des docs.
 
-Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle intercepte ses erreurs. L’exception injectée est un cas de laboratoire ; la preuve prioritaire concerne un vrai processus arrêté avec commit SQLite acquis. Le retour normal en 19 après relance et le rollback de sauvegarde vers 18 sont deux sorties différentes, prouvées séparément.
+Brouillon de remise : https://github.com/doncivo/circletasks/releases/tag/untagged-df3538464857e88980dc ; ne pas publier. ZIP SHA-256 e8b7d51a8d129a9b4e203ff047daca4bb51d403e155ef7c138cd8aa3db9d880a ; quatre IPA et deux guides contrôlés. Original 0.3.3 et candidat 1.0.0 vérifiés contre leurs assets publiés. Premier essai : exception et vraie restauration Rust, puis relance suspendue par le banc ; installer 0.3.3 par-dessus pour vérifier le schéma 18. Ensuite build interruption, attendre le diagnostic afterApply, tuer le processus depuis le sélecteur iOS, rouvrir ; vérifier reprise et données. L'ancien 0.3.3 doit refuser le schéma 19 ; le candidat correct 1.0.0 rend l'accès. Ne jamais désinstaller.
 
-Branche active i-06-a9-afterapply, worktree n-ios-apercus ; main 7247f4a6. PC 1.0.0 publié, run 39616432734 vert, signature et manifeste servis vérifiés ; IPA candidate inchangée. Branche rel-03-publication-1-0 conserve les consignations antérieures, jusqu’à 8200cf48 ; ne pas perdre ses deux commits non poussés. La préparation A9 ne vaut pas une recette terminée.
-
+PC 1.0.0 publié, signature et endpoint vérifiés ; Ali utilise seulement sa bannière. A6b différé en usage après la 1.0 sans bloquer, jamais fait. Les autres essais natifs du guide restent ouverts ; pas de clôture REL-01/REL-02/REL-03 avant les retours réels. Les paragraphes suivants sont historiques et ne rouvrent aucune décision. L'ancienne branche rel-03-publication-1-0 (8200cf48) conserve des notes dépassées ; leurs faits utiles ont été repris, ne pas fusionner ses anciennes consignes de séance sans relecture. Aucun worktree supprimé, racine personnelle sale conservée.
 
 ## Priorité — IPA publiée, terminer recette automatique et audit
 
