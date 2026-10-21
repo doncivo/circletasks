@@ -37,8 +37,11 @@ describe('Y-TECH-03 scénario 4 : suppression en échec durable (critère 22, B5
     expect(b.folder.fileNames(b.id)).toContain(ORPHAN_SNAPSHOT);
     for (const status of failing) expect(visible(status, b.clock.nowMs())).toBe(true);
     b.folder.disarmFaults();
-    const ok = await b.cycle();
+    const accepted = await b.cycle();
     expect(events(b, 'orphan-epoch-deleted')).toBe(1);
+    expect(visible(accepted, b.clock.nowMs())).toBe(true);
+    expect(b.folder.fileNames(b.id)).not.toContain(ORPHAN_SNAPSHOT);
+    const ok = await b.cycle(); // Le scan du moteur confirme désormais la disparition complète.
     expect(visible(ok, b.clock.nowMs())).toBe(false);
     expect(statusLine(ok, b.clock.nowMs())).toContain('À jour');
   });

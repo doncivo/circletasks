@@ -2,6 +2,8 @@
 
 ## Complément de sécurité TLS — 2026-10-21
 
+**Complément vérifié et fusionné #73**, main **`9baff642`**, tête **`f1eb69f4`**, runs **39554560617 / 39554565334**, **48 contrôles verts**, dont les deux audits TLS et la garde RSA ; couverture complète, lint et typage verts, revue distincte approuvée. Avant push puis sur main : **58/58 bundle, 338 443 normalisés, 338 387 bruts, marge 19 957**, plafond inchangé. Aucun secret détecté avant push. Les paragraphes suivants gardent les étapes et les rouges ; la signature réelle de l'installeur de livraison reste ouverte.
+
 **Statut : en cours, avant livraison 1.0.** La CI complète de B5 #72, tête `5c845e67`, est rouge sur deux avis RustSec nouvellement publiés : **RUSTSEC-2026-0382** (`rustls-webpki` 0.103.15) et **RUSTSEC-2026-0383** (`webpki-root-certs` 1.0.9). Preuves rouges : runs **39552278950 / 39552285403**, jobs **119063942988 / 119063961468**, audit actuel non modifié. Les deux avis indiquent une confiance possible dans des intermédiaires emSign révoqués ; aucune exploitation ni atteinte aux données d'Ali n'est affirmée.
 
 Passe product-owner : mettre uniquement les deux dépendances verrouillées à leurs versions corrigées, **0.103.16** et **1.0.10** ; garder les seuils, l'audit obligatoire et l'exception RSA déjà décidée avec sa garde de non-compilation. Aucun changement de fonctionnalité, de secret, de permission ou de catalogue front. Branche propre séparée `ci-sec-01-audit-20261021`, depuis main `dc14badf`, fusion avant B5 pour débloquer sa CI. Estimation **1 h active**, alerte **1,5 h**.

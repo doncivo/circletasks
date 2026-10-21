@@ -146,7 +146,7 @@ export async function joinFromSnapshot(
       continue;
     }
     const same = saved !== null && saved.epoch === epoch && saved.from === deviceId && saved.seq === seq;
-    tracked = { epoch, from: deviceId, seq, done: same ? Math.min(saved.done, loaded.records.length) : 0, total: loaded.end.count, failure: null };
+    tracked = { epoch, from: deviceId, seq, done: same ? Math.min(saved.done, loaded.records.length) : 0, total: loaded.end.count, failure: saved?.epoch === epoch ? saved.failure : null };
     await writeJson(repos, JOIN_META, tracked);
     tried.applying(pick.end);
     try {
@@ -258,7 +258,7 @@ async function applyJoin(
   for (let from = Math.min(start.done, rowsEnd); from < rowsEnd; from += JOIN_CHUNK_RECORDS) {
     const to = Math.min(rowsEnd, from + JOIN_CHUNK_RECORDS);
     const chunk: LoadedSnapshot = { records: records.slice(from, to), end: loaded.end };
-    const remember: SnapshotTxHook = (tx) => writeJson(tx, JOIN_META, { ...start, done: to, failure: null } satisfies JoinState);
+    const remember: SnapshotTxHook = (tx) => writeJson(tx, JOIN_META, { ...start, done: to } satisfies JoinState);
     const result = await mergeSnapshot(deps, chunk, ctx, (doneOps, totalOps) => hooks.onProgress?.(from + Math.floor(((to - from) * doneOps) / Math.max(1, totalOps)), total), remember);
     if (result === 'clock-ahead') throw new JoinError('clock-ahead');
     if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);

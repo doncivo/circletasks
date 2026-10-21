@@ -1,5 +1,47 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
+## Reprise autorisée et correctif — 2026-10-21
+
+**Statut : correctif en QA, pas encore fusionné.** Ali approuve les **5 h** comme périmètre réel et exige une preuve rouge propre à chaque chemin corrigé. Tout suspect non prouvé reste inchangé, documenté pour après la 1.0 dans [l'inventaire](../audits/2026-10-20-effacement-erreurs.md). Cette décision remplace les arrêts historiques ci-dessous. La branche distante `y-ios-02-fix-01-partiel` contient `86eeadc0`, poussé après bundle 58/58 et contrôle des secrets sans candidat.
+
+Passe product-owner : conserver l'erreur durable d'une opération tant qu'un succès complet de cette opération n'est pas prouvé ; aucune nouvelle story, migration, commande, permission ou lecture iCloud pour l'écriture. Ne pas transformer une hypothèse en correctif.
+
+Preuves rouges **avant correction** : `016dbd04` (cycle hostile complet), `86eeadc0` (persistance du lot partiel et réparation de réglage), **`9dba2a9e`** (entretien orphelin, oubli partiel, reprise par tranches, lecture Apple interrompue et deux réparations de listes). Les scénarios utilisent base et service réels avec doubles de transport ; aucune donnée utilisateur réelle ni iPhone physique. La première écriture du scénario d'oubli a été ajustée avant correctif : conserver les refus jusqu'à la bascule explicite vers `complete: false`, car la façade lance déjà deux cycles.
+
+Correctif **`f987edef`** : compteur partiel ne résout pas les reçus ; confirmation d'absence par scan pour l'époque, intention conservée entre-temps ; oubli résolu seulement sur `complete` ; erreur de reprise gardée pendant les transactions de tranche ; lecture Apple partielle conserve sa cause ; réparation de listes limitée à `lists-setting-invalid` dans la mise à jour sérialisée. Aucun changement des acquittements explicites ni des autres suspects.
+
+Passe QA : **49/49 ciblés**, puis scénario B5 renforcé **1/1** (cause encore persistée après cycle partiel et redémarrage, puis effacée après suppression réelle et scan de confirmation). Lint global et typage verts. Les trois anciens oracles d'entretien qui effaçaient dès le compteur positif sont renforcés : mémo encore présent après suppression, puis absent après le scan du moteur ; **41/41** tests concernés verts. QA élargie encore en cours, CI complète et bundle final attendus.
+
+Passe code-reviewer distincte : diff de `origin/main` à `f987edef` relu à froid, puis oracles de confirmation relus séparément. **Revue du code approuvée** : erreurs d'une autre opération préservées, code/heure stables sur résultat partiel, résolution complète toujours possible, aucun appel iCloud ajouté, catalogues et liste de départ inchangés. La revue ne vaut pas feu vert CI ni essai physique. Critère physique 18 toujours ouvert ; aucune clôture « fait ».
+
+QA élargie terminée : **2251 verts / 8 échecs**, 206 fichiers ; six anciens oracles de résolution avant confirmation, deux timeouts 5000 ms dans le scénario de restauration à 501 lignes. Les oracles conservent l'assertion de succès après un scan confirmant réellement l'absence. Le scénario de restauration inchangé est vérifié séparément après arrêt de la concurrence locale avec les builds : **8/8 en 11,34 s**, mêmes délais, aucun skip ou retry automatique (cause et correction d'orchestration au journal). Bundle du correctif **58/58**. Ces résultats ne remplacent pas la suite complète CI avec couverture ; aucun statut « fait » avant celle-ci.
+
+Banc hostile final : **72/72**, dont les six oracles corrigés côté observation et les preuves de persistance et de succès réel. Relecture distincte des modifications finales de tests : approuvée, aucun oracle de données supprimé ; confirmation explicite de l'absence ajoutée au moteur avant résolution. CI complète encore requise.
+
+## Inventaire avant correction — 2026-10-20
+
+Ali a autorisé le complément et sa généralisation, avec `016dbd04` comme preuve rouge conservée. [Inventaire des chemins](../audits/2026-10-20-effacement-erreurs.md) : suppression propre agrégée, entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple partiels/réparation/autorisation et fin de Focus. Les autres familles et les acquittements explicites y sont distingués ; les pistes par lecture restent à prouver, aucune revue finale inventée.
+
+Deux rouges supplémentaires exécutés avant correction : `ownDeletionPersistence.test.ts` exige explicitement la conservation de la cause après un lot partiellement réussi ; `appleListsSafety.test.ts` exige que réparer les réglages ne résolve pas une erreur de lecture du magasin. Résultat ciblé : **2 rouges, 18 verts**, couverture coupée. Le redémarrage prévu dans le premier test reste après l'assertion actuellement rouge et n'a donc pas encore été atteint : aucune preuve de ce point revendiquée.
+
+Lint des deux fichiers de test et typage global verts. Pas de passe de revue finale ni de CI complète revendiquée pour un correctif encore absent. Tests et inventaire sauvegardés au commit d'arrêt ; aucun push de cette branche rouge.
+
+**Arrêt au commit, cas 3 : estimation révisée de 2 h à 5 h actives (+150 %), seuil de 3 h dépassé par le périmètre généralisé. Aucun correctif fonctionnel appliqué.** Reprendre après information d'Ali, avec les preuves rouges des autres chemins avant leurs corrections ; ne pas ouvrir une nouvelle story. #71 est désormais fusionnée (`dc14badf`), bundle 58/58, 338 413 normalisés, marge 19 987 ; UIKit physique encore ouvert.
+
+## Complément B5 du 2026-10-20 — arrêt convenu, état faux reproduit
+
+**Statut du complément : rouge, non corrigé, bloquant avant publication.** Rattaché à cette story existante, conformément à la décision d'Ali d'étendre B5 aux substituts persistants sans nouvelle story. Estimation initiale du complément : **2 h actives**, alerte à **3 h**, à compter de la reprise d'implémentation.
+
+Ce qu'Ali verrait dans ce cas du banc : après un premier refus de suppression, un nouvel essai retire un fichier mais laisse l'autre substitut ; la ligne affiche pourtant **« À jour · à l'instant »**, sans avertissement, et la cause persistée est effacée.
+
+Preuve rouge **`016dbd04`**, `tests/unit/sync/hostile/mixedOldEpochDeletion.test.ts` : **un test, un échec**, couverture coupée. Le service complet et son constructeur de texte sont utilisés avec le banc hostile déjà établi : ancienne époque contenant deux instantanés, `removeLeavesPlaceholder: true`, substitut du second, refus `io` ponctuel sur le premier. Le premier cycle signale bien l'erreur. Au deuxième, le premier fichier part, le second reste ; résultat observé : `line = À jour · à l'instant`, `ownDelete = []`, `pending = []`, `ownDeleteFailure = null`. Aucune donnée utilisateur réelle consultée, aucun essai physique iPhone revendiqué.
+
+Cause localisée : `deleteOwnTracked` traite un compteur agrégé strictement positif comme un succès pour toutes les références et efface la cause antérieure ; pour une référence d'époque, ce compteur peut représenter une seule partie de ses fichiers. Les anciens fichiers évincés ne figurent pas dans les fichiers attendus de l'état courant, donc aucun autre avertissement ne compense cette perte de cause.
+
+Acceptation du complément : conserver une cause visible et persistante tant que la suppression complète n'est pas prouvée ; le cas partiel doit devenir vert sans modifier son oracle. Le succès complet doit toujours résoudre la cause, et les retours tardifs déjà couverts par B5 doivent rester signalés. Aucun relâchement de budget, de couverture, de protocole ou de la règle « l'écriture ne lit jamais iCloud ». Garder les trois passes QA/revue/CI et le critère physique 18 ouverts jusqu'aux preuves. **Aucun correctif fonctionnel appliqué pendant cet arrêt.**
+
+## Historique du correctif initial fusionné dans #65
+
 Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.0, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine, écran de Détails, bandeau) et **ios-mobile** (vérification sur l'iPhone, e2e `iphone`) · Relectures : qa-test, code-reviewer · Statut : code fusionné et vérifié le 2026-10-20, PR #65 ; essai appareil en attente (critère 18)
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD ; ajoute un avertissement de plus à l'écran de Détails et aux bandeaux A-09.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 (bandeaux), Y-10-FIX-01 (aucune dépendance de code, mais même écran : fusionner dans l'ordre de la phase). Ne bloque aucune autre story.

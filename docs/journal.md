@@ -2,11 +2,35 @@
 
 ## 2026-10-21 — audit TLS, complément CI-SEC-01
 
+Clôture du complément : **#73 fusionnée**, main **9baff642**, tête **f1eb69f4**, runs **39554560617 / 39554565334**, **48 contrôles verts**, dont les audits auparavant rouges et la garde RSA. Revue approuvée, lint/typage et contrôle Rust verts ; bundle avant push et sur main **58/58, 338 443 normalisés, 338 387 bruts, marge 19 957**. La branche B5 publiée intègre ce main par une fusion, sans rebase ni force-push ; conflits documentaires résolus en conservant les deux historiques. Nouvelle CI complète B5 requise avant fusion.
+
 Contrôle Rust local vert sur les dépendances corrigées : `cargo check --locked --tests --features test-hooks`, **9 min 03 s**, caches et TEMP/TMP dans le dépôt. Lint global et typage verts. Échec d'environnement du premier bundle : **56 verts / 2 échecs** de gardes de la fenêtre pairing ; la jonction node_modules nouvellement créée vers codex-main-validation donne des chemins `../codex-main-validation/node_modules/...` hors liste. Correction d'environnement : contrôle de FullName, du type Junction et de la cible attendue, suppression non récursive du seul lien, conservation de la cible, puis copie locale des dépendances. Tests, listes blanches et seuils inchangés ; mesure à refaire après cette correction, aucun retry automatique. Aucun worktree supprimé.
 
 B5 #72 publiée, tête 5c845e67, bundle avant push 58/58, 338 458 normalisés, 338 392 bruts, marge 19 942, secret 0 candidat. La CI accuse deux nouveaux avis RustSec : 2026-0382 / 0383, runs rouges 39552278950 / 39552285403. Passe product-owner CI-SEC-01 : verrouiller seulement rustls-webpki 0.103.16 et webpki-root-certs 1.0.10 sur branche ci-sec-01-audit-20261021 depuis main dc14badf ; 1 h active, alerte 1,5 h, audit et garde RSA conservés. B5 recevra main par fusion, sans force-push. Aucune exploitation ni donnée personnelle consultée. N-IOS-FIX-01 rebasée sans conflit de code, rouge 56a5aa37 / correctif 39ec8856 (blobs identiques aux preuves), 345 tests du module verts ; publication après B5.
 
+## 2026-10-20 — B5 : inventaire avant correction, estimation révisée
+
+### Reprise du 2026-10-21
+
+Ali approuve 5 h comme périmètre réel, exige un rouge propre à chaque chemin corrigé et reporte les suspects non prouvés. `86eeadc0` poussé après bundle 58/58 et contrôle secrets 0 candidat. Rouges dédiés **9dba2a9e**, correctif **f987edef** : entretien orphelin, oubli partiel, reprise par tranches, lecture Apple interrompue et réparation/détachement de listes. **49/49 ciblés**, lint global et typage verts ; scénario complet renforcé **1/1**, comprenant persistance après cycle partiel et redémarrage puis résolution après absence réelle. Les suspects et leurs limites sont dans l'inventaire, aucun correctif aveugle.
+
+La QA élargie accuse trois anciens oracles : ils effaçaient le mémo dès un compteur positif. Correction des oracles sans enlever d'assertion de données : mémo conservé jusqu'au scan suivant, qui confirme l'absence ; **41/41** tests concernés verts. Aucun délai ou timeout ajouté, pas de relance automatique. Revue distincte du code approuvée, QA élargie encore en cours ; bundle final et CI complète requis avant fusion. Critère physique B5 toujours ouvert.
+
+Résultat de la QA élargie : **2251 verts / 8 échecs**, 206 fichiers. Six échecs sont les oracles d'effacement immédiat (y compris les bancs hostiles) : conservation de toutes les assertions de disparition et de données, ajout de l'état d'attente puis confirmation au scan suivant ; événement `orphan-epoch-cleared` explicitement attendu au troisième cycle. Deux échecs du gros scénario de restauration sont des timeouts de **5000 ms inchangés**, pendant la concurrence avec le build bundle et d'autres contrôles locaux. Cause pratique : orchestration locale trop concurrente ; correctif d'exécution : aucun autre build ou contrôle lourd pendant ce scénario. Vérification manuelle motivée, fichier inchangé, mêmes délais : **8/8 verts en 11,34 s**, sans boucle de relance automatique. Aucun test ralenti, ignoré ou repoussé ; le contrôle reste dans la CI complète obligatoire. Les résultats composés ne sont pas présentés comme une nouvelle suite complète locale verte.
+
+À la demande d'Ali, recherche des effacements persistés avant correctif : `docs/audits/2026-10-20-effacement-erreurs.md`. Le compteur global de suppression efface une cause sans succès de toute la cible ; chemins voisins recensés dans entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple et Focus. Les constats par lecture restent sans preuve d'exécution. Deux nouveaux rouges exécutés, **2 échecs / 18 succès**, couverture coupée : persistance après lot partiel et erreur du magasin après réparation de réglage. `016dbd04` reste la preuve rouge initiale. Aucun correctif fonctionnel, délai, timeout augmenté ou test désactivé.
+
+Estimation généralisée **2 h → 5 h actives (+150 %)**, seuil d'alerte 3 h : arrêt au commit et information d'Ali, cas 3, sans clôture. #71 fusionnée après 48 CI verts et revue consignée ; main `dc14badf`, bundle **58/58**, mesure **338 413 normalisés / 338 339 bruts**, marge **19 987**. UIKit reste à vérifier dans l'unique lot iPhone. Aucun worktree supprimé.
+
 ## 2026-10-20 — ouverture Y-IOS-06
+
+## 2026-10-20 — arrêt du lot, complément B5 confirmé par le banc
+
+La vérification préparatoire REL-02 reproduit l'hypothèse : premier cycle refus de suppression visible, deuxième cycle succès partiel avec ancien substitut toujours listé, mais **« À jour · à l'instant »**, aucune cause persistée et aucun fichier en attente. Preuve rouge **`016dbd04`**, un test en échec (couverture coupée), lint ciblé vert. Compteur agrégé pris pour un succès complet dans `deleteOwnTracked`. Complément rattaché à **Y-IOS-02-FIX-01**, sans nouvelle story conformément à la décision d'Ali sur B5 ; fiche, backlog et audit actualisés. Arrêt au titre du cas 2, aucun correctif fonctionnel ni compilation iPhone.
+
+Au point d'arrêt : main `44441dbe` (#70), bundle après fusion **58/58, 338 443 normalisés, marge 19 957**. Y-IOS-06 : trois preuves initiales vertes, **371 Rust sync verts**, PR #71 tête `004d45a1`, **48 contrôles CI verts**, non fusionnée pendant cet arrêt. `n-ios-apercus` reste préparée et non publiée ; suite du palier et preuves physiques toujours ouvertes. Aucun worktree supplémentaire supprimé.
+
+## 2026-10-20 — préparation des audits REL-02
 
 CI #71 rouge sur `sync_ios_y02::y_ios_02_13` (run `39470831050`, job `118794148125`) : la QA locale initiale du seul fichier sync_bookmark n'avait pas inclus ce contrat voisin. L'assertion attendait encore le premier plan directement dans `confirm` ; elle suit maintenant l'appel à la garde commune et vérifie son refus avant création de l'alerte. Styles Annuler/confirmer, action préférée et annulation en arrière-plan conservés ; les trois tests initiaux ne changent pas. Après élargissement au module sync : **371 tests verts, zéro échec, deux ignorés préexistants**, aucun délai ni timeout changé. Revue du complément approuvée, nouvelle CI et mesure avant push requises.
 

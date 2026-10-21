@@ -6,7 +6,7 @@ import { SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { SyncPlatformError } from '../../../src/platform/sync/types';
 import type { SyncDeps } from '../../../src/sync/deps';
 import type { EpochId } from '../../../src/domain/sync/format';
-import { abandonOrphan } from '../../../src/sync/orphanEpoch';
+import { abandonOrphan, retryOrphanDeletion } from '../../../src/sync/orphanEpoch';
 import { createSyncService } from '../../../src/sync/service';
 
 const SELF = '56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -21,6 +21,27 @@ beforeEach(async () => {
 afterEach(async () => { await device.close(); });
 
 describe('Y-IOS-02-FIX-01 : persistance et erreurs de suppression', () => {
+  it('entretien orphelin : un compteur partiel garde sa cause et son intention', async () => {
+    await device.data.repos.sync.setMeta('orphanEpoch', JSON.stringify({ epoch: EPOCH }));
+    await deleteOwnTracked(deps, [{ epoch: EPOCH, kind: 'epoch' }], true);
+    const failure = await device.data.repos.sync.getMeta('orphanDeleteFailure');
+    const own = { deviceId: device.id, kid: null, state: null, stateStatus: 'missing' as const, epochs: [{ epoch: EPOCH, segments: [], snapshots: [1, 2] }], pending: [] };
+    await retryOrphanDeletion({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.resolve(1) } }, own, `e0010-${SELF}` as EpochId);
+    expect(await device.data.repos.sync.getMeta('orphanEpoch')).toBe(JSON.stringify({ epoch: EPOCH }));
+    expect(await device.data.repos.sync.getMeta('orphanDeleteFailure')).toBe(failure);
+  });
+
+  it('une erreur persiste apres un lot partiellement reussi puis un redemarrage', async () => {
+    const files = [{ epoch: EPOCH, kind: 's' as const, n: 1 }, { epoch: EPOCH, kind: 's' as const, n: 2 }];
+    await deleteOwnTracked(deps, files);
+    const failure = await device.data.repos.sync.getMeta('ownDeleteFailure');
+    expect(failure).not.toBeNull();
+    await deleteOwnTracked({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.resolve(1) } }, files);
+    expect(await device.data.repos.sync.getMeta('ownDeleteFailure')).toBe(failure);
+    await device.restart();
+    expect(await readOwnDeleteFailures(device.data.repos)).toMatchObject([{ code: 'io' }, { code: 'io' }]);
+  });
+
   it('code et heure sont mis à jour ; un succès efface la cause, pas la preuve de suppression', async () => {
     await deleteOwnTracked(deps, [{ epoch: EPOCH, kind: 'epoch' }], true);
     expect(JSON.parse((await device.data.repos.sync.getMeta('orphanDeleteFailure')) ?? 'null')).toMatchObject({ code: 'io', at: new Date(device.clock.nowMs()).toISOString() });
@@ -28,6 +49,8 @@ describe('Y-IOS-02-FIX-01 : persistance et erreurs de suppression', () => {
     await deleteOwnTracked({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.reject(new SyncPlatformError('vault-unavailable')) } }, [{ epoch: EPOCH, kind: 'epoch' }], true);
     expect(await readOwnDeleteFailures(device.data.repos)).toMatchObject([{ code: 'vault-unavailable', at: new Date(device.clock.nowMs()).toISOString() }]);
     await deleteOwnTracked({ ...deps, platform: { ...deps.platform, deleteOwn: () => Promise.resolve(1) } }, [{ epoch: EPOCH, kind: 'epoch' }], true);
+    expect(await readOwnDeleteFailures(device.data.repos)).toMatchObject([{ code: 'vault-unavailable' }]);
+    await observeOwnDeletions(deps, null, false);
     expect(await readOwnDeleteFailures(device.data.repos)).toEqual([]);
     expect(await device.data.repos.sync.getMeta('orphanDeleteFailure')).toBeNull();
     expect(await device.data.repos.sync.getMeta('ownDeletionReceipts')).not.toBeNull();

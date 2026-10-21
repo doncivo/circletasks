@@ -24,6 +24,8 @@ describe('Y-IOS-02-FIX-01 : défauts 2 et 3 connus du banc', () => {
     b.folder.disarmFaults();
     await b.cycle();
     expect(b.folder.fileNames(b.id)).not.toContain(ORPHAN_SNAPSHOT);
+    expect(statusLine(b.service.status(), b.clock.nowMs())).not.toContain('À jour');
+    await b.cycle(); // Confirmation d'absence du substitut, sans attendre de nouvel instantané.
     expect(statusLine(b.service.status(), b.clock.nowMs())).toContain('À jour');
   });
 

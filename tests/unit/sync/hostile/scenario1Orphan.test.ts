@@ -38,10 +38,10 @@ describe('Y-TECH-03 scénario 1 : instantané orphelin évincé, première suppr
       ['orphan-remove-io', 1],
     ]);
     expect(obs.deleteFailures).toEqual([{ code: 'io' }]);
-    // Ordre au journal : réarmé puis échec au cycle 1, supprimé au cycle 2, plus rien ensuite.
+    // Ordre : échec au cycle 1, suppression au cycle 2, absence confirmée au cycle 3.
     expect(obs.cycles[0]?.events.filter((e) => e.startsWith('orphan-epoch-'))).toEqual(['orphan-epoch-relisted', 'orphan-epoch-delete-failed']);
     expect(obs.cycles[1]?.events.filter((e) => e.startsWith('orphan-epoch-'))).toEqual(['orphan-epoch-deleted']);
-    expect(obs.cycles[2]?.events.filter((e) => e.startsWith('orphan-epoch-'))).toEqual([]);
+    expect(obs.cycles[2]?.events.filter((e) => e.startsWith('orphan-epoch-'))).toEqual(['orphan-epoch-cleared']);
     // Publication dès le premier cycle malgré l'échec (l'instantané orphelin ne borne rien) ; aucun publish-deferred à aucun cycle.
     expect(obs.cycles[0]?.ownFiles).toContain('state.ctx');
     expect(events(b, 'publish-deferred')).toBe(0);

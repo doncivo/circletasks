@@ -1,5 +1,9 @@
 # Y-IOS-06 — Gardes de présentation du sélecteur et de la confirmation iOS
 
+## Fusion du 2026-10-20
+
+#71 fusionnée, main dc14badf, tête 004d45a1, 48 contrôles CI verts et revue consignée ci-dessous. Module Rust sync : 371 verts. Bundle sur main : 58/58, 338 413 normalisés, 338 339 bruts, marge 19 987. Compilation Swift et critère physique UIKit restent ouverts ; aucune IPA nouvelle.
+
 Module : plugin iOS folder-bookmark · Palier 1.0 · Estimation **3 h actives** (avec C-FIX-01, total 5 h), alerte au-delà de **4,5 h** · Statut : en cours, passe product-owner du 2026-10-20.
 
 ## Passe product-owner

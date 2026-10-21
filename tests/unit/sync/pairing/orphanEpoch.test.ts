@@ -475,8 +475,10 @@ describe('abandon de l’orpheline : étapes, arrêts, refus, suppression', () =
     failing = false;
     await b.service.syncNow('manual');
     expect(b.logger.entries.some((e) => e.event === 'orphan-epoch-deleted')).toBe(true);
-    expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
     expect(b.folder.devices.get(b.id)?.epochs.has(orphanEpochOf(b)) ?? false).toBe(false);
+    expect(await b.data.repos.sync.getMeta('orphanEpoch')).not.toBeNull();
+    await b.service.syncNow('manual'); // Ce scan confirme l'absence, contrairement au compteur du cycle précédent.
+    expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
   });
 
   it('bloc ./orphanEpoch illisible à l’abandon : cycle en io, rien d’écrit (époque toujours l’orpheline, orphanEpoch nul), le cycle suivant reprend', async () => {

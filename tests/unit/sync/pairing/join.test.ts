@@ -55,6 +55,23 @@ function watchProgress(d: SimDevice): { readonly seen: { done: number; total: nu
 }
 
 describe('nouvel appareil : instantané en fusion, progression, reprise (critère 13)', () => {
+  it('une reprise par tranches conserve la cause jusqu a sa transaction finale', async () => {
+    const a = await pcWithTasks(130);
+    const b = await joiner(a);
+    await pair(a, b);
+    let batches = 0;
+    setSnapshotTestHooks({ beforeBatch: () => { if (++batches === 3) throw new Error('interruption'); } });
+    expect((await b.cycle()).phase).toBe('error');
+    expect((await joinState(b))?.failure).toBe('io');
+    const observed: Promise<JoinState | null>[] = [];
+    setSnapshotTestHooks({ beforeBatch: () => { observed.push(joinState(b)); } });
+    expect((await b.cycle()).phase).toBe('idle');
+    const intermediate = await Promise.all(observed);
+    expect(intermediate.length).toBeGreaterThan(0);
+    expect(intermediate.every((state) => state?.failure === 'io')).toBe(true);
+    expect(await joinState(b)).toBeNull();
+  });
+
   it('progression en enregistrements jusqu’au total annoncé par snap-end, puis effacée ; tâches lisibles', async () => {
     const a = await pcWithTasks(60);
     const b = await joiner(a);

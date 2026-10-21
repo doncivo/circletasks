@@ -2,7 +2,15 @@
 
 ### CI-SEC-01 : audit TLS rouge du 2026-10-21
 
+**Résolu et vérifié #73**, main **9baff642**, tête **f1eb69f4**, runs **39554560617 / 39554565334**, **48 CI verts** dont audit et garde RSA, revue approuvée. Dépendances corrigées 0.103.16 / 1.0.10 ; bundle main **58/58, 338 443 normalisés, marge 19 957**. Les rouges suivants sont historiques. Signature de livraison encore ouverte.
+
 La CI de B5 #72 accuse RUSTSEC-2026-0382 (rustls-webpki 0.103.15) et RUSTSEC-2026-0383 (webpki-root-certs 1.0.9), avis du 20 octobre. Rouge runs 39552278950 / 39552285403, audit inchangé ; correctifs disponibles 0.103.16 / 1.0.10. Complément de CI-SEC-01 sur branche distincte, à fusionner avant B5 ; aucun impact utilisateur ou exploitation affirmé, aucune clôture de sécurité avant audit vert. Signature #69 acquise, exception RSA et garde de non-compilation conservées. B5 a ses preuves propres, correctif f987edef, tête 5c845e67 ; N-IOS-FIX-01 rebasée sur B5, 345 tests du module verts, non publiée.
+
+### B5 — inventaire avant correction et estimation révisée
+
+**Mise à jour du 2026-10-21, prioritaire** : 5 h approuvées par Ali comme périmètre réel. Rouge propre obligatoire, suspect non prouvé reporté sans correction (inventaire et limite consignés). `86eeadc0` poussé, nouveaux rouges **9dba2a9e**, correctif **f987edef**. Quatre chemins supplémentaires prouvés : entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple ; **49/49 ciblés**, scénario complet renforcé **1/1**, lint, typage et revue du code verts. Contrats d'absence confirmée **41/41** après renforcement des anciens oracles. QA élargie, CI complète et fusion encore requises ; critère physique ouvert. Bundle du correctif **58/58**, aucune modification des seuils. Les arrêts historiques suivants sont levés.
+
+Inventaire dans `docs/audits/2026-10-20-effacement-erreurs.md`, communiqué avant correction : effacements prématurés dans les suppressions, reprises et Rappels Apple ; Focus et autres transitions explicitement à prouver. Deux nouveaux rouges exécutés, **2 échecs / 18 succès**, couverture coupée ; rouge initial `016dbd04` conservé. **Non corrigé**. Estimation du complément généralisé 2 h → 5 h (+150 %), arrêt au commit selon le cas 3 d'Ali. #71 fusionnée (`dc14badf`), 48 CI verts et revue consignée, bundle main **58/58, 338 413 normalisés, marge 19 987** ; UIKit physique ouvert. Aucun feu vert de livraison.
 
 ### CI-SEC-01 et C-FIX-01 — suivi des fusions du 2026-10-20
 
@@ -11,6 +19,10 @@ Clé updater hors du build : **#69 fusionnée** (`ea596996`), 48 CI verts et rev
 ### Y-IOS-06 — suivi du correctif des gardes natives (2026-10-20)
 
 Trois contrôles de source rouges `546bee4e`, puis correctif `f535596f` : garde commune sur le fil principal pour premier plan, interaction libre et présentateur attaché sans transition ; choix et annulations du sélecteur répondent une fois. Module Rust **40/40**, lint, typage et revue distincte approuvés. CI complète et mesure du bundle encore requises avant fusion ; compilation Swift et essais UIKit réservés à l'unique lot iPhone. Ce constat n'est pas clos sur appareil.
+
+### B5 — suppression partielle d'une ancienne époque, état faux reproduit le 2026-10-20
+
+**Arrêt dans le cas 2 convenu avec Ali ; complément de Y-IOS-02-FIX-01 à corriger avant publication, sans nouvelle story.** Banc hostile, refus `io` puis suppression de l'un des deux fichiers anciens, substitut du second conservé : la ligne devient **« À jour · à l'instant »**, `ownDelete` et `pending` sont vides, `ownDeleteFailure` est effacé. Le compteur global positif de `deleteOwnTracked` ne prouve pas que toute l'époque a été supprimée. Preuve rouge **`016dbd04`**, un test ciblé en échec dans `mixedOldEpochDeletion.test.ts`, lint du test vert. Aucun accès aux données réelles ni essai physique revendiqué ; pas de correctif appliqué. REL-02 reste non conforme sur ce point et la livraison n'est pas clôturée.
 
 ### B8 — constat complémentaire de revue du 2026-10-19
 
