@@ -1,0 +1,13 @@
+# REL-03 — Préparation et publication du lot 1.0
+
+Statut : préparation de l'IPA candidate ; livraison et essais physiques ouverts. Estimation préparation/publication : 2 h actives, alerte 3 h ; temps des runners et essais d'Ali distincts.
+
+## Passe product-owner
+
+Demande d'Ali : montrer le guide complet avant compilation, puis compiler et publier sans nouvelle consultation. Une seule nouvelle compilation fournit N+1 ; N est l'IPA installée. Version candidate 1.0.0 dans package, lock npm, Tauri, Cargo et lock Cargo. Notes honnêtes sur les critères physiques ouverts ; aucun tag PC ni clôture de REL-01/REL-02 déduit de la publication iPhone.
+
+La publication existante est limitée aux tags ios-v*. Le workflow accepte soit un push du tag, soit un lancement manuel sur ce tag : employer un seul déclenchement, jamais les deux, ne pas écraser un tag existant. Publier uniquement le commit intégré via PR, revue et CI complète verte ; guide intégré et montré au préalable. Contrôler IPA, identifiant, version, empreinte et source SideStore après Actions.
+
+## Vérifications à consigner
+
+Contrat de version et extraction des notes ; tests des outils de publication et SideStore ciblés sans couverture ; lint, typage, revue distincte ; bundle avant push et après fusion, scan secrets, CI complète. Compilation Swift et publication réelles restent ouvertes jusqu'au run iOS vert. Signature Windows, manifeste updater et guides de livraison seront vérifiés séparément ; sur PC aucune mise à jour par installeur manuel.

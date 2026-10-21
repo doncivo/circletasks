@@ -609,7 +609,7 @@ dependencies = [
 
 [[package]]
 name = "circletasks"
-version = "0.3.3"
+version = "1.0.0"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
