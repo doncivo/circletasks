@@ -339,3 +339,7 @@ Audit npm frais : Vite 8.3.2, trois avis liés au lancement d'éditeur ; un paqu
 
 Guide complet présenté à Ali avant tout build : vérification iCloud indépendante de la copie locale, SideStore détaillé, cinq régressions en tête des essais, traces d'écart et distinction des douze parcours automatiques / frontières natives. Pas de rejeu manuel des routines sur trois jours. A6 à deux jours et A9 natif restent ouverts. #74 fusionnée après 48 contrôles verts et revue ; mesure main en cours. Aucun résultat d'appareil inventé.
 
+# REL-01 — vérification sur les dépendances finales
+
+Préparation remise sur dcde7edc sans modifier le guide de séance montré avant compilation. J02 composé **2/2 verts en 42,0 s**, Vite 8.3.3, un worker et zéro retries ; lint/typage verts, revue séparée approuvée. Aucun code applicatif modifié ni réception iOS prétendue. L'IPA unique est en compilation dans le run 39605174348 ; les contrôles de recette ajoutés ne nécessitent pas de reconstruire ce binaire. CI d'intégration et réception physique encore ouvertes.
+

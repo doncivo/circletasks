@@ -19,6 +19,10 @@ Référence immuable : PRD §8, douze parcours de bout en bout sur PC et mobile 
 
 ## Preuves
 
+Reprise sur le main candidat **dcde7edc** (version 1.0.0, Vite 8.3.3) : seul le commit propre de recette est rejoué, devenu **27205581** ; guide récent conservé, conflits documentaires résolus sans perdre les états REL-02/REL-03. Dépendances exactes installées depuis le lock. J02 vérifié sur cette base : **2/2 verts en 42,0 s**, un worker, zéro retries, budget de 40 s par test inchangé. Aucun build lourd local pendant les tests. Lint/typage globaux verts ; bundle avant publication en cours. Le build iPhone **39605174348** porte sur le même code applicatif, les ajouts de recette ne changent pas l'IPA et ne justifient aucune nouvelle compilation.
+
+Revue distincte de reprise : diff du test, du helper et du README relu ; initialisation des faux avant navigation, horloges alignées et retour de Fait au PC toujours vérifiés, aucun code applicatif modifié, **approuvée côté automatisation**. La recette physique reste ouverte. Le guide montré avant compilation trie les douze parcours et ne demande aucun rejeu des preuves automatiques.
+
 J02 exécuté avant toute modification applicative : **2/2 verts**, projets PC et iPhone, **35,9 s** au total (13,4 s / 11,4 s par test), un worker, zéro retries. Chaque exécution ouvre ses deux applications ; cinq cycles pilotés, même tâche et même rappel, action native simulée et retour de l'état terminé au PC. Le PC ne planifie aucun rappel ; la requête iPhone est retirée après « Fait ». Le budget initial de 40 s est inchangé.
 
 Le helper de synchro reçoit seulement un callback facultatif avant navigation pour installer les horloges et les faux au bon moment. Compatibilité des anciens J10 et J11 : **2/2 verts dans leur projet PC**, chacun ouvrant ses pages prévues ; leurs deux filtres iPhone préexistants sont inchangés (2 non-exécutions prévues, aucun nouveau skip). README rectifié pour ces trois parcours ; aucune preuve de réception par iOS ni validation de recette finale n'est inventée. Lint, typage, revue, CI complète et appareil encore requis.
