@@ -1,5 +1,21 @@
 # CI-SEC-01 — Clé updater réservée à la signature de l'installeur
 
+## Complément de sécurité TLS — 2026-10-21
+
+**Statut : en cours, avant livraison 1.0.** La CI complète de B5 #72, tête `5c845e67`, est rouge sur deux avis RustSec nouvellement publiés : **RUSTSEC-2026-0382** (`rustls-webpki` 0.103.15) et **RUSTSEC-2026-0383** (`webpki-root-certs` 1.0.9). Preuves rouges : runs **39552278950 / 39552285403**, jobs **119063942988 / 119063961468**, audit actuel non modifié. Les deux avis indiquent une confiance possible dans des intermédiaires emSign révoqués ; aucune exploitation ni atteinte aux données d'Ali n'est affirmée.
+
+Passe product-owner : mettre uniquement les deux dépendances verrouillées à leurs versions corrigées, **0.103.16** et **1.0.10** ; garder les seuils, l'audit obligatoire et l'exception RSA déjà décidée avec sa garde de non-compilation. Aucun changement de fonctionnalité, de secret, de permission ou de catalogue front. Branche propre séparée `ci-sec-01-audit-20261021`, depuis main `dc14badf`, fusion avant B5 pour débloquer sa CI. Estimation **1 h active**, alerte **1,5 h**.
+
+Acceptation : diff du lockfile limité et relu, audit sans ces vulnérabilités, garde RSA conservée, validation des cibles existantes et CI complète verte ; lint, typage et revue consignés, bundle avant push et après fusion. B5 sera mis à jour par fusion de main, sans réécriture de sa branche publiée.
+
+Sources primaires relues : [RUSTSEC-2026-0382](https://rustsec.org/advisories/RUSTSEC-2026-0382.html), [RUSTSEC-2026-0383](https://rustsec.org/advisories/RUSTSEC-2026-0383.html). Le correctif de signature #69 ci-dessous reste acquis ; seule sa preuve de signature de livraison est encore ouverte.
+
+Passe module : `cargo update --precise` pour chacun des deux paquets ; diff limité à **8 lignes** du lockfile (deux versions, deux empreintes), aucun changement de dépendance ni de manifeste. Passe QA : lint global et typage verts ; contrôle Rust `cargo check --locked --tests --features test-hooks` en cours, caches et répertoire temporaire dans le dépôt. L'audit final et tous les tests restent exigés en CI, sans nouvelle exception.
+
+Passe code-reviewer distincte : diff du lockfile relu à froid et comparé aux versions corrigées des deux avis ; **revue du correctif approuvée côté code**. Plages de dépendances inchangées, aucune montée globale, garde RSA et isolation de la clé de signature conservées. Aucun coût front attendu ; bundle avant push et mesure main à consigner. La story n'est pas close sur la seule mise à jour du verrou.
+
+Contrôle Rust local **vert** : `cargo check --locked --tests --features test-hooks`, 9 min 03 s, avec les deux versions corrigées effectivement vérifiées. Lint global et typage verts. Le premier bundle local accuse deux gardes de chemins de la fenêtre d'association : la jonction `node_modules` vers un autre worktree rend ses sources extérieures à la liste blanche. Cause et correction : enlever seulement cette jonction après contrôle du lien et de sa cible interne au dépôt, copier les dépendances dans le worktree ; aucun changement des tests, listes ou seuils. Mesure représentative à refaire avant push, sans relance automatique. L'audit de sécurité final reste attendu en CI.
+
 Module : publication et sécurité · Palier 1.0 · Estimation **3 h actives**, alerte au-delà de **4,5 h** · Statut : fait côté code vérifié et fusionné le 2026-10-20, PR #69 ; signature réelle de livraison à vérifier lors de la publication.
 
 ## Passe product-owner

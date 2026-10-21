@@ -1,5 +1,13 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Point prioritaire du 2026-10-21 — audit TLS avant B5
+
+Après compaction relire AGENTS.md, CLAUDE.md et ce point. Travail actif : branche/worktree ci-sec-01-audit-20261021 depuis main dc14badf. La CI de B5 #72 (tête 5c845e67) est rouge sur deux nouveaux avis TLS, RUSTSEC-2026-0382 / 0383, runs 39552278950 / 39552285403. Complément CI-SEC-01 : mises à jour minimales Cargo.lock vers rustls-webpki 0.103.16 et webpki-root-certs 1.0.10, sans nouvelle exception ; 1 h active, alerte 1,5 h. Attendre audit, tests, lint/typage, revue, bundle avant push, CI complète, fusion et mesure main. Puis fusionner main dans la branche B5 publiée (jamais rebase/force-push), attendre CI et fusionner B5, mesurer main.
+
+B5 : 5 h approuvées comme périmètre réel ; preuves rouges 016dbd04, 86eeadc0, 9dba2a9e ; correctif f987edef. 49 ciblés, cycle complet renforcé 1/1, 41 contrats, 72 hostiles verts ; lint, typage, revue consignés. QA élargie 2251 verts / 8 échecs résolus par renforcement des anciens oracles et suppression de concurrence locale avec le build ; scénario de restauration inchangé 8/8 seul, pas de timeout augmenté ni retry automatique. Inventaire des suspects non prouvés et report après 1.0 dans la branche B5. Bundle B5 338 458 normalisés, marge 19 942 ; dernier main 338 413, marge 19 987.
+
+N-IOS-FIX-01 : branche existante n-ios-apercus rebasée sur B5, tête 19cd9262, non publiée. Rouge 56a5aa37 et correctif 39ec8856 : blobs identiques aux preuves antérieures ; 345 tests / 24 fichiers verts après rebase. Finir lint/typage/revue/bundle/CI après mise à jour sur le main B5. Puis annexes, guide ordonné docs/essais-iphone.md déjà présent, unique build iPhone et publication IPA, REL-01 à REL-03. Aucun build iPhone ni suppression de worktree pendant cette reprise ; preuves physiques toujours ouvertes. Pas de nouvelle décision requise.
+
 Écrit à la passation de Claude Code vers Codex (décision d'Ali du 2026-10-19). Règles de travail : `AGENTS.md`. Plan de la 1.0 : `docs/backlog.md` section « Palier 1.0 », audit `docs/audit-1.0.md`, décisions `docs/decisions.md`.
 
 ## Suivi du 2026-10-20 — à lire avant l'historique
