@@ -2,6 +2,14 @@
 
 ## Non publié
 
+## 1.0.0
+
+- Lot candidat iPhone : les vérifications natives du guide `docs/essais-iphone.md` restent à exécuter ; la publication de l'IPA ne vaut pas validation de la recette 1.0.
+- Synchronisation : reprise de publication interrompue, rotation quand le segment iCloud est évincé, refus de clore un segment tronqué et suppression des doublons de récurrences. Les erreurs de suppression et de lecture restent visibles jusqu'au succès de l'opération concernée, y compris après une réussite partielle et un redémarrage.
+- Rappels iPhone : fenêtre chronologique de sept jours limitée à 64 demandes, couverture annoncée selon les demandes réellement posées ; heure d'échéance conservée et mention du report silencieux placée en dernier. Texte de remplacement par catégorie lorsque les aperçus sont masqués.
+- iPhone : focus du clavier des checklists et gardes de réouverture des sélecteurs et confirmations. Le rendu natif et les notifications réelles sont à vérifier avec ce lot.
+- Qualité et sécurité : écrans et textes secondaires chargés à la demande sous le plafond inchangé ; clé de signature Windows séparée du build frontal ; dépendances de vérification TLS mises à jour.
+
 - Désinstallation : la case « Supprimer les données de l'application » du désinstalleur Windows est désormais sans effet. Vos tâches, vos sauvegardes locales et vos réglages sont toujours conservés, que vous désinstalliez depuis Windows ou que vous choisissiez « Désinstaller avant d'installer ». Pour effacer vos données, supprimez à la main les dossiers de l'application (voir docs/install-pc.md).
 - Attention : cette protection existe à partir de cette version. Avant, cocher cette case supprimait vos données.
 - Qualité : l'installation, la réinstallation et la désinstallation de l'application Windows sont testées à chaque suite sur un vrai installeur.

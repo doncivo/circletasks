@@ -153,6 +153,10 @@ Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, déc
 ## Annexe : rapports détaillés
 
 Les onze rapports détaillés (tableaux fichier:ligne, scénarios, corrections) sont dans `docs/audits/2026-10-16/` ; ce document en est la consolidation dédoublonnée. Domaines : sécurité (8 constats), données (18), code/ADR (29), iOS (13 + 28 points non testables sans appareil), synchro (14), QA (28 + parcours PRD), notifications (15), métier (20), architecture (20 + 8 ADR à écrire), écrans 393 (34), accessibilité (24).
+# Préparation de publication du lot iPhone
+
+La version 1.0.0 prépare l'unique candidate N+1 demandée par Ali, pas une déclaration de recette terminée. Notes, contrat de version et 75 tests des outils release/SideStore verts ; revue de préparation consignée. Guide montré avant compilation, à intégrer par #75. Build, IPA publiée, signature Windows, audits finaux et observations physiques restent ouverts.
+
 # Actualisation npm du lot
 
 Le résultat npm historique est remplacé par le rouge 72154cc0 : Vite 8.3.2 affecté par GHSA-698v-4r3x-3vcv / GHSA-r825-w8mm-5pxw / GHSA-587h-7wmj-h5pm. Patch exact 8.3.3 et npm audit code 0 ; revue distincte consignée. Aucune exploitation ni perte constatée. CI finale et intégration avant compilation, audit complet REL-02 et observations natives toujours ouverts.

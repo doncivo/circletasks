@@ -17,12 +17,13 @@ Ce guide est pour le PC Windows (Windows 10 ou 11). Les versions PC sont publié
 
 C'est la seule voie à utiliser pour une mise à jour. Elle a été vérifiée le 2026-10-17 (0.1.1 → 0.3.3, modèle NSIS de Tauri 2.12.1).
 
-## Installer à la main (première installation, ou si la bannière ne vient pas)
+## Première installation uniquement
 
 1. Télécharger `CircleTasks_X.Y.Z_x64-setup.exe` depuis la page des versions de `circletasks-releases`.
-2. Lancer l'installeur. Si une version est déjà installée, l'installeur propose une page « La version … est installée sur le système » avec deux choix.
-3. Choisir **« Ne pas désinstaller »**. L'installeur remplace le programme en place et garde les données.
-4. Si tu choisis quand même « Désinstaller avant d'installer », le désinstalleur de l'ancienne version s'ouvre et affiche une case **« Supprimer les données de l'application »**.
+2. Cette procédure concerne seulement un PC sans CircleTasks. Sur le PC d'Ali, déjà équipé, ne pas lancer cet installeur : utiliser la bannière intégrée.
+3. Si la bannière n'apparaît pas, ouvrir Réglages > À propos et rechercher la mise à jour ; relever version et erreur éventuelle pour diagnostic. Ne pas contourner l'updater par une installation manuelle.
+
+Les avertissements historiques ci-dessous expliquent le risque des anciens désinstalleurs ; ils ne constituent pas une procédure de mise à jour.
 
 > **⚠️ Ne jamais cocher « Supprimer les données de l'application ». Cette case efface sans confirmation supplémentaire `%APPDATA%\fr.circletasks.planner` et `%LOCALAPPDATA%\fr.circletasks.planner` : la base, toutes les sauvegardes locales, le journal technique et les réglages. Un seul clic suffit, et rien ne les met à la corbeille.**
 
