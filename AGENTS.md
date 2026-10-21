@@ -52,3 +52,8 @@ Lis d'abord `CLAUDE.md` (stack, commandes, règles d'architecture) puis `docs/re
 Codex assure lui-même product-owner → agent du module → qa-test → code-reviewer en passes séparées, dans cet ordre, et consigne chaque résultat. La revue relit le diff à froid et s’appuie sur les tests, sans se fier au souvenir de l’écriture. Une story non vérifiée ne porte jamais le statut « fait ». I-06 reste « code fusionné, en attente de vérification appareil » jusqu’au succès de A1 à A10.
 
 Exception explicite à la compilation iPhone unique par lot : l’essai SideStore N → N+1 utilise l’IPA déjà installée comme N ; une seule nouvelle compilation fournit N+1.
+
+## A9 — décision d'Ali du 21 octobre 2026
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+Avant toute mise à jour changeant le schéma, le guide exige la vérification d'une sauvegarde iCloud récente (S1 à S4 de docs/essais-iphone.md). Ne jamais présenter cette vérification comme une restauration éprouvée.

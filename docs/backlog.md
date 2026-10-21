@@ -1,5 +1,14 @@
 # Backlog CircleTasks
 
+## Décision applicable — 21 octobre 2026
+
+A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+
+Cette décision remplace les exigences A9 antérieures conservées ci-dessous pour historique. Aucun banc isolé ni séance A9 à lancer. Les preuves automatiques existantes sont conservées, sans les assimiler à un essai d'appareil. A6b reste « vérifié en usage après la 1.0 » : vérification future, non faite et non bloquante. Les autres essais natifs restent ouverts ; REL-01 à REL-03 ne sont pas clos sans leurs résultats.
+
+
 121 user stories (plus les stories techniques et correctifs, dont la section « Palier 1.0 »), triées par ordre de construction (PRD section 9). Critères d'acceptation : docs/PRD.md section 4.
 
 Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fichier à jour.
@@ -245,11 +254,11 @@ En additionnant sans retirer l'ancien B14, on obtiendrait 107 à 121 h : c'est u
 | REL-TECH-01 | Test de fumée du binaire Windows : le vrai `circletasks.exe` démarre et affiche l'écran du jour (fiche `docs/stories/REL-TECH-01.md`, décision d'Ali du 2026-10-10) | ci-release + qa-test | fait (PR #31 fusionnée ; réconcilié le 2026-10-19 avec GitHub et la passation) |
 | REL-TECH-02 | La désinstallation ne supprime jamais les données : crochet NSIS `NSIS_HOOK_PREUNINSTALL` (case « Supprimer les données » sans effet), garde-fou sur le script NSIS généré, smoke Windows étendu installation / réinstallation / désinstallation (fiche `docs/stories/REL-TECH-02.md`, audit B15, décision 9 d'Ali du 2026-10-17) | ci-release + qa-test | fait (PR #41 fusionnée le 2026-10-17, run 39034221587 vert) |
 | REL-01 | Les 12 parcours clés (PRD section 8) verts sur PC et iPhone | qa-test | Automatisation intégrée #78, main c5fc22ee ; 48 CI verts, revue/lint/typage/couverture consignés, J02 inclus. Douze parcours reliés aux preuves ; seules les frontières natives du guide restent ouvertes. |
-| REL-02 | Audits sécurité, performance, accessibilité conformes | security-privacy, performance, accessibility-i18n | Audit intégré #79 : npm zéro avis, Rust/perf/couverture verts, bundle main 338 476 ; IPA 1.0.0 et empreinte vérifiées. Signature réelle PC, SHA et endpoint updater vérifiés après run 39616432734 ; revue consignée. A9 et frontières natives encore ouverts ; aucune clôture déduite de l'automatisation #78. |
-| REL-03 | Version 1.0.0 taguée, installeur PC et IPA publiés, guide d'installation à jour | ci-release + docs-writer | Candidats PC et iPhone 1.0.0 publiés et vérifiés, runs 39616432734 / 39605174348 verts ; signature, empreintes et manifestes contrôlés. PC par bannière uniquement. A9 préalable et recette physique ouverts ; livraison finale non close. |
+| REL-02 | Audits sécurité, performance, accessibilité conformes | security-privacy, performance, accessibility-i18n | Audit intégré #79 : npm zéro avis, Rust/perf/couverture verts, bundle main 338 476 ; IPA 1.0.0 et empreinte vérifiées. Signature réelle PC, SHA et endpoint updater vérifiés après run 39616432734 ; revue consignée. A9 : risque accepté ; frontières natives encore ouvertes ; aucune clôture déduite de l'automatisation #78. |
+| REL-03 | Version 1.0.0 taguée, installeur PC et IPA publiés, guide d'installation à jour | ci-release + docs-writer | Candidats PC et iPhone 1.0.0 publiés et vérifiés, runs 39616432734 / 39605174348 verts ; signature, empreintes et manifestes contrôlés. PC par bannière uniquement. A9 : risque accepté ; recette physique ouverte ; livraison finale non close. |
 
 
-## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
+## Historique annulé — I-06-A9 bloquant (2026-10-21)
 
 Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds de test non publiés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
 

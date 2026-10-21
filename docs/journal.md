@@ -373,3 +373,13 @@ A9 : deux compilations de test demandées avec publication interdite : exception
 Paquet A9-seance-4-IPA.zip : 29 328 763 octets ; SHA-256 e8b7d51a8d129a9b4e203ff047daca4bb51d403e155ef7c138cd8aa3db9d880a, identique au digest GitHub. Quatre IPA internes relues et hachées depuis le ZIP : chacune concorde avec son empreinte ; deux guides, mémo et SHA256SUMS inclus, huit entrées. Brouillon non publié a9-20261021-cff59f5c ; aucun ajout à la source SideStore publique (blob 5a8af39e2a3f10209bf965f131ca1483b95dcd39 inchangé).
 
 Guide et paquet transmis à Ali ; créneau physique de 60 à 75 minutes. A9 reste **non exécuté sur appareil** et bloque la livraison. Après A9 restent les frontières natives du guide et le verdict final REL-01/REL-02/REL-03. A6b : « vérifié en usage après la 1.0 », futur, non fait, non bloquant. Aucun worktree supprimé.
+
+## 2026-10-21 — REL-03 : abandon explicite d'A9
+
+A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+
+Rappel dans l'app estimé à 3–4 h avec validation et nouveau build : la mise à jour SideStore est extérieure à l'app et une version déjà installée ne peut recevoir ce rappel rétroactivement. Plafond 2 h dépassé : rappel dans le guide seulement, moins d'une heure d'intégration estimée. Aucun code ni nouveau build ; candidats officiels conservés. Ancien ZIP déjà retiré, brouillon de séance et les deux artefacts IPA GitHub supprimés ; copies locales du paquet à supprimer uniquement dans le répertoire temporaire A9 vérifié.
+
+Passe product-owner : risque accepté sans faux statut fait ; QA documentaire : cohérence des règles, procédure S1–S4 et séparation iCloud Drive/sauvegarde relues. Passe code-reviewer distincte : diff documentaire relu, pas de modification PRD ni d'application ; revue approuvée sous réserve des contrôles CI obligatoires. Recette physique REL-01/02/03 en attente d'Ali.

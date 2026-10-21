@@ -1,6 +1,10 @@
 # Essais iPhone du lot 1.0
 
-**A9 bloque désormais la livraison 1.0** (décision d'Ali du 2026-10-21). Suivre d'abord le [protocole dédié A9](essais-iphone-a9.md) après confirmation des artefacts : exception après commit avec restauration puis arrêt réel du processus après commit avant `afterApply`. Ne pas installer l'IPA candidate avant cette séance. PC 1.0.0 publié et signé, mise à jour uniquement par la bannière. A6b : **« vérifié en usage après la 1.0 »**, futur, non exécuté et non bloquant.
+A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+
+Aucune IPA A9 à installer. Utiliser uniquement le candidat officiel 1.0.0. PC par bannière de mise à jour d'abord, puis iPhone par SideStore après S1 à S4. A6b : « vérifié en usage après la 1.0 », futur et non fait.
 
 Lot **publié : 1.0.0**, build **1.0.0**, source **dcde7edc** ; [compilation et publication vertes](https://github.com/doncivo/circletasks/actions/runs/39605174348). [IPA du lot](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.0/CircleTasks.ipa), **7 356 430 octets**, SHA-256 `d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057`. Identifiant `fr.circletasks.planner` et minimum iOS 18.0 vérifiés dans le Info.plist exporté de cette IPA ; taille et empreinte concordent avec l'asset et source.json. La mise à jour normale se fait depuis la source SideStore, sans désinstallation. Compilation réussie ne signifie pas essais physiques réussis.
 
@@ -8,7 +12,9 @@ Chaque ligne donne une action et son résultat attendu. Noter pour chaque essai 
 
 Avant les parcours : conserver l'IPA déjà installée comme N ; vérifier la sauvegarde ci-dessous, puis suivre la séquence SideStore avant les régressions. N+1 est l'IPA 1.0.0 ci-dessus. Sur PC, attendre la publication du lot puis utiliser uniquement la bannière de mise à jour intégrée. Une ligne ne devient vérifiée qu'après son exécution ; la publication d'une IPA ne suffit pas. Le rappel à deux jours reste différé ; ne pas avancer l'horloge.
 
-## Avant N+1 — confirmer la sauvegarde iCloud
+## Avant toute mise à jour qui change le schéma — confirmer la sauvegarde iCloud
+
+**Règle permanente :** avant d'installer une version qui change le schéma, vérifier une sauvegarde iCloud récente avec S1 à S4 ci-dessous. La mise à jour 0.3.3 → 1.0.0 passe du schéma 18 au 19 : cette vérification s'applique maintenant. Si la sauvegarde n'est pas confirmée, rester sur la version installée. Une synchronisation iCloud Drive ne remplace pas cette sauvegarde. Le contrôle ne prouve pas qu'une restauration a été essayée.
 
 La sauvegarde de CircleTasks reste locale au conteneur de l'app. Le dossier de synchronisation iCloud Drive n'est pas une sauvegarde de cette base. Une date récente de sauvegarde iCloud ne prouve pas à elle seule l'inclusion de CircleTasks, ni qu'une restauration d'app signée par SideStore a été testée.
 
@@ -35,7 +41,7 @@ Cette section s'exécute après S4, avant les régressions. Préparer A1/A2 dans
 - **A6b :** au jour prévu, attendre le rappel préparé dans N à deux jours → reçu à 60 secondes près, sans doublon ; noter nombre en attente s'il est affiché, conservé ou replanifié ; sinon noter heure attendue/réelle et état de Rappels. Statut **« vérifié en usage après la 1.0 »**, vérification future non exécutée, non bloquante et jamais « fait » ; ne pas avancer l'horloge.
 - **A7 :** avant la mise à jour PC, observer le PC puis le mettre à jour avec sa bannière intégrée → éventuel avertissement de version affiche le vrai numéro de l'iPhone ; après mise à jour, avertissement disparu et données conservées. **Si écart :** noter l’heure, le geste, le texte attendu et observé, le code et une capture ; si la condition n’a pas été obtenue, noter « non reproduit ».
 - **A8 :** ouvrir les sauvegardes → entrée « Avant mise à jour » datée de l'opération. **Si écart :** noter l’heure, le geste, le texte attendu et observé, le code et une capture ; si la condition n’a pas été obtenue, noter « non reproduit ».
-- **A9 :** suivre le [protocole dédié](essais-iphone-a9.md), bloquant de livraison 1.0, budget 6 h → restauration native et reprise après arrêt réel vérifiées sur appareil ; **sinon noter** l'étape et l'écart, ne pas clore A9 grâce aux seuls tests automatiques. Les injections restent réservées aux IPA de test non publiées de test.
+- **A9 : non exécuté, risque accepté** selon la décision ci-dessus ; aucune manipulation de panne ni installation de laboratoire dans cette séance.
 - **A10 :** refaire la procédure en lisant `docs/install-iphone.md`, étape 7 → guide suffisant, aucune désinstallation nécessaire entre N et N+1. **Si écart :** noter l’heure, le geste, le texte attendu et observé, le code et une capture ; si la condition n’a pas été obtenue, noter « non reproduit ».
 
 

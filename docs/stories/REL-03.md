@@ -1,10 +1,19 @@
 # REL-03 — Préparation et publication du lot 1.0
 
-Statut : candidats PC et iPhone 1.0.0 publiés et vérifiés ; A9 préalable et recette physique ouverts, livraison non prononcée. Estimation préparation/publication : 2 h actives, alerte 3 h ; temps des runners et essais d'Ali distincts. A9 : périmètre séparé explicitement autorisé à 6 h, fiche I-06-A9.
+## Décision applicable — 21 octobre 2026
+
+A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+
+Cette décision remplace les exigences A9 antérieures conservées ci-dessous pour historique. Aucun banc isolé ni séance A9 à lancer. Les preuves automatiques existantes sont conservées, sans les assimiler à un essai d'appareil. A6b reste « vérifié en usage après la 1.0 » : vérification future, non faite et non bloquante. Les autres essais natifs restent ouverts ; REL-01 à REL-03 ne sont pas clos sans leurs résultats.
+
+
+Statut : candidats PC et iPhone 1.0.0 publiés et vérifiés ; A9 : risque accepté ; recette physique ouverte, livraison non prononcée. Estimation préparation/publication : 2 h actives, alerte 3 h ; temps des runners et essais d'Ali distincts. A9 : périmètre séparé explicitement autorisé à 6 h, fiche I-06-A9.
 
 Publication PC : run **39616432734** vert ; EXE téléchargé sans exécution, signature Ed25519 et version signée 1.0.0 valides ; SHA-256 **b303d07a077bc6c5dfe021090af9c7d73f3dd91bdcb34d7568dd188d7ed7ede2**, conforme à l'asset GitHub. L'endpoint public `releases/latest/download/latest.json` sert 1.0.0 avec la signature du fichier téléchargé. Mise à jour d'Ali uniquement par la bannière, aucun installeur lancé à la main. La publication des candidats ne clôt pas la recette.
 
-**A9 bloque désormais la livraison 1.0**, décision confirmée d'Ali après constat du changement 18 vers 19. Voir `docs/stories/I-06-A9.md` et `docs/essais-iphone-a9.md`. Les deux builds instrumentés sont réservés aux essais, sans publication SideStore, et ne remplacent pas le candidat correct ; aucun résultat physique encore acquis.
+**Historique annulé — A9 bloquait la livraison 1.0**, décision précédemment confirmée d'Ali après constat du changement 18 vers 19. Voir `docs/stories/I-06-A9.md` et `docs/essais-iphone-a9.md`. Les deux builds instrumentés sont réservés aux essais, sans publication SideStore, et ne remplacent pas le candidat correct ; aucun résultat physique encore acquis.
 
 ## Passe product-owner
 
