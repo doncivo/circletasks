@@ -10,6 +10,8 @@ La publication existante est limitée aux tags ios-v*. Le workflow accepte soit 
 
 ## Vérifications à consigner
 
+Intégration finale préparée après #75 (guide, 865c8729) et #77 (Vite, f9d7d242), chacune après 48 CI verts. Diff à froid depuis ce main : seulement les six versions racines, notes et documentation ; aucun changement applicatif ni transitif supplémentaire. **Revue finale de préparation approuvée**. Dépendances installées par `npm ci --ignore-scripts` depuis le lock : Vite 8.3.3, audit zéro avis ; contrat v1.0.0 vert. Les 48 verts historiques de b58d0df ne valent pas la CI de cette intégration : nouvelle validation requise avant fusion, puis mesure sur main avant le tag.
+
 QA préparatoire : contrat de version `v1.0.0` et notes extraites avec succès ; **75 tests / 4 fichiers** des outils release/SideStore verts, couverture coupée. Diff des cinq fichiers de version relu séparément : seules les six occurrences de la version racine changent, aucune dépendance mise à jour. Guides PC corrigés pour retirer le recours à l'installeur quand la bannière manque et l'ancienne attente d'approbation humaine. Revue distincte de la préparation approuvée ; lint, typage et mesure finale en cours, CI complète requise avant fusion. Ne pas confondre cette préparation avec REL-03 livré.
 
 Contrat de version et extraction des notes ; tests des outils de publication et SideStore ciblés sans couverture ; lint, typage, revue distincte ; bundle avant push et après fusion, scan secrets, CI complète. Compilation Swift et publication réelles restent ouvertes jusqu'au run iOS vert. Signature Windows, manifeste updater et guides de livraison seront vérifiés séparément ; sur PC aucune mise à jour par installeur manuel.

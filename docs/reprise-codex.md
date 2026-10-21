@@ -2,6 +2,8 @@
 
 ## Priorité — guide intégré, unique IPA à compiler et publier
 
+Actualisation après la reprise : **#77 fusionnée dans f9d7d242**, tête 636a6a64, 48 CI verts. Candidate #76 remise sur ce main, tête de fusion locale **d86507e4** (non poussée), `npm ci --ignore-scripts` terminé, Vite 8.3.3 et audit zéro avis ; revue finale de préparation consignée dans REL-03, contrat version vert. Mesures main #77 et candidate finale en cours. Prochain : consigner mesures, secrets, push normal de #76, attendre les 48 CI de la nouvelle tête, fusion et mesure main ; une seule compilation/publication iOS ensuite. REL-01 locale actualisée sans toucher au guide : **b9d0e7db**, non publiée. Les paragraphes suivants conservent l'historique préparatoire.
+
 Après compaction relire AGENTS.md, CLAUDE.md et ce point. Guide complet montré à Ali avant compilation, puis fusionné #75 dans **865c8729** après 48 CI verts. Sauvegarde locale/iCloud distinguée, SideStore détaillé, cinq régressions en tête, matrice REL-01 sans rejeu inutile ; A6 à deux jours différé et A9 natif ouvert. Bundle main #75 **58/58, 338 479 normalisés, 338 411 bruts, marge 19 921**. #74 également fusionnée (454778a9), compilation Swift et appareil ouverts.
 
 Nouvel audit npm frais : Vite 8.3.2 affecté, preuve rouge **72154cc0**, patch exact 8.3.3 sans transitive changée, audit zéro avis, lint/typage/revue et bundle verts. Branche **rel-02-vite-audit**, worktree rel-02-audit, PR **#77**, tête après intégration du guide **636a6a64** ; attendre la CI complète sur cette tête, fusion puis mesure main. Ne pas reprendre les 48 verts de la tête précédente comme preuve de la tête de fusion.
