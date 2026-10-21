@@ -1,5 +1,15 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Point prioritaire du 2026-10-21 — B5 fusionné, N-IOS-FIX-01 en publication
+
+Après chaque compaction, relire AGENTS.md, CLAUDE.md et ce point ; il prévaut sur les historiques. Main **1eac03fd**, #72 fusionnée après les 48 CI verts de la tête **2b4315a7**, runs **39556430486 / 39556432201**, revue approuvée ; bundle main **58/58, 338 458 normalisés, 338 392 bruts, marge 19 942**. B5 code corrigé sur les seuls chemins prouvés, physique 18 ouvert ; suspects non prouvés inventoriés après 1.0. TLS #73 également fusionnée et auditée (9baff642, f1eb69f4, 48 CI verts) ; signature réelle de livraison encore ouverte.
+
+Travail actif : branche existante **n-ios-apercus**, worktree du même nom. Rebase final sur main B5 sans conflit de code, tête de rebase 77dbc2df ; rouge courant **05e70a80**, correctif **8b25ac25**, blobs identiques aux preuves exécutées (ancien rouge 0e23aa2e, ancien correctif 2393eec6). **345 tests / 24 fichiers**, lint global, typage et revue du diff verts ; code et tests identiques après les rebases. 19 tests de frontière et 9 Rust historiques, à nouveau en CI sur la tête publiée. Commit de consignation **dd03f6fd**. Bundle final en cours, puis secrets, push/PR, attendre 48 verts, fusion et mesure main. Le .codex-tmp non suivi ancien est conservé ; aucun temporaire à commiter. Swift et appareil restent ouverts pour l'IPA unique.
+
+Préparation indépendante REL-01 : branche/worktree **rel-01-1-0**, tête **96a034d9**, base **19cd9262** (ancienne tête N-IOS-FIX-01). J02 composé PC → synchro → plan iPhone → action Fait → PC : **2/2 verts**, 35,9 s, zéro retries, un worker ; J10/J11 **2/2 verts** dans le projet PC, deux filtres iPhone préexistants inchangés. Lint, typage et revue verts ; aucun code applicatif modifié. Fiche et README rectifiés, recette finale et appareil non clos. Après fusion N-IOS, utiliser **git rebase --onto origin/main 19cd9262 rel-01-1-0** pour rejouer seulement ses propres commits, sans les anciennes preuves N-IOS déjà fusionnées. Ne pas publier avant les étapes précédentes. Cache Playwright dans t-tech-01/node_modules/.cache/codex-t-tech-validation/browsers ; TEMP/TMP/npm-cache dans le worktree, CT_E2E_PORT_BASE 47100 ; pas de test lourd pendant un build local.
+
+Suite : annexes (fiche N-IOS-CHK-01 à écrire), guide ordonné existant à compléter des douze parcours sans déplacer les cinq régressions en tête ; version de candidate, un seul lot iPhone Actions et publication IPA ; REL-01, REL-02, REL-03. Aucun build iPhone ni suppression de worktree pendant cette reprise ; preuves physiques toujours ouvertes, dont I-06 A1 à A10.
+
 ## Point prioritaire du 2026-10-21 — TLS fusionné, B5 remis sur main
 
 Relire AGENTS.md, CLAUDE.md et ce point après compaction ; il prévaut sur les historiques. #73 fusionnée dans main 9baff642, tête f1eb69f4, runs 39554560617 / 39554565334, 48 CI verts dont les deux audits TLS. Rust local, lint, typage et revue verts ; mesure du bundle sur main 58/58, 338 443 normalisés, 338 387 bruts, marge 19 957. Signature réelle de livraison encore ouverte.

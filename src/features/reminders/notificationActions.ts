@@ -1,3 +1,4 @@
+import { tNotificationPreviews } from '../../i18n/notificationPreviewsText';
 import type { ReplanTrigger } from './replanNotifications';
 import { restoredThisLaunch, settleRestoreMemo } from '../settings/restoreMemoPeek';
 import { nowIso } from '../../domain/clock';
@@ -47,6 +48,7 @@ export function actionTypeSpecs(): ActionTypeSpec[] {
   return (Object.keys(ACTION_TYPE_ID) as (keyof typeof ACTION_TYPE_ID)[]).map((category) => ({
     id: ACTION_TYPE_ID[category],
     actions: ACTIONS_BY_CATEGORY[category].map((id) => ({ id, title: t(ACTION_TITLE_KEY[id]), foreground: true as const })),
+    hiddenPreviewsBodyPlaceholder: tNotificationPreviews(category),
   }));
 }
 

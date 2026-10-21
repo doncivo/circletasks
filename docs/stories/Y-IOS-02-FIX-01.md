@@ -1,5 +1,9 @@
 # Y-IOS-02-FIX-01 — Échec de suppression de l'époque orpheline affiché avec sa cause
 
+## Clôture du complément côté code — 2026-10-21
+
+**#72 fusionnée**, main **1eac03fd**, tête **2b4315a7**, runs **39556430486 / 39556432201**, **48 CI verts** avec couverture complète, lint et typage ; revue distincte approuvée. Rouges **016dbd04**, **86eeadc0**, **9dba2a9e**, correctif **f987edef** ; seuls les chemins accusés par leurs propres tests sont corrigés. Les suspects non prouvés restent inventoriés avec leur limite, après 1.0, sans correction aveugle. Bundle sur main après fusion : **58/58, 338 458 normalisés, 338 392 bruts, marge 19 942**. La cause survit explicitement au cycle partiel et au redémarrage puis disparaît après suppression réelle et scan de confirmation. **Critère physique 18 encore ouvert**, aucune vérification iPhone inventée. Les paragraphes suivants sont l'historique des preuves et validations.
+
 ## Reprise autorisée et correctif — 2026-10-21
 
 **Statut : correctif en QA, pas encore fusionné.** Ali approuve les **5 h** comme périmètre réel et exige une preuve rouge propre à chaque chemin corrigé. Tout suspect non prouvé reste inchangé, documenté pour après la 1.0 dans [l'inventaire](../audits/2026-10-20-effacement-erreurs.md). Cette décision remplace les arrêts historiques ci-dessous. La branche distante `y-ios-02-fix-01-partiel` contient `86eeadc0`, poussé après bundle 58/58 et contrôle des secrets sans candidat.

@@ -45,6 +45,15 @@ describe('adaptateur du plugin (faux invoke)', () => {
     expect(call).toHaveBeenCalledWith('plugin:notification-actions|register_action_types', { types: [{ id: 'ct.task', actions: [{ id: 'done', title: 'Fait', foreground: true }] }] });
   });
 
+  it('N-IOS-FIX-01 : transmet le texte des aperçus au natif sans modifier les actions', async () => {
+    const call = vi.fn().mockResolvedValue({ registered: 1 });
+    const placeholder = 'Rappel CircleTasks : déverrouillez pour voir la tâche';
+    await createTauriNotificationActionSource(call).registerActionTypes([{ ...SPEC, hiddenPreviewsBodyPlaceholder: placeholder }]);
+    expect(call).toHaveBeenCalledWith('plugin:notification-actions|register_action_types', {
+      types: [{ id: 'ct.task', actions: [{ id: 'done', title: 'Fait', foreground: true }], hiddenPreviewsBodyPlaceholder: placeholder }],
+    });
+  });
+
   it('status : délégué et catégories, sinon réponse inattendue', async () => {
     expect(await createTauriNotificationActionSource(vi.fn().mockResolvedValue({ delegate: true, delegateAtLaunch: true, categories: 3 })).status()).toEqual({ delegate: true, delegateAtLaunch: true, categories: 3 });
     await expect(createTauriNotificationActionSource(vi.fn().mockResolvedValue({ delegate: 'oui' })).status()).rejects.toMatchObject({ reason: 'bad-response' });

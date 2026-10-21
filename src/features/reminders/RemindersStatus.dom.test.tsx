@@ -217,6 +217,27 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     expect(screen.getByText(/^Fuseau modifié : rappels recalculés à \d{2}:\d{2}$/)).toBeInTheDocument();
   });
 
+  const PREVIEWS_HELP =
+    'Sur l’écran verrouillé, iOS masque le contenu des rappels tant que l’iPhone n’est pas déverrouillé. Pour voir le titre du rappel : Réglages iOS › Notifications › CircleTasks › Afficher les aperçus › Toujours.';
+
+  it('N-IOS-FIX-01 : iPhone : ligne d’aide sur le masquage des aperçus iOS (texte simple, ni alerte ni lien)', async () => {
+    await open({ mode: 'real' }, async (harness) => {
+      await replanNotifications(harness.container, 'open');
+    });
+    const line = screen.getByText(PREVIEWS_HELP);
+    expect(line.tagName).toBe('P');
+    expect(line).not.toHaveAttribute('role');
+    expect(line).not.toHaveAttribute('data-kind', 'problem');
+    expect(line.querySelector('a, button')).toBeNull();
+  });
+
+  it('N-IOS-FIX-01 : PC : aucune ligne sur les aperçus iOS', async () => {
+    await open({ platform: { runtime: 'tauri', os: 'windows' }, mode: 'none' }, async (harness) => {
+      await replanNotifications(harness.container, 'open');
+    });
+    expect(screen.queryByText(/Afficher les aperçus/)).toBeNull();
+  });
+
   it('un état enregistré est montré dès l’ouverture de l’écran après un redémarrage (avant tout passage)', async () => {
     h = await setupReminders();
     h.fake.setPermission('denied');

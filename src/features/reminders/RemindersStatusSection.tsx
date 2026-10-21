@@ -1,3 +1,4 @@
+import { tNotificationPreviews } from '../../i18n/notificationPreviewsText';
 import { isValidTimeZone } from '../../domain/timeZone';
 import { localDateTimeAt } from '../../domain/notificationInstant';
 import type { PlanFailureReason } from '../../domain/notificationStatus';
@@ -120,6 +121,11 @@ export function RemindersStatusSection() {
         </p>
       )}
       {availability === 'available' && <p className="ct-recap__statusLine">{t('reminders.status.zoneLimit')}</p>}
+      {iphone && (
+        <p className="ct-recap__statusLine">
+          {tNotificationPreviews('previewsHelp')}
+        </p>
+      )}
     </section>
   );
 }
