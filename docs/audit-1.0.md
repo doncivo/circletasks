@@ -1,5 +1,11 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### CI-SEC-01 : audit TLS rouge du 2026-10-21
+
+**Résolu et vérifié #73**, main **9baff642**, tête **f1eb69f4**, runs **39554560617 / 39554565334**, **48 CI verts** dont audit et garde RSA, revue approuvée. Dépendances corrigées 0.103.16 / 1.0.10 ; bundle main **58/58, 338 443 normalisés, marge 19 957**. Les rouges suivants sont historiques. Signature de livraison encore ouverte.
+
+La CI de B5 #72 accuse RUSTSEC-2026-0382 (rustls-webpki 0.103.15) et RUSTSEC-2026-0383 (webpki-root-certs 1.0.9), avis du 20 octobre. Rouge runs 39552278950 / 39552285403, audit inchangé ; correctifs disponibles 0.103.16 / 1.0.10. Complément de CI-SEC-01 sur branche distincte, à fusionner avant B5 ; aucun impact utilisateur ou exploitation affirmé, aucune clôture de sécurité avant audit vert. Signature #69 acquise, exception RSA et garde de non-compilation conservées. B5 a ses preuves propres, correctif f987edef, tête 5c845e67 ; N-IOS-FIX-01 rebasée sur B5, 345 tests du module verts, non publiée.
+
 ### B5 — inventaire avant correction et estimation révisée
 
 **Mise à jour du 2026-10-21, prioritaire** : 5 h approuvées par Ali comme périmètre réel. Rouge propre obligatoire, suspect non prouvé reporté sans correction (inventaire et limite consignés). `86eeadc0` poussé, nouveaux rouges **9dba2a9e**, correctif **f987edef**. Quatre chemins supplémentaires prouvés : entretien orphelin, oubli partiel, reprise par tranches, Rappels Apple ; **49/49 ciblés**, scénario complet renforcé **1/1**, lint, typage et revue du code verts. Contrats d'absence confirmée **41/41** après renforcement des anciens oracles. QA élargie, CI complète et fusion encore requises ; critère physique ouvert. Bundle du correctif **58/58**, aucune modification des seuils. Les arrêts historiques suivants sont levés.

@@ -1,5 +1,23 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Point prioritaire du 2026-10-21 — TLS fusionné, B5 remis sur main
+
+Relire AGENTS.md, CLAUDE.md et ce point après compaction ; il prévaut sur les historiques. #73 fusionnée dans main 9baff642, tête f1eb69f4, runs 39554560617 / 39554565334, 48 CI verts dont les deux audits TLS. Rust local, lint, typage et revue verts ; mesure du bundle sur main 58/58, 338 443 normalisés, 338 387 bruts, marge 19 957. Signature réelle de livraison encore ouverte.
+
+Travail actif B5 : branche publiée y-ios-02-fix-01-partiel, worktree rel-02-audit. Fusion de origin/main résolue, conflits documentaires seulement, historiques des deux côtés conservés ; aucun rebase ni force-push. Les 44 contrôles hors audit/agrégat de la précédente CI B5 sont verts, mais une nouvelle CI complète est exigée sur la fusion. Terminer consignation, bundle, secrets, push, attendre 48 verts, fusion #72, mesure main. Rouge 016dbd04, 86eeadc0 et 9dba2a9e ; correctif f987edef, tête initiale 5c845e67 ; 5 h approuvées, suspects non prouvés reportés sans correction.
+
+N-IOS-FIX-01 : n-ios-apercus, tête 19cd9262 (base B5 5c845e67), non publiée ; 345 tests du module, lint global, typage verts, preuves de blobs rouge/vert conservées. Rebaser sur main après fusion B5, actualiser aliases, revue/bundle/PR/CI/fusion puis mesure main. Préparation indépendante REL-01 dans rel-01-1-0, base 19cd9262 : fiche PO et test J02 composé (PC → synchro → rappel iPhone → Fait → PC), pas encore exécuté ni commité. Helper sync reçoit un callback facultatif avant ouverture pour initialiser les faux et horloges ; aucun code applicatif modifié. Dépendances locales copiées, pas de jonction. Lancer ce test seulement après les builds lourds, avec cache navigateur et TEMP dans le dépôt, deux projets, un worker, zéro retries. Aucun nouveau défaut applicatif affirmé.
+
+Suite : annexes dont fiche N-IOS-CHK-01 à écrire avant appareil, version de candidate, unique IPA Actions et publication, REL-01 à REL-03. Le guide ordonné est présent ; ajouter les douze parcours fonctionnels après les régressions déjà en tête. Les vérifications iPhone et I-06 restent ouvertes. Aucun worktree supprimé.
+
+## Point prioritaire du 2026-10-21 — audit TLS avant B5
+
+Après compaction relire AGENTS.md, CLAUDE.md et ce point. Travail actif : branche/worktree ci-sec-01-audit-20261021 depuis main dc14badf. La CI de B5 #72 (tête 5c845e67) est rouge sur deux nouveaux avis TLS, RUSTSEC-2026-0382 / 0383, runs 39552278950 / 39552285403. Complément CI-SEC-01 : mises à jour minimales Cargo.lock vers rustls-webpki 0.103.16 et webpki-root-certs 1.0.10, sans nouvelle exception ; 1 h active, alerte 1,5 h. Attendre audit, tests, lint/typage, revue, bundle avant push, CI complète, fusion et mesure main. Puis fusionner main dans la branche B5 publiée (jamais rebase/force-push), attendre CI et fusionner B5, mesurer main.
+
+B5 : 5 h approuvées comme périmètre réel ; preuves rouges 016dbd04, 86eeadc0, 9dba2a9e ; correctif f987edef. 49 ciblés, cycle complet renforcé 1/1, 41 contrats, 72 hostiles verts ; lint, typage, revue consignés. QA élargie 2251 verts / 8 échecs résolus par renforcement des anciens oracles et suppression de concurrence locale avec le build ; scénario de restauration inchangé 8/8 seul, pas de timeout augmenté ni retry automatique. Inventaire des suspects non prouvés et report après 1.0 dans la branche B5. Bundle B5 338 458 normalisés, marge 19 942 ; dernier main 338 413, marge 19 987.
+
+N-IOS-FIX-01 : branche existante n-ios-apercus rebasée sur B5, tête 19cd9262, non publiée. Rouge 56a5aa37 et correctif 39ec8856 : blobs identiques aux preuves antérieures ; 345 tests / 24 fichiers verts après rebase. Finir lint/typage/revue/bundle/CI après mise à jour sur le main B5. Puis annexes, guide ordonné docs/essais-iphone.md déjà présent, unique build iPhone et publication IPA, REL-01 à REL-03. Aucun build iPhone ni suppression de worktree pendant cette reprise ; preuves physiques toujours ouvertes. Pas de nouvelle décision requise.
+
 ## Point prioritaire — reprise du 2026-10-21, B5 en QA
 
 Après chaque compaction : relire AGENTS.md, CLAUDE.md et ce point. Ali approuve 5 h comme périmètre réel, sans dérive, et demande de continuer jusqu'à REL-03 ; seuls les quatre cas d'arrêt convenus s'appliquent. Chemin corrigé = rouge propre préalable ; suspect non prouvé = inventaire avec limite, après 1.0, aucun correctif aveugle.
