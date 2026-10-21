@@ -1,5 +1,12 @@
 # Essais iPhone du lot 1.0
 
+## Décision de recette du 2026-10-21
+
+A6b : "vérifié en usage après la 1.0" (vérification future, non exécutée, jamais fait). Décision d’Ali : ne bloque pas la livraison ; ne pas avancer l’horloge. A6a immédiat reste dans la recette.
+
+**Candidats disponibles ensemble : PC et iPhone 1.0.0.** PC uniquement par la bannière de mise à jour ; signature et manifeste public vérifiés, run 39616432734 vert. Attendre que le PC affiche 1.0.0 avant la séance iPhone.
+
+
 Lot **publié : 1.0.0**, build **1.0.0**, source **dcde7edc** ; [compilation et publication vertes](https://github.com/doncivo/circletasks/actions/runs/39605174348). [IPA du lot](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.0/CircleTasks.ipa), **7 356 430 octets**, SHA-256 `d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057`. Identifiant `fr.circletasks.planner` et minimum iOS 18.0 vérifiés dans le Info.plist exporté de cette IPA ; taille et empreinte concordent avec l'asset et source.json. La mise à jour normale se fait depuis la source SideStore, sans désinstallation. Compilation réussie ne signifie pas essais physiques réussis.
 
 Chaque ligne donne une action et son résultat attendu. Noter pour chaque essai : version, heure, succès ou échec, capture et code affiché en cas d'échec. Les contrôles automatisés ne valent pas une vérification sur appareil. Ne jamais supprimer CircleTasks entre N et N+1 ; sur PC, utiliser seulement la bannière de mise à jour intégrée.

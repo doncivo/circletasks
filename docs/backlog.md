@@ -247,3 +247,8 @@ En additionnant sans retirer l'ancien B14, on obtiendrait 107 à 121 h : c'est u
 | REL-01 | Les 12 parcours clés (PRD section 8) verts sur PC et iPhone | qa-test | Automatisation intégrée #78, main c5fc22ee ; 48 CI verts, revue/lint/typage/couverture consignés, J02 inclus. Douze parcours reliés aux preuves ; seules les frontières natives du guide restent ouvertes. |
 | REL-02 | Audits sécurité, performance, accessibilité conformes | security-privacy, performance, accessibility-i18n | Audit consolidé du candidat : npm zéro avis, Rust/perf/couverture verts, bundle main 338 476 ; IPA 1.0.0 et empreinte vérifiées. Revue documentaire consignée ; appareil et signature PC ouverts, automatisation #78 fusionnée. |
 | REL-03 | Version 1.0.0 taguée, installeur PC et IPA publiés, guide d'installation à jour | ci-release + docs-writer | IPA candidate 1.0.0 publiée, tag ios-v1.0.0 et run 39605174348 verts ; empreinte, version/build et source SideStore vérifiés. Version PC et recette physique ouvertes ; livraison finale non close. |
+
+
+## Décision de recette du 2026-10-21
+
+A6b : "vérifié en usage après la 1.0" (vérification future, non exécutée, jamais fait). Décision d’Ali : ne bloque pas la livraison ; ne pas avancer l’horloge. A6a immédiat reste dans la recette.

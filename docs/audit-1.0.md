@@ -177,3 +177,8 @@ Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source
 
 Voir `docs/audits/2026-10-21-lot-1.0.md` : source et arbre, CI, audits de dépendances, performance, couverture, bundle et publication IPA reliés à leurs preuves. Aucun verdict final sur l'appareil ; I-06 A6 différé et A9 natif non exécuté restent explicites. Automatisation #78 intégrée ; signature/publication PC et preuves physiques à terminer. Aucun statut « fait » sur les vérifications physiques absentes.
 
+
+
+## Décision de recette du 2026-10-21
+
+A6b : "vérifié en usage après la 1.0" (vérification future, non exécutée, jamais fait). Décision d’Ali : ne bloque pas la livraison ; ne pas avancer l’horloge. A6a immédiat reste dans la recette.

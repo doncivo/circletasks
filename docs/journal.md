@@ -359,3 +359,8 @@ Audit documentaire : source iPhone dcde7edc, arbre de #76 identique à main et 4
 
 Tag v1.0.0 sur c5fc22ee, arbre validé par les 48 CI de #78 et sources applicatives identiques à l'IPA ; #79 fusionnée ensuite dans 7247f4a6, audit et bundle main 58/58 verts. Après absence de tout run Windows malgré le tag, workflow actif et filtre inchangé, une seule réémission de création de la référence est faite avec l'authentification gh du propriétaire, après remesure. Objet annoté **64ff8d1a2aed1e8ac774f95eddc10598635430d5** et source **c5fc22ee** conservés exactement ; aucune release PC n'existait. Cause du premier événement manquant non prouvée, aucune relance de test échoué, aucun seuil changé. Compilation/signature/publication non déclarées réussies avant leurs jobs et contrôles d'artefact.
 
+
+
+## Décision de recette du 2026-10-21
+
+A6b : "vérifié en usage après la 1.0" (vérification future, non exécutée, jamais fait). Décision d’Ali : ne bloque pas la livraison ; ne pas avancer l’horloge. A6a immédiat reste dans la recette.
