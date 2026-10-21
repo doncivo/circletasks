@@ -1,5 +1,14 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+## Décision applicable — 21 octobre 2026
+
+A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+
+Cette décision remplace les exigences A9 antérieures conservées ci-dessous pour historique. Aucun banc isolé ni séance A9 à lancer. Les preuves automatiques existantes sont conservées, sans les assimiler à un essai d'appareil. A6b reste « vérifié en usage après la 1.0 » : vérification future, non faite et non bloquante. Les autres essais natifs restent ouverts ; REL-01 à REL-03 ne sont pas clos sans leurs résultats.
+
+
 ### N-IOS-CHK-01 — protocole natif, pas de résultat présumé (2026-10-21)
 
 Fiche écrite avant la séance : `%`, `50 %` et `%u` dans le titre ; nom d'espace temporaire `50 % %u` pour exercer aussi le corps natif, puis restauration du nom et des aperçus. Aucune correction à l'aveugle des clés de localisation. Le guide conserve les cinq cas déjà cassés en tête et ajoute les douze parcours fonctionnels, avec limites des simulations, vérifications étalées et I-06 explicites. Statut **préparation vérifiée, appareil non testé** ; aucun feu vert 1.0 fondé sur ce document seul.

@@ -1,6 +1,15 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
-## Priorité : A9 prêt pour la séance physique
+## Décision applicable — 21 octobre 2026
+
+A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
+
+A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
+
+Cette décision remplace les exigences A9 antérieures conservées ci-dessous pour historique. Aucun banc isolé ni séance A9 à lancer. Les preuves automatiques existantes sont conservées, sans les assimiler à un essai d'appareil. A6b reste « vérifié en usage après la 1.0 » : vérification future, non faite et non bloquante. Les autres essais natifs restent ouverts ; REL-01 à REL-03 ne sont pas clos sans leurs résultats.
+
+
+## Historique annulé : préparation de la séance A9
 
 Relire AGENTS.md et CLAUDE.md après compaction. Main 2398e8e2, #80 fusionnée après 48 CI verts de d67692ae ; preuves : 13 tests ciblés et 4 Rust, bundle main 58/58. Deux IPA A9 vérifiées ; paquet et guide transmis, A9 physique non exécuté, livraison 1.0 bloquée jusqu'à sa preuve. Branche active rel-03-a9-seance, worktree n-ios-apercus, consignation des artefacts en cours de PR/CI. Les branches instrumentées i-06-a9-build-afterapply (1226f203) et i-06-a9-build-interruption (2560945a) ne doivent jamais être fusionnées. Deux compilations seulement : 39637333456 / 39637672577, toutes deux réussies ; aucune compilation à relancer pour des docs.
 

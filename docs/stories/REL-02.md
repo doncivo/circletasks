@@ -1,6 +1,6 @@
 # REL-02 — Audits de livraison 1.0
 
-Module : sécurité, performance, accessibilité · Estimation **3 h actives**, alerte à **4,5 h** · Statut : audit automatique consigné, IPA publiée et vérifiée ; **appareil et signature PC ouverts**. Aucune conformité finale revendiquée. L'avenant B5 de 5 h est historique, corrigé et fusionné #72.
+Module : sécurité, performance, accessibilité · Estimation **3 h actives**, alerte à **4,5 h** · Statut : audit automatique consigné, IPA publiée et vérifiée ; signature PC vérifiée (run 39616432734), **essais natifs ouverts**. A9 : trou assumé, non vérifié sur appareil, risque accepté par Ali le 21 octobre 2026 pour son usage personnel ; redevient bloquant uniquement si cet usage devient multi-utilisateur ou distribué à des tiers. Aucune conformité finale revendiquée. L'avenant B5 de 5 h est historique, corrigé et fusionné #72.
 
 ## Passe product-owner — 2026-10-20
 
