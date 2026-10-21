@@ -4,6 +4,10 @@ Statut : préparation de l'IPA candidate ; livraison et essais physiques ouverts
 
 ## Passe product-owner
 
+Passe publication PC du lot : préparer le même candidat 1.0.0 pour que la séance couvre aussi I-06 A7 sur le PC par la bannière updater. Cette publication fait partie de REL-03 déjà autorisée ; elle ne transforme pas les essais physiques en succès. Après l'intégration de l'audit #79, tag **v1.0.0** sur main avec CI verte et bundle mesuré ; jamais de lancement de l'installeur sur le PC réel par Codex, ni de demande d'installation manuelle à Ali. Vérifier ensuite les fichiers publiés, la signature hors ligne avec la clé publique, le manifeste réellement servi par l'endpoint updater et la conservation de source.json iPhone. Garder le verdict final de recette ouvert jusqu'aux observations d'appareil.
+
+Précontrôles : tag v1.0.0 et release correspondante absents au contrôle ; environnement releases autorise v*, secrets présents par nom seulement ; workflow compilant sans clé updater puis signant dans une étape séparée relu. Aucun secret extrait. Version iPhone déjà publiée par l'unique run 39605174348 ; aucun nouveau build iPhone pour le PC ni pour les documents. Branche de consignation rel-03-publication-1-0, depuis le dossier d'audit, non publiée à ce stade.
+
 Demande d'Ali : montrer le guide complet avant compilation, puis compiler et publier sans nouvelle consultation. Une seule nouvelle compilation fournit N+1 ; N est l'IPA installée. Version candidate 1.0.0 dans package, lock npm, Tauri, Cargo et lock Cargo. Notes honnêtes sur les critères physiques ouverts ; aucun tag PC ni clôture de REL-01/REL-02 déduit de la publication iPhone.
 
 La publication existante est limitée aux tags ios-v*. Le workflow accepte soit un push du tag, soit un lancement manuel sur ce tag : employer un seul déclenchement, jamais les deux, ne pas écraser un tag existant. Publier uniquement le commit intégré via PR, revue et CI complète verte ; guide intégré et montré au préalable. Contrôler IPA, identifiant, version, empreinte et source SideStore après Actions.
