@@ -157,6 +157,10 @@ Les onze rapports détaillés (tableaux fichier:ligne, scénarios, corrections) 
 
 La version 1.0.0 prépare l'unique candidate N+1 demandée par Ali, pas une déclaration de recette terminée. Notes, contrat de version et 75 tests des outils release/SideStore verts ; revue de préparation consignée. Guide montré avant compilation, à intégrer par #75. Build, IPA publiée, signature Windows, audits finaux et observations physiques restent ouverts.
 
+# Actualisation npm du lot
+
+Le résultat npm historique est remplacé par le rouge 72154cc0 : Vite 8.3.2 affecté par GHSA-698v-4r3x-3vcv / GHSA-r825-w8mm-5pxw / GHSA-587h-7wmj-h5pm. Patch exact 8.3.3 et npm audit code 0 ; revue distincte consignée. Aucune exploitation ni perte constatée. CI finale et intégration avant compilation, audit complet REL-02 et observations natives toujours ouverts.
+
 # État du lot avant compilation
 
 N-IOS-FIX-01 #74 fusionnée dans main 454778a9 : 48 CI verts, revue approuvée ; bundle main 338 479 normalisés, marge 19 921. Compilation Swift et appareil ouverts. Guide complet montré à Ali avant compilation, incluant sauvegarde iCloud, SideStore et matrice REL-01 ; aucun contrôle physique clos par la documentation.
