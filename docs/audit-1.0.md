@@ -2,6 +2,8 @@
 
 ### N-IOS-FIX-01 — reprise des aperçus masqués (2026-10-20)
 
+**Mise à jour du 2026-10-21** : B5 #72 fusionnée dans **1eac03fd**, 48 CI verts, preuve rouge 016dbd04, bundle main **338 458**, marge **19 942** ; physique 18 ouvert. N-IOS-FIX-01 remise sur ce main, rouge **05e70a80** / correctif **8b25ac25** (blobs identiques aux preuves), **345 tests du module**, lint, typage et revue du code verts. Bundle final, CI complète puis compilation Swift et appareil restent requis. Aucun statut « fait » pour un essai non exécuté.
+
 Correctif de la branche existante remis sur main puis isolé du départ : textes de remplacement par catégorie et explication iPhone, champ natif facultatif. Rouge de frontière `1ed328c3`, correctif `e3cbfa4c` ; 344 tests du module, 19 tests de frontière, 9 contrôles Rust, lint, typage et revue distincte verts. CI, bundle final, compilation Swift et essai sur écran verrouillé encore requis ; aucune clôture appareil revendiquée.
 
 ### CI-SEC-01 : audit TLS rouge du 2026-10-21

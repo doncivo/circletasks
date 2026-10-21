@@ -2,6 +2,10 @@
 
 ## 2026-10-20 — reprise N-IOS-FIX-01 sur la branche existante
 
+### Finalisation sur main B5 — 2026-10-21
+
+B5 #72 fusionnée après **48 CI verts**, tête **2b4315a7**, runs **39556430486 / 39556432201**, main **1eac03fd**. Bundle main **58/58, 338 458 normalisés, 338 392 bruts, marge 19 942** ; critère physique 18 ouvert. N-IOS-FIX-01 conserve sa branche d'origine et reçoit ce main sans conflit de code. Aliases rouge **05e70a80** / correctif **8b25ac25**, blobs vérifiés identiques aux preuves exécutées ; **345 tests / 24 fichiers**, lint global, typage et revue distincte du diff verts. Bundle final et CI complète avant fusion ; Swift et aperçus réels dans l'IPA unique, aucun essai physique revendiqué.
+
 Mesure préparatoire : **58/58, 338 464 normalisés, 338 401 bruts, marge 19 936**, coût **21 octets**, catalogues hors départ et garde inchangée. Premier build local refusé car le cache de l'ancien worktree ne contenait pas le worker Tesseract ; copie complète des dépendances vérifiées du dépôt, puis contrôle réussi. Ce n'est pas une relance d'un test instable : la dépendance manquante est corrigée, sans modifier les tests ou les seuils. Mesure finale après remise sur main requise avant push.
 
 `n-ios-apercus` conservée, rebase du commit historique sur main après #69 (`11ec2744`), seul conflit de journal résolu en gardant les deux historiques. Textes nouveaux isolés dans leurs catalogues à la demande, garde hors du départ ; catégories sans titre utilisateur ni `%`, aide simple réservée à l'iPhone. **48 tests ciblés**, **344 tests du module**, **9 contrôles Rust**, lint global et typage verts. Frontière JS/natif : rouge `1ed328c3` reconstruit sur l'ancien adaptateur (champ absent), correctif `e3cbfa4c`, puis **19/19 verts**, dont l'appel historique sans champ. Aucun échec de main nouveau revendiqué. Revue distincte approuvée côté code ; remise sur main après Y-IOS-06, bundle, CI et compilation Swift du lot encore requis, essai réel des aperçus ouvert. Estimation d'intégration 2 h actives, alerte 3 h.

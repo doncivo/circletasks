@@ -1,5 +1,15 @@
 # N-IOS-FIX-01 — Rappel sur écran verrouillé : texte de remplacement et explication
 
+## Validation sur le main B5 — 2026-10-21
+
+**Statut : code validé localement, CI complète et compilation Swift attendues avant clôture ; essai appareil ouvert.** Branche existante `n-ios-apercus` conservée, remise sur main **1eac03fd** après #72 et le complément TLS #73. Aucun conflit de production ; conflits documentaires antérieurs résolus en gardant les deux historiques.
+
+Preuve rouge courante **05e70a80**, correctif **8b25ac25**. Blobs du test et de l'adaptateur rouge identiques aux preuves exécutées avant rebase (`834aafed504840fe89cc1161ef580eb7838eca7c`, `e8d166d6dad0b37c8dc3f2b4a3a868049d7111c3`) ; adaptateur corrigé `f8d65d39f88ea88074ac3856294c8db54e693327`. Le rouge reconstruit explicitement l'ancien adaptateur pour prouver le champ perdu, sans prétendre découvrir une nouvelle régression de main.
+
+QA après rebase : **345 tests / 24 fichiers** rappels et adaptateurs, couverture coupée, lint global et typage verts. Les sources applicatives et tests de ce module sont identiques après la dernière remise sur main ; les preuves précédentes 19 tests de frontière et 9 contrôles Rust restent consignées. La CI complète vérifiera à nouveau ces contrôles sur la tête publiée. Aucun délai ou timeout augmenté, aucun test désactivé ni retry automatique.
+
+Passe code-reviewer distincte : diff depuis **1eac03fd** relu à froid, **approuvé côté code**. Champ facultatif dans TS et Codable, appel historique sans champ conservé ; identifiants/actions inchangés, titres utilisateurs et `%` absents des textes de catégorie ; aide simple iPhone seulement. Catalogues propres hors départ, garde du bundle sans nouvelle entrée autorisée. Compilation Swift et apparence réelle sur écran verrouillé réservées à l'unique lot iPhone. Mesure finale et CI encore requises avant fusion.
+
 Module : M5 Notifications · Correctif rattaché à **N-01** et **N-03** (ADR 0012) · Agents : notifications (TS, plugin Swift `notification-actions`), qa-test, code-reviewer · Statut : code en validation (2026-10-20, branche existante n-ios-apercus), compilation et essai appareil ouverts.
 Pas de nouvelle user story du PRD. Aucune commande ni permission nouvelle.
 
