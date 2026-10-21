@@ -86,7 +86,20 @@ export async function bootstrapDatabase(
         },
         () => logFailure('db', 'pre-migration-list-unreadable'),
       ),
-      afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined),
+      afterApply: async (db, report) => {
+        await reintegrateAfterMigration(db, options.clock);
+
+  if (localStorage.getItem('ct.a9.afterapply.consumed') === '1') return;
+  const versions = await db.select('SELECT MAX(version) AS version FROM schema_migrations');
+  if (report.currentVersion !== 19 || report.applied.length !== 1 || report.applied[0] !== 19 || versions[0]?.version !== 19) {
+    throw Object.assign(new Error('A9 requires a fresh migration from schema 18 to 19'), { name: 'A9InvalidBaseline' });
+  }
+  await db.select('SELECT COUNT(*) AS count FROM epoch_carry_report');
+  // Une seule panne : la restauration/recharge exerce le vrai parcours de reprise sans réinjecter la panne.
+  localStorage.setItem('ct.a9.afterapply.consumed', '1');
+  throw Object.assign(new Error('A9 injected failure after committed schema 19'), { name: 'A9AfterApplyCommitted19' });
+
+      },
       onSchemaRead: ({ current }) => {
         schemaVersion = current;
       },

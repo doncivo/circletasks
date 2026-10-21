@@ -68,7 +68,7 @@ export async function restoreUpdateBackup(name: string, clock: Clock, service: B
     return { ok: false, message: updateRestoreFailureText(reason, databaseClosed), code: reason };
   }
   try {
-    await service.restart();
+    await Promise.reject(new Error('A9RestoreCompletedInstallSchema18BeforeReload'));
     return { ok: true };
   } catch (error) {
     logFailure('backup-restore', `update-restore-restart-failed ${error instanceof Error ? error.name : 'erreur'}`);
