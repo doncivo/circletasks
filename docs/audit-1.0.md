@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+### CI-SEC-01 : audit TLS rouge du 2026-10-21
+
+La CI de B5 #72 accuse RUSTSEC-2026-0382 (rustls-webpki 0.103.15) et RUSTSEC-2026-0383 (webpki-root-certs 1.0.9), avis du 20 octobre. Rouge runs 39552278950 / 39552285403, audit inchangé ; correctifs disponibles 0.103.16 / 1.0.10. Complément de CI-SEC-01 sur branche distincte, à fusionner avant B5 ; aucun impact utilisateur ou exploitation affirmé, aucune clôture de sécurité avant audit vert. Signature #69 acquise, exception RSA et garde de non-compilation conservées. B5 a ses preuves propres, correctif f987edef, tête 5c845e67 ; N-IOS-FIX-01 rebasée sur B5, 345 tests du module verts, non publiée.
+
 ### CI-SEC-01 et C-FIX-01 — suivi des fusions du 2026-10-20
 
 Clé updater hors du build : **#69 fusionnée** (`ea596996`), 48 CI verts et revue approuvée, banc de signature réel à clé jetable vérifié ; signature de livraison encore requise. Focus de checklist : **#70 fusionnée** (`44441dbe`), 48 CI verts sur `6f2a66be`, preuves rouge/verte et revue approuvées ; clavier réel encore ouvert. Bundle sur main après chacune : **58/58, 338 443 normalisés, marge 19 957**, coût nul. Aucune clôture physique inventée.

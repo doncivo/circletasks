@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-21 — audit TLS, complément CI-SEC-01
+
+B5 #72 publiée, tête 5c845e67, bundle avant push 58/58, 338 458 normalisés, 338 392 bruts, marge 19 942, secret 0 candidat. La CI accuse deux nouveaux avis RustSec : 2026-0382 / 0383, runs rouges 39552278950 / 39552285403. Passe product-owner CI-SEC-01 : verrouiller seulement rustls-webpki 0.103.16 et webpki-root-certs 1.0.10 sur branche ci-sec-01-audit-20261021 depuis main dc14badf ; 1 h active, alerte 1,5 h, audit et garde RSA conservés. B5 recevra main par fusion, sans force-push. Aucune exploitation ni donnée personnelle consultée. N-IOS-FIX-01 rebasée sans conflit de code, rouge 56a5aa37 / correctif 39ec8856 (blobs identiques aux preuves), 345 tests du module verts ; publication après B5.
+
 ## 2026-10-20 — ouverture Y-IOS-06
 
 CI #71 rouge sur `sync_ios_y02::y_ios_02_13` (run `39470831050`, job `118794148125`) : la QA locale initiale du seul fichier sync_bookmark n'avait pas inclus ce contrat voisin. L'assertion attendait encore le premier plan directement dans `confirm` ; elle suit maintenant l'appel à la garde commune et vérifie son refus avant création de l'alerte. Styles Annuler/confirmer, action préférée et annulation en arrière-plan conservés ; les trois tests initiaux ne changent pas. Après élargissement au module sync : **371 tests verts, zéro échec, deux ignorés préexistants**, aucun délai ni timeout changé. Revue du complément approuvée, nouvelle CI et mesure avant push requises.
