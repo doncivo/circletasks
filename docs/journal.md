@@ -4,6 +4,12 @@
 
 Branche de protocole séparée depuis N-IOS-FIX-01, préparée pendant sa CI, publication après sa fusion. Fiche des pourcentages : titres littéraux et corps via renommage temporaire d'un espace existant (ES-01), restauration du nom et des aperçus ; aucun code corrigé sans preuve native. Guide conservant les cinq régressions en tête, puis annexes, douze parcours et I-06 A1–A10 ; attentes réelles sur plusieurs jours et limites de simulation explicites. Relecture QA et revue distincte approuvées pour le protocole, pas pour le résultat physique. 1 h prévue, alerte 1,5 h. Aucun nouveau build iPhone, données réelles jamais consultées par Codex.
 
+## 2026-10-21 — préparation REL-01 pendant les CI du lot
+
+J02 composé **2/2 verts** sur PC et iPhone simulés (13,4 s / 11,4 s, total 35,9 s), un worker, zéro retries, budget initial inchangé 40 s. J10/J11 compatibles : **2/2 verts** dans leur projet PC ; les deux filtres iPhone préexistants restent inchangés. Lint global, typage et revue distincte du test/helper/README verts. Première vérification sans panne applicative nouvelle ; la réception iOS réelle reste ouverte. Préparation locale non publiée, sans attribuer à ces modifications les anciennes CI de main.
+
+Lecture du PRD §8 et des specs : J10 et J11 existent mais le README est en retard ; le parcours J02 complet manque, contrairement à ses étapes isolées N-01/N-03. Fiche REL-01 écrite avant code, 2 h actives, alerte 3 h. Préparation d'un parcours composé à deux applications simulées, horloge contrôlée, notification demandée puis action native simulée et retour de l'état au PC. Aucun défaut applicatif affirmé, aucune modification de production ; réception physique toujours à vérifier avec l'IPA. Aucun délai, retry ou skip nouveau. Test pas encore exécuté ; aucune clôture de recette.
+
 ## 2026-10-20 — reprise N-IOS-FIX-01 sur la branche existante
 
 ### Finalisation sur main B5 — 2026-10-21

@@ -1,0 +1,26 @@
+# REL-01 — Recette des douze parcours clés
+
+Module : QA de livraison · Statut : préparation pendant les CI du lot, aucune clôture revendiquée · Estimation **2 h actives**, alerte **3 h** ; les essais physiques sont séparés.
+
+## Passe product-owner — 2026-10-21
+
+Référence immuable : PRD §8, douze parcours de bout en bout sur PC et mobile ; §9, vérification de la synchronisation entre appareils avant livraison. Conserver les seuils de taille et couverture, les décisions de contraste et de taille iOS, l'interdiction de désinstaller pour mettre à jour le PC et le lot iPhone unique. Branche de préparation depuis N-IOS-FIX-01 ; aucune publication avant les fusions précédentes.
+
+État de couverture lu : J01, J03 à J11 et J12 existent ; le README est en retard pour J10/J11. Le parcours J02 complet manque : les specs N-01 et N-03 isolent planification et action mais ne relient pas la création PC, la synchronisation, le plan iPhone et le retour de l'action au PC. Ce manque de preuve ne constitue pas une panne fonctionnelle démontrée.
+
+## Acceptation
+
+1. Les douze parcours sont reliés à leurs specs actuelles ; les limites du simulateur et les preuves physiques restent nommées.
+2. Ajouter J02 avec deux vrais conteneurs applicatifs reliés au simulateur, horloge contrôlée, planificateur et source d'actions de notification de test. Créer la tâche sur PC, transmettre le rappel à l'iPhone, vérifier heure/titre/catégorie et absence d'envoi PC, injecter l'action native « Fait », puis vérifier son retour au PC et la disparition du rappel.
+3. Ne pas présenter le faux planificateur comme une réception par iOS : livraison réelle, gestes natifs et conservation après mise à jour restent dans `docs/essais-iphone.md` pour l'IPA.
+4. Aucun délai ajouté, retry automatique, skip de test instable ou timeout augmenté. Budget initial du nouveau parcours : 40 s, comme J10 qui ouvre deux applications et les synchronise ; les appels supplémentaires se bornent à cinq cycles applicatifs et à des attentes d'état.
+5. Mettre à jour le guide des essais sans déplacer les cinq régressions en tête. Ne pas effacer les données réelles pour rejouer un premier lancement ; distinguer première installation simulée et mise à jour physique N → N+1.
+6. QA ciblée, lint, typage et revue distincte ; suite complète avec couverture en CI, bundle avant push et après fusion. Aucun statut « fait » ni livraison finale sur une seule préparation.
+
+## Preuves
+
+J02 exécuté avant toute modification applicative : **2/2 verts**, projets PC et iPhone, **35,9 s** au total (13,4 s / 11,4 s par test), un worker, zéro retries. Chaque exécution ouvre ses deux applications ; cinq cycles pilotés, même tâche et même rappel, action native simulée et retour de l'état terminé au PC. Le PC ne planifie aucun rappel ; la requête iPhone est retirée après « Fait ». Le budget initial de 40 s est inchangé.
+
+Le helper de synchro reçoit seulement un callback facultatif avant navigation pour installer les horloges et les faux au bon moment. Compatibilité des anciens J10 et J11 : **2/2 verts dans leur projet PC**, chacun ouvrant ses pages prévues ; leurs deux filtres iPhone préexistants sont inchangés (2 non-exécutions prévues, aucun nouveau skip). README rectifié pour ces trois parcours ; aucune preuve de réception par iOS ni validation de recette finale n'est inventée. Lint, typage, revue, CI complète et appareil encore requis.
+
+Lint global et typage **verts**. Passe code-reviewer distincte : spec, helper et diff du README relus à froid ; **revue du code de recette approuvée**. Initialisation des faux avant navigation, horloges alignées des deux appareils avant action, espace isolé par exécution, nettoyage des contextes et du simulateur, assertions sur la requête exacte et sur l'état revenu au PC ; aucun code applicatif modifié. Cette préparation n'est pas encore publiée et doit être remise sur le main final du lot avant bundle et CI ; les autres parcours et l'appareil restent à consigner dans la recette finale.

@@ -4,6 +4,10 @@
 
 Fiche écrite avant la séance : `%`, `50 %` et `%u` dans le titre ; nom d'espace temporaire `50 % %u` pour exercer aussi le corps natif, puis restauration du nom et des aperçus. Aucune correction à l'aveugle des clés de localisation. Le guide conserve les cinq cas déjà cassés en tête et ajoute les douze parcours fonctionnels, avec limites des simulations, vérifications étalées et I-06 explicites. Statut **préparation vérifiée, appareil non testé** ; aucun feu vert 1.0 fondé sur ce document seul.
 
+### REL-01 — preuve de recette à compléter (2026-10-21)
+
+Le README des parcours n'est plus exact pour J10/J11, qui existent. La chaîne J02 complète n'a pas de spec dédiée : N-01 et N-03 couvrent des étapes isolées. Fiche PO et test composé en préparation, sans modification de production ni panne affirmée. Validation en simulation et réception réelle iPhone distinguées ; aucune conformité finale sur cette préparation seule.
+
 ### N-IOS-FIX-01 — reprise des aperçus masqués (2026-10-20)
 
 **Mise à jour du 2026-10-21** : B5 #72 fusionnée dans **1eac03fd**, 48 CI verts, preuve rouge 016dbd04, bundle main **338 458**, marge **19 942** ; physique 18 ouvert. N-IOS-FIX-01 remise sur ce main, rouge **05e70a80** / correctif **8b25ac25** (blobs identiques aux preuves), **345 tests du module**, lint, typage et revue du code verts. Bundle final, CI complète puis compilation Swift et appareil restent requis. Aucun statut « fait » pour un essai non exécuté.
