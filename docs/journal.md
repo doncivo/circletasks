@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-21 — préparation N-IOS-CHK-01 et guide du lot
+
+Branche de protocole séparée depuis N-IOS-FIX-01, préparée pendant sa CI, publication après sa fusion. Fiche des pourcentages : titres littéraux et corps via renommage temporaire d'un espace existant (ES-01), restauration du nom et des aperçus ; aucun code corrigé sans preuve native. Guide conservant les cinq régressions en tête, puis annexes, douze parcours et I-06 A1–A10 ; attentes réelles sur plusieurs jours et limites de simulation explicites. Relecture QA et revue distincte approuvées pour le protocole, pas pour le résultat physique. 1 h prévue, alerte 1,5 h. Aucun nouveau build iPhone, données réelles jamais consultées par Codex.
+
 ## 2026-10-20 — reprise N-IOS-FIX-01 sur la branche existante
 
 ### Finalisation sur main B5 — 2026-10-21
@@ -320,4 +324,8 @@ Ce journal compte une ligne par story livrée ou par décision notable : date, s
 # REL-02 — dépendance de développement avant compilation
 
 Audit npm frais : Vite 8.3.2, trois avis liés au lancement d'éditeur ; un paquet de sévérité haute, code 1. Preuve rouge 72154cc0 avant correction. Patch exact 8.3.3, aucune transitive changée, audit code 0. La résolution initiale par plage vers 8.3.5 a été abandonnée avant commit pour garder le patch minimal. Aucun exploit exécuté et aucun incident sur les données personnelles constaté. Revue distincte approuvée, contrôles et CI en cours ; compilation unique du lot attend cette intégration.
+
+# N-IOS-CHK-01 — séance préparée avant compilation
+
+Guide complet présenté à Ali avant tout build : vérification iCloud indépendante de la copie locale, SideStore détaillé, cinq régressions en tête des essais, traces d'écart et distinction des douze parcours automatiques / frontières natives. Pas de rejeu manuel des routines sur trois jours. A6 à deux jours et A9 natif restent ouverts. #74 fusionnée après 48 contrôles verts et revue ; mesure main en cours. Aucun résultat d'appareil inventé.
 
