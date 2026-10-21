@@ -1,10 +1,10 @@
 # Essais iPhone du lot 1.0
 
-Lot visé : **1.0.0**, source **dcde7edc**, [compilation et publication GitHub Actions](https://github.com/doncivo/circletasks/actions/runs/39605174348). **Attendre ce run vert et la proposition de 1.0.0 dans SideStore avant N+1** ; un build en cours ne vaut pas publication. Le [lien IPA du lot](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.0/CircleTasks.ipa) sera disponible après publication. La mise à jour normale se fait depuis la source SideStore, sans désinstallation.
+Lot **publié : 1.0.0**, build **1.0.0**, source **dcde7edc** ; [compilation et publication vertes](https://github.com/doncivo/circletasks/actions/runs/39605174348). [IPA du lot](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.0/CircleTasks.ipa), **7 356 430 octets**, SHA-256 `d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057`. Identifiant `fr.circletasks.planner` et minimum iOS 18.0 vérifiés dans le Info.plist exporté de cette IPA ; taille et empreinte concordent avec l'asset et source.json. La mise à jour normale se fait depuis la source SideStore, sans désinstallation. Compilation réussie ne signifie pas essais physiques réussis.
 
 Chaque ligne donne une action et son résultat attendu. Noter pour chaque essai : version, heure, succès ou échec, capture et code affiché en cas d'échec. Les contrôles automatisés ne valent pas une vérification sur appareil. Ne jamais supprimer CircleTasks entre N et N+1 ; sur PC, utiliser seulement la bannière de mise à jour intégrée.
 
-Avant les parcours : conserver l'IPA déjà installée comme N ; vérifier la sauvegarde ci-dessous, puis suivre la séquence SideStore avant les régressions. N+1 est l'IPA du lot : version et lien seront ajoutés après publication. Sur PC, attendre la publication du lot puis utiliser uniquement la bannière de mise à jour intégrée. Une ligne ne devient vérifiée qu'après son exécution ; la publication d'une IPA ne suffit pas. Le rappel à deux jours reste différé ; ne pas avancer l'horloge.
+Avant les parcours : conserver l'IPA déjà installée comme N ; vérifier la sauvegarde ci-dessous, puis suivre la séquence SideStore avant les régressions. N+1 est l'IPA 1.0.0 ci-dessus. Sur PC, attendre la publication du lot puis utiliser uniquement la bannière de mise à jour intégrée. Une ligne ne devient vérifiée qu'après son exécution ; la publication d'une IPA ne suffit pas. Le rappel à deux jours reste différé ; ne pas avancer l'horloge.
 
 ## Avant N+1 — confirmer la sauvegarde iCloud
 

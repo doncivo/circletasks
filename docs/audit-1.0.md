@@ -169,3 +169,7 @@ Le résultat npm historique est remplacé par le rouge 72154cc0 : Vite 8.3.2 aff
 
 N-IOS-FIX-01 #74 fusionnée dans main 454778a9 : 48 CI verts, revue approuvée ; bundle main 338 479 normalisés, marge 19 921. Compilation Swift et appareil ouverts. Guide complet montré à Ali avant compilation, incluant sauvegarde iCloud, SideStore et matrice REL-01 ; aucun contrôle physique clos par la documentation.
 
+# Preuve de publication de l'IPA candidate
+
+Le lot iPhone 1.0.0 est compilé et publié par l'unique run 39605174348, source dcde7edc ; IPA, taille, SHA-256, version/build et identifiant vérifiés contre asset, source et Info.plist exporté. Guide complet montré avant compilation, sauvegarde iCloud et séquence SideStore explicites. Les preuves physiques restent ouvertes ; J02 composé est vert localement sur les dépendances finales, CI d'intégration attendue. Publication ne vaut pas recette 1.0 terminée.
+

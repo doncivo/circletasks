@@ -343,3 +343,7 @@ Guide complet présenté à Ali avant tout build : vérification iCloud indépen
 
 Préparation remise sur dcde7edc sans modifier le guide de séance montré avant compilation. J02 composé **2/2 verts en 42,0 s**, Vite 8.3.3, un worker et zéro retries ; lint/typage verts, revue séparée approuvée. Aucun code applicatif modifié ni réception iOS prétendue. L'IPA unique est en compilation dans le run 39605174348 ; les contrôles de recette ajoutés ne nécessitent pas de reconstruire ce binaire. CI d'intégration et réception physique encore ouvertes.
 
+# Lot iPhone 1.0.0 — compilation unique et publication vérifiées
+
+Tag ios-v1.0.0 sur dcde7edc après #76, 48 CI verts et mesure main 58/58, 338 476 normalisés, marge 19 924. Un seul run **39605174348**, ios et publish verts. IPA téléchargée dans le dépôt : **7 356 430 octets**, SHA-256 **d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057**, concordance asset/source ; Info.plist exporté de l'IPA : version et build 1.0.0, identifiant conservé, minimum iOS 18.0. Contrats source et permissions verts. Anciennes versions conservées ; avertissements de métadonnées manquantes de l'entrée 0.1.0 laissée intacte. Guide montré avant build puis enrichi du résultat réel, lien transmis à Ali. Aucun essai physique déclaré passé, aucun second build lancé.
+

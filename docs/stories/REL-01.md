@@ -19,6 +19,8 @@ Référence immuable : PRD §8, douze parcours de bout en bout sur PC et mobile 
 
 ## Preuves
 
+Lot iPhone effectivement publié : run **39605174348**, jobs ios et publish verts, un seul build. IPA 1.0.0/build 1.0.0, identifiant conservé, minimum 18.0, **7 356 430 octets** ; SHA-256 **d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057** concordant entre téléchargement, asset GitHub et source SideStore. Contrat Info.plist cinq plugins et contrôle source verts ; seuls les avertissements historiques de la version 0.1.0 restent, son entrée est conservée. Guide actualisé avec les preuves réelles ; réception physique toujours ouverte.
+
 Reprise sur le main candidat **dcde7edc** (version 1.0.0, Vite 8.3.3) : seul le commit propre de recette est rejoué, devenu **27205581** ; guide récent conservé, conflits documentaires résolus sans perdre les états REL-02/REL-03. Dépendances exactes installées depuis le lock. J02 vérifié sur cette base : **2/2 verts en 42,0 s**, un worker, zéro retries, budget de 40 s par test inchangé. Aucun build lourd local pendant les tests. Lint/typage globaux verts ; bundle avant publication en cours. Le build iPhone **39605174348** porte sur le même code applicatif, les ajouts de recette ne changent pas l'IPA et ne justifient aucune nouvelle compilation.
 
 Revue distincte de reprise : diff du test, du helper et du README relu ; initialisation des faux avant navigation, horloges alignées et retour de Fait au PC toujours vérifiés, aucun code applicatif modifié, **approuvée côté automatisation**. La recette physique reste ouverte. Le guide montré avant compilation trie les douze parcours et ne demande aucun rejeu des preuves automatiques.
