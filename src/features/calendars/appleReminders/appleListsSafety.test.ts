@@ -22,10 +22,10 @@ async function importMany(count: number): Promise<void> {
 }
 
 describe('réglage des listes illisible ou liste absente (audit M1, revue 6)', () => {
-  it('reparer le reglage ne resout pas une erreur de lecture du magasin', async () => {
+  it.each([resetLists, detachUnlisted])('reparer les listes ne resout pas une erreur de lecture du magasin (%s)', async (repair) => {
     await appleRemindersState(h.container).fail('store-unavailable');
     const failure = status().failure;
-    await resetLists(h.container);
+    await repair(h.container);
     expect(status().failure).toEqual(failure);
   });
 

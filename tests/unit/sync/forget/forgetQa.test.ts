@@ -67,6 +67,26 @@ const mirrorDeletion = (from: SimDevice, id: string): void => {
 };
 
 describe('faux dossier devices/<uuid> et appareil seulement cité : la suppression attend, visiblement (critère 13, exigence d’Ali)', () => {
+  it('une suppression incomplete ne resout pas le refus persiste du meme appareil', async () => {
+    const [a, x] = (await setup([X_ID])) as [SimDevice, SimDevice];
+    let calls = 0;
+    let partial = false;
+    a.platform.forget.deleteFiles = () => {
+      calls += 1;
+      return !partial ? Promise.reject(new SyncPlatformError('io')) : Promise.resolve({ deleted: 1, complete: false });
+    };
+    expect(await a.service.forgetDevice(x.id as DeviceId)).toEqual({ kind: 'done' });
+    await a.cycle();
+    expect(calls).toBeGreaterThan(0);
+    const saved = await meta(a, FORGET_META.failure);
+    expect(saved).toMatchObject({ deviceId: x.id, step: 'delete', code: 'io' });
+    partial = true;
+    await a.cycle();
+    expect(calls).toBeGreaterThan(1);
+    expect(await meta(a, FORGET_META.failure)).toEqual(saved);
+    expect(a.service.status().forget?.failure).toMatchObject({ deviceId: x.id, code: 'io' });
+  });
+
   // ADR 0011 §18 point 8 a (tranché par l'architecte après la QA) : un dossier jamais vu (vide, état illisible ou étranger, auteur
   // d'aucune déclaration) est un fantôme : il ne bloque pas la suppression, et il est montré dans APPAREILS (« jamais vu », nom neutre)
   // avec « Oublier ». QA-1 corrigé : les deux `it.fails` sont devenus des tests ordinaires.

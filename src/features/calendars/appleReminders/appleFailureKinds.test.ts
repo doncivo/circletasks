@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { appleRemindersState, appleRemindersStore } from './appleRemindersState';
+import { runRemindersPass } from './remindersPass';
 import { PERSO, setupRemindersHarness, type RemindersHarness } from './testKit';
 
 /** Revue 5 : un passage `push` ne lit pas les listes ; sa réussite n'efface que les échecs d'ÉCRITURE, jamais un échec de lecture ou de passage. */
@@ -13,6 +14,15 @@ afterEach(() => h.close());
 const failure = () => appleRemindersStore.get(h.container).getState().status.failure;
 
 describe('effacement des échecs par un passage push (revue 5)', () => {
+  it('une lecture interrompue par son echeance garde l erreur du passage precedent', async () => {
+    h.reminders.add({ listId: 'L-courses', title: 'Pain' });
+    await h.pass('full');
+    await appleRemindersState(h.container).fail('store-unavailable');
+    const saved = failure();
+    await runRemindersPass(h.container, 'full', { deadlineAt: h.db.clock.nowMs() - 1 });
+    expect(failure()).toEqual(saved);
+  });
+
   it('un échec de lecture survit à un push réussi, puis disparaît au premier passage complet réussi', async () => {
     await appleRemindersState(h.container).fail('store-unavailable');
     expect(await h.pass('push')).toMatchObject({ status: 'done' });
