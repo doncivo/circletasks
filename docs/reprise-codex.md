@@ -1,5 +1,14 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
+
+Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds privés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
+
+Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle intercepte ses erreurs. L’exception injectée est un cas de laboratoire ; la preuve prioritaire concerne un vrai processus arrêté avec commit SQLite acquis. Le retour normal en 19 après relance et le rollback de sauvegarde vers 18 sont deux sorties différentes, prouvées séparément.
+
+Branche active i-06-a9-afterapply, worktree n-ios-apercus ; main 7247f4a6. PC 1.0.0 publié, run 39616432734 vert, signature et manifeste servis vérifiés ; IPA candidate inchangée. Branche rel-03-publication-1-0 conserve les consignations antérieures, jusqu’à 8200cf48 ; ne pas perdre ses deux commits non poussés. La préparation A9 ne vaut pas une recette terminée.
+
+
 ## Priorité — IPA publiée, terminer recette automatique et audit
 
 Actualisation : **#78 fusionnée dans c5fc22ee**, tête 241daa87, **48 CI verts**, runs **39607713371 / 39607884918**. Bundle main après fusion **58/58, 338 476 normalisés, 338 433 bruts, marge 19 924**, sources applicatives et dépendances identiques à ios-v1.0.0. Audit non publié **rel-02-audit-final**, worktree rel-02-audit, rebasé sans conflit sur ce main ; tête avant cette actualisation 280d1e07. Dossier d'audit, guide et statuts actuels relus, J02 indiqué intégré, lint/typage/revue verts, bundle local identique. Prochain : mesure avant push final, secrets, PR documentaire, attendre tous les CI, fusion et mesure main. IPA déjà publiée et vérifiée, aucun second build iPhone. Les paragraphes suivants conservent l'historique préparatoire ; appareil et signature/publication PC restent ouverts.

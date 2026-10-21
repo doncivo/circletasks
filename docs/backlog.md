@@ -247,3 +247,10 @@ En additionnant sans retirer l'ancien B14, on obtiendrait 107 à 121 h : c'est u
 | REL-01 | Les 12 parcours clés (PRD section 8) verts sur PC et iPhone | qa-test | Automatisation intégrée #78, main c5fc22ee ; 48 CI verts, revue/lint/typage/couverture consignés, J02 inclus. Douze parcours reliés aux preuves ; seules les frontières natives du guide restent ouvertes. |
 | REL-02 | Audits sécurité, performance, accessibilité conformes | security-privacy, performance, accessibility-i18n | Audit consolidé du candidat : npm zéro avis, Rust/perf/couverture verts, bundle main 338 476 ; IPA 1.0.0 et empreinte vérifiées. Revue documentaire consignée ; appareil et signature PC ouverts, automatisation #78 fusionnée. |
 | REL-03 | Version 1.0.0 taguée, installeur PC et IPA publiés, guide d'installation à jour | ci-release + docs-writer | IPA candidate 1.0.0 publiée, tag ios-v1.0.0 et run 39605174348 verts ; empreinte, version/build et source SideStore vérifiés. Version PC et recette physique ouvertes ; livraison finale non close. |
+
+
+## I-06-A9 : bloquant de livraison 1.0 (2026-10-21)
+
+Ali confirme A9 avant livraison, budget 6 h, avec priorité à l’arrêt réel après commit 19 avant afterApply. Deux builds privés sont préparés, sans publication : exception puis interruption ; aucune panne dans le candidat. Le premier conserve la vraie restauration Rust et suspend sa relance pour prouver la réouverture par 0.3.3 en 18 ; le second attend l’arrêt physique, puis reprend le vrai traitement au redémarrage. Guide : docs/essais-iphone-a9.md. Statut : préparation, aucun succès physique revendiqué. A6b reste "vérifié en usage après la 1.0" (futur, non fait, non bloquant).
+
+Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle intercepte ses erreurs. L’exception injectée est un cas de laboratoire ; la preuve prioritaire concerne un vrai processus arrêté avec commit SQLite acquis. Le retour normal en 19 après relance et le rollback de sauvegarde vers 18 sont deux sorties différentes, prouvées séparément.
