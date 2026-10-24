@@ -21,6 +21,8 @@
 }
 
 .ct-export__backdrop {
+  padding: max(20px, var(--ct-safe-area-top)) max(20px, var(--ct-safe-area-right)) max(20px, var(--ct-safe-area-bottom)) max(20px, var(--ct-safe-area-left));
+  box-sizing: border-box;
   position: fixed;
   inset: 0;
   z-index: 200;

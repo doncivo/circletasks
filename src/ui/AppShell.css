@@ -16,6 +16,11 @@
   box-sizing: border-box;
 }
 
+/* La limite du défilement, pas son contenu, commence sous la barre d'état. */
+.ct-app-shell[data-layout='mobile'] {
+  padding-top: var(--ct-safe-area-top);
+}
+
 .ct-app-shell__main {
   flex-grow: 1;
   min-width: 0;
@@ -26,7 +31,7 @@
   flex-direction: column;
   --ct-shell-gap: 14px;
   gap: var(--ct-shell-gap);
-  padding: calc(52px + var(--ct-safe-area-top)) calc(20px + var(--ct-safe-area-right)) calc(28px + var(--ct-safe-area-bottom))
+  padding: 52px calc(20px + var(--ct-safe-area-right)) calc(28px + var(--ct-safe-area-bottom))
     calc(20px + var(--ct-safe-area-left));
 }
 

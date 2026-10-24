@@ -22,9 +22,13 @@
   align-items: center;
   justify-content: center;
   background: rgba(46, 33, 80, 0.45);
+  padding: max(20px, var(--ct-safe-area-top)) max(20px, var(--ct-safe-area-right)) max(20px, var(--ct-safe-area-bottom)) max(20px, var(--ct-safe-area-left));
+  box-sizing: border-box;
 }
 
 .ct-date-prompt__modal {
+  max-height: 100%;
+  overflow-y: auto;
   width: 440px;
   max-width: calc(100% - 40px);
   padding: var(--ct-space-5);

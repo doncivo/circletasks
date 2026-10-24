@@ -526,7 +526,7 @@ export const fr = {
     spaceProjectRow: 'Espace · projet',
     goalRow: 'Objectif',
     goalNone: 'Non rattachée',
-    createdModified: 'Créée le {created} · modifiée {modified}',
+    createdModified: 'Créée {created} · modifiée {modified}',
     stampToday: 'aujourd’hui à {time}',
     stampYesterday: 'hier à {time}',
     stampOn: 'le {date} à {time}',

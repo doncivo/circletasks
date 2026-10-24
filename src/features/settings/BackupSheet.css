@@ -1,5 +1,7 @@
 /* Feuille « Restaurer une sauvegarde » (P-04) : fenêtre centrée sur PC (gabarit de la fenêtre d'export), feuille sur iPhone. */
 .ct-backup__backdrop {
+  padding: max(20px, var(--ct-safe-area-top)) max(20px, var(--ct-safe-area-right)) max(20px, var(--ct-safe-area-bottom)) max(20px, var(--ct-safe-area-left));
+  box-sizing: border-box;
   position: fixed;
   inset: 0;
   z-index: 200;

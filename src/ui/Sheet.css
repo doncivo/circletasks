@@ -7,10 +7,12 @@
   flex-direction: column;
   justify-content: flex-end;
   z-index: 100;
+  padding-top: max(40px, calc(var(--ct-safe-area-top) + 12px));
+  box-sizing: border-box;
 }
 
 .ct-sheet {
-  max-height: calc(100% - 40px);
+  max-height: 100%;
   background: var(--ct-color-surface);
   border-radius: var(--ct-radius-xl) var(--ct-radius-xl) 0 0;
   display: flex;
@@ -35,5 +37,5 @@
 
 /* Fiche détail iPhone (Detail.html) : quasi plein écran, marge haute de 40 px. */
 .ct-sheet--tall {
-  height: calc(100% - 40px);
+  height: 100%;
 }
