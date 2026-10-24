@@ -32,6 +32,18 @@ test('UI-FIX-02 : le défilement de chaque écran reste sous la barre d’état'
   const geometry = await main.evaluate((el) => ({ top: el.getBoundingClientRect().top, scroll: el.scrollTop }));
   expect(geometry.scroll).toBeGreaterThan(0);
   expect(geometry.top).toBeGreaterThanOrEqual(59);
+  const bounds = await main.boundingBox();
+  expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) - 34);
+});
+
+test('UI-FIX-02 : en paysage, le rail et le défilement restent dans la zone sûre', async ({ page }) => {
+  await page.setViewportSize({ width: 956, height: 440 });
+  await page.setContent(`${viewport}<style>${styles}\nhtml,body{margin:0;height:100%}:root{--ct-safe-area-top:0px;--ct-safe-area-left:59px;--ct-safe-area-right:59px;--ct-safe-area-bottom:21px}</style><div class="app-shell"><div class="ct-app-shell" data-layout="mobile"><nav style="width:64px;flex-shrink:0">Onglets</nav><main class="ct-app-shell__main">${items}</main></div></div>`);
+  const rail = await page.locator('nav').boundingBox();
+  const main = await page.locator('main').boundingBox();
+  expect(rail?.x).toBeGreaterThanOrEqual(59);
+  expect((main?.x ?? 0) + (main?.width ?? 0)).toBeLessThanOrEqual(956 - 59);
+  expect((main?.y ?? 0) + (main?.height ?? 0)).toBeLessThanOrEqual(440 - 21);
 });
 
 for (const [name, content, selector] of [
