@@ -11,6 +11,7 @@ import { replanNotifications } from '../reminders/replanNotifications';
 import { clearSigningBanner } from '../reminders/signingNotice';
 import { setupReminders, type ReminderHarness } from '../reminders/testKit';
 import { AboutSection } from './AboutSection';
+import { SettingsScreen } from './SettingsScreen';
 
 /**
  * I-02 critères 7 et 8 : la ligne « Expire le … » de « À propos » (iPhone), l'état « date inconnue » dans « À propos » et dans Réglages >
@@ -48,6 +49,16 @@ describe('À propos : expiration de la signature (I-02)', () => {
         <RemindersStatusSection />
       </AppContainerProvider>,
     );
+
+  it('UI-FIX-02 : expiration visible en tête de Réglages, avant Général, en un seul exemplaire', async () => {
+    source.expireAt('2026-10-14T08:00:00Z');
+    await replanNotifications(h.container, 'open');
+    render(<AppContainerProvider container={h.container}><SettingsScreen /></AppContainerProvider>);
+    const expiry = await screen.findByText('Expire le mer. 14 oct. à 10:00 · dans 6 jours');
+    const general = screen.getByRole('heading', { name: 'GÉNÉRAL' });
+    expect(expiry.compareDocumentPosition(general) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(screen.getAllByText('Expire le mer. 14 oct. à 10:00 · dans 6 jours')).toHaveLength(1);
+  });
 
   it('expiration dans 6 jours : « Expire le … à 10:00 · dans 6 jours » et l’alerte prévue (24 h, heure murale)', async () => {
     source.expireAt('2026-10-14T08:00:00Z');

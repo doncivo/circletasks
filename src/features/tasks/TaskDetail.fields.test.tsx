@@ -261,6 +261,12 @@ describe('Fiche détail d’une tâche (A-08)', () => {
   });
 
   describe('iPhone : feuille plein écran et « Modifier » (Q15)', () => {
+    it('UI-FIX-02 : aucune commande circulaire ambiguë près du titre, une seule commande Terminer', async () => {
+      await open();
+      const sheet = screen.getByRole('dialog', { name: 'Détail de la tâche' });
+      expect(sheet.querySelectorAll('.ct-task-detail__header button')).toHaveLength(0);
+      expect(within(sheet).getAllByRole('button', { name: 'Marquer comme terminée' })).toHaveLength(1);
+    });
     beforeEach(() => mockViewport(440));
 
     it('en-tête ✕ / DÉTAIL / crayon, lignes en lecture seule (date sans l’année courante), note modifiable (critères 2, 5, 9, 11)', async () => {
