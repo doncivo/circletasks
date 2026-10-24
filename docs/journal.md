@@ -383,3 +383,9 @@ A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage pe
 Rappel dans l'app estimé à 3–4 h avec validation et nouveau build : la mise à jour SideStore est extérieure à l'app et une version déjà installée ne peut recevoir ce rappel rétroactivement. Plafond 2 h dépassé : rappel dans le guide seulement, moins d'une heure d'intégration estimée. Aucun code ni nouveau build ; candidats officiels conservés. Ancien ZIP déjà retiré, brouillon de séance et les deux artefacts IPA GitHub supprimés ; copies locales du paquet à supprimer uniquement dans le répertoire temporaire A9 vérifié.
 
 Passe product-owner : risque accepté sans faux statut fait ; QA documentaire : cohérence des règles, procédure S1–S4 et séparation iCloud Drive/sauvegarde relues. Passe code-reviewer distincte : diff documentaire relu, pas de modification PRD ni d'application ; revue approuvée sous réserve des contrôles CI obligatoires. Recette physique REL-01/02/03 en attente d'Ali.
+
+## 2026-10-24 — UI-FIX-02, paquet A en cours
+
+Point 1 : rouge 32d3b748 (18 assertions de couleur/annonce en échec, 14 tests existants verts), correctif b2ca3887 ; 47 tests ciblés verts avec couverture coupée. Vert réservé aux cycles complets ; attente et publication incomplète neutres, erreurs en danger, annonce vocale cohérente. Lancement initial forks : aucun test exécuté, timeout de démarrage de worker, donc jamais compté comme preuve rouge. Diagnostic : IPC Node et import/construction jsdom natifs réussis ; exécution threads complète sans changer délai, timeout ni test. Ce changement de pool est une condition d'exécution locale, pas une relance automatique ni une preuve de résolution du démarrage forks. CI garde sa configuration habituelle.
+
+Point 2 : preuve de géométrie des conteneurs communs préparée, marges sûres simulées 59/34 px. Nouvelle tâche et Détail : aucune refonte autorisée avant les maquettes.
