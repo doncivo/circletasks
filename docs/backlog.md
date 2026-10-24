@@ -1,10 +1,16 @@
 # Backlog CircleTasks
 
+## Paquet A — publication vérifiée du 24 octobre 2026
+
+PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.
+
+Bundle main après #83 : **58/58, 339 198 normalisés, 339 190 bruts, marge 19 202 octets**, plafond et liste de modules inchangés ; +722 octets pour le paquet. CI applicative 48/48, lint, typage et revue approuvée. **Vérification native du paquet et clôture REL-01 à REL-03 encore ouvertes** ; ne pas écrire « fait ». A9 reste le trou assumé décidé par Ali, A6b « vérifié en usage après la 1.0 » est futur, pas exécuté. Suivi documentaire sur rel-03-paquet-a-1-0-1 ; aucune recompilation pour ces textes.
+
 ## UI-FIX-02 — Paquet A demandé le 24 octobre 2026
 
 En cours : dix défauts constatés sur l'iPhone 1.0.0, dans l'ordre de la fiche `docs/stories/UI-FIX-02.md`. Pas de refonte Nouvelle tâche/Détail avant les maquettes. Aucune correction encore validée sur appareil.
 
-Correctifs locaux, preuves rouges/vertes et revue de code consignés ; lint/typage verts. Version de lot préparée 1.0.1, sans changement de schéma ; CI complète, intégration, publication et vérification sur iPhone encore dues. La fiche et le guide donnent les dix vérifications ciblées ; aucun statut « fait » avant les preuves nécessaires.
+Code fusionné par #83 dans b8ddc85f, 48 CI verts sur 80970c6c, revue/lint/typage consignés. Version de lot 1.0.1 sans changement de schéma ; publication et vérification sur iPhone encore dues. La fiche et le guide donnent les dix vérifications ciblées ; aucun statut « fait » sur l'appareil avant les preuves nécessaires.
 
 ## Décision applicable — 21 octobre 2026
 

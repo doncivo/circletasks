@@ -1,8 +1,14 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Paquet A — publication vérifiée du 24 octobre 2026
+
+PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.
+
+Bundle main après #83 : **58/58, 339 198 normalisés, 339 190 bruts, marge 19 202 octets**, plafond et liste de modules inchangés ; +722 octets pour le paquet. CI applicative 48/48, lint, typage et revue approuvée. **Vérification native du paquet et clôture REL-01 à REL-03 encore ouvertes** ; ne pas écrire « fait ». A9 reste le trou assumé décidé par Ali, A6b « vérifié en usage après la 1.0 » est futur, pas exécuté. Suivi documentaire sur rel-03-paquet-a-1-0-1 ; aucune recompilation pour ces textes.
+
 ## Priorité — paquet A UI-FIX-02 du 24 octobre 2026
 
-Ali a testé l'iPhone 1.0.0 et demande dix correctifs dans l'ordre de `docs/stories/UI-FIX-02.md`. Branche `ui-fix-paquet-a`, worktree `n-ios-apercus`, base main a8d0282b. Correctifs locaux et preuves rouges consignés ; lint/typage, revue et CI complète encore à terminer, aucune validation native présumée. Version de lot préparée 1.0.1, sans migration ; une compilation iPhone seulement après intégration du paquet. Ne pas modifier la mise en page de Nouvelle tâche/Détail avant les maquettes, hors corrections explicitement listées. Racine personnelle sale `passation-codex` conservée. A9 reste un trou assumé, pas une tâche à relancer ; les paragraphes de préparation A9 ci-dessous sont historiques et annulés.
+Ali a testé l'iPhone 1.0.0 et demande dix correctifs dans l'ordre de `docs/stories/UI-FIX-02.md`. #83 fusionnée dans b8ddc85f après 48 CI verts de 80970c6c, runs 40089223693 / 40089225629 ; lint, typage et revue consignés, aucune validation native présumée. La première CI avait accusé des références de noms partagées : origine inconnue des sauvegardes conservée avec identifiant de secours, attentes des conflits et parcours adaptées sans suppression de test ni changement de délai. Branche de remise `rel-03-paquet-a-1-0-1`, worktree `n-ios-apercus`. Version 1.0.1 sans migration ; mesure main après fusion puis un seul build iPhone et un build PC sur ce commit, vérification des artefacts avant annonce. Ne pas modifier la mise en page de Nouvelle tâche/Détail avant les maquettes, hors corrections explicitement listées. Racine personnelle sale `passation-codex` conservée ; la consigne de périmètre ajoutée par cfa2c8f0 est conservée dans main, seuls les trois ajouts d'AGENTS diffèrent de la tête revue, pas le code applicatif. A9 reste un trou assumé, pas une tâche à relancer ; les paragraphes de préparation A9 ci-dessous sont historiques et annulés.
 
 ## Décision applicable — 21 octobre 2026
 

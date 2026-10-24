@@ -1,5 +1,13 @@
 # REL-03 — Préparation et publication du lot 1.0
 
+## Paquet A — 1.0.1, suivi du 24 octobre 2026
+
+UI-FIX-02 est intégré par #83 dans b8ddc85f, tête 80970c6c, 48 CI verts (40089223693 / 40089225629), revue approuvée. Nouvelle tâche et Détail attendent toujours les maquettes hors corrections explicitement demandées. Version 1.0.1, schéma 19 et protocole inchangés. Bundle main après fusion : 58/58, 339 198 octets normalisés, 339 190 bruts, marge 19 202 ; coût du paquet 722 octets. Une seule compilation iPhone, run 40090523848 vert, et PC 40090523636 vert, tags ios-v1.0.1 / v1.0.1 sur cette même source. Les paragraphes 1.0.0 ci-dessous sont historiques, pas une preuve native de la 1.0.1.
+
+Vérification des artefacts : IPA téléchargée, 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97 identique à l'asset et source.json ; version/build 1.0.1, identifiant fr.circletasks.planner, minimum iOS 18.0, contrat cinq plugins et source SideStore valides (deux avertissements historiques 0.1.0 conservés). EXE téléchargé sans exécution, 6 402 709 octets, SHA-256 0de27f4640af6e4d130f8925526111b70a266018642989237fb5d365564e787d ; signature Ed25519, version signée et endpoint latest.json 1.0.1 concordants. PC uniquement par bannière. Guide actualisé, pas de deuxième compilation pour la documentation.
+
+Revue distincte du suivi documentaire : liens, empreintes et versions confrontés aux artefacts réels et aux runs ; aucun code applicatif modifié. Passe de revue approuvée. Bundle avant push documentaire 58/58 ; lint et typage applicatifs verts sur la source inchangée, nouvelle CI complète exigée sur la PR documentaire. REL-01 à REL-03 restent ouverts jusqu'aux résultats physiques ; A9 reste le trou assumé et A6b une vérification future en usage après la 1.0.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
