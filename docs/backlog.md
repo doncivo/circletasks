@@ -1,5 +1,9 @@
 # Backlog CircleTasks
 
+## UI-FIX-02 — Paquet A demandé le 24 octobre 2026
+
+En cours : dix défauts constatés sur l'iPhone 1.0.0, dans l'ordre de la fiche `docs/stories/UI-FIX-02.md`. Pas de refonte Nouvelle tâche/Détail avant les maquettes. Aucune correction encore validée sur appareil.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.

@@ -47,6 +47,26 @@ const renderLine = () =>
     </AppContainerProvider>,
   );
 
+describe('UI-FIX-02 : couleur de tous les états', () => {
+  it.each(['not-configured', 'needs-pairing', 'syncing', 'waiting-icloud', 'restore-choice', 'update-required', 'clock-ahead', 'key-mismatch', 'error', 'forgotten', 'reset-required'] as const)('%s ne prend jamais la couleur du succès', (phase) => {
+    sync.setStatus({ phase });
+    renderLine();
+    expect(screen.getByTestId('sync-status-text').getAttribute('data-tone')).toBe(phase === 'error' || phase === 'key-mismatch' || phase === 'clock-ahead' || phase === 'update-required' || phase === 'forgotten' || phase === 'reset-required' ? 'danger' : 'neutral');
+  });
+
+  it.each(([null, ['received-unapplied'], ['publish-blocked'], ['awaiting-other-devices'], ['own-delete-failed'], ['carry-held'], ['carry-report']] as const).map((warnings) => ({ warnings })))('idle ne devient pas vert avec une publication incomplète : $warnings', ({ warnings }) => {
+    sync.setStatus({ phase: 'idle', lastSyncAt: warnings === null ? null : NOW as IsoDateTime, warnings: warnings === null ? [] : [...warnings] });
+    renderLine();
+    expect(screen.getByTestId('sync-status-text').getAttribute('data-tone')).not.toBe('success');
+    expect(screen.getByTestId('sync-status-live').textContent).toBe('');
+  });
+
+  it('réserve le succès à idle avec un cycle complet sans avertissement', () => {
+    renderLine();
+    expect(screen.getByTestId('sync-status-text').getAttribute('data-tone')).toBe('success');
+  });
+});
+
 describe('états d’erreur (Y-03 critère 7, Y-05 critère 2)', () => {
   const cases: readonly { phase: SyncPhase; patch: Record<string, unknown> }[] = [
     { phase: 'error', patch: { errorCode: 'folder-unreachable' } },

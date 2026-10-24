@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+## UI-FIX-02 — défauts de séance du 24 octobre 2026
+
+Ali constate sur iPhone 1.0.0 une attente iCloud verte (apparence de succès), une lecture nulle présentée comme 00:00 et huit défauts de contenu/ergonomie. Paquet A explicitement demandé, ordre et périmètre dans `docs/stories/UI-FIX-02.md`. En cours, sans validation présumée ; pas de refonte Nouvelle tâche/Détail avant les nouvelles maquettes.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
