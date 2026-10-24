@@ -30,7 +30,7 @@
   max-height: 100%;
   overflow-y: auto;
   width: 440px;
-  max-width: calc(100% - 40px);
+  max-width: 100%;
   padding: var(--ct-space-5);
   background: var(--ct-color-surface);
   border-radius: var(--ct-radius-xl);

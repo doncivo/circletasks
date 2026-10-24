@@ -44,7 +44,7 @@ describe('Rattacher une tâche à un objectif : fiche détail PC (OB-03)', () =>
     const fiche = await openDetail('Relire le PRD');
     await waitFor(() => expect(within(fiche).getByText('Aucun objectif cette semaine')).toBeInTheDocument());
     expect(goalSwitch()).toBeDisabled();
-    expect(within(fiche).getByText('Non rattachée')).toBeInTheDocument();
+    expect(within(fiche).queryByText('Non rattachée')).toBeNull();
   });
 
   it('un seul objectif ouvert : rattachement direct, « Rattachée : titre », puis détachement (critères 1, 4 et 7)', async () => {

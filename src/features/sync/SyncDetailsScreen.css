@@ -62,7 +62,7 @@
   padding: 0;
 }
 
-.ct-sync__device {
+.ct-sync .ct-sync__device {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(72px, 30%);
   gap: 4px 12px;

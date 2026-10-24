@@ -49,7 +49,7 @@ for (const [name, content, selector] of [
     await page.setContent(`${viewport}<style>${styles}\nhtml,body{margin:0;height:100%}:root{--ct-safe-area-top:59px;--ct-safe-area-bottom:34px}</style>${content}`);
     const bounds = await page.locator(selector).boundingBox();
     expect(bounds?.y).toBeGreaterThanOrEqual(59);
-    expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual(page.viewportSize()!.height - 34);
+    expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) - 34);
   });
 }
 

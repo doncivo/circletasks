@@ -86,7 +86,7 @@ describe('emplacement « version » (Y-07 critère 10)', () => {
     });
     renderIn(<SyncDetailsVersion />);
     const lines = [...screen.getByRole('status').querySelectorAll('.ct-sync__deviceName')].map((n) => n.textContent);
-    expect(lines).toEqual(['iPhone bbbb utilise une version plus récente de l’app (0.5.0)', 'PC cccc utilise une version plus récente de l’app (0.6.0)']);
+    expect(lines).toEqual(['iPhone 1 utilise une version plus récente de l’app (0.5.0)', 'PC 2 utilise une version plus récente de l’app (0.6.0)']);
   });
 
   it('dans l’écran de détails, à sa place (entre l’état et APPAREILS)', () => {

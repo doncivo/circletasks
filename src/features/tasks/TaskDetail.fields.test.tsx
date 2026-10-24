@@ -93,9 +93,9 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       expect(within(fiche).getByTestId('recurrence-detail')).toHaveTextContent('Une fois');
       expect(within(fiche).getByText('Pro')).toBeInTheDocument();
       expect(within(fiche).getByText('Projet')).toBeInTheDocument();
-      expect(within(fiche).getByText('Non rattachée')).toBeInTheDocument();
+      expect(within(fiche).getByText('Aucun objectif cette semaine')).toBeInTheDocument();
       expect(within(fiche).getByLabelText('Note')).toHaveValue('Joindre le relevé');
-      expect(fiche).toHaveTextContent(/Créée le aujourd’hui à \d\d:\d\d · modifiée aujourd’hui à \d\d:\d\d/);
+      expect(fiche).toHaveTextContent(/Créée aujourd’hui à \d\d:\d\d · modifiée aujourd’hui à \d\d:\d\d/);
       // Aucun champ de saisie tant qu'on n'a pas cliqué une valeur (PC-Aujourdhui.html : lignes en texte).
       expect(within(fiche).queryByLabelText('Heure')).toBeNull();
       expect(within(fiche).queryByRole('combobox')).toBeNull();

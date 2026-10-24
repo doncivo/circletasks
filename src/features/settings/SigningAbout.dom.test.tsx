@@ -141,7 +141,7 @@ describe('À propos : expiration de la signature (I-02)', () => {
         <AppStatusBanner />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Voir l’expiration de la signature dans À propos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir l’expiration de la signature dans Réglages' }));
     expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'home' });
   });
 

@@ -31,9 +31,12 @@ describe('UI-FIX-02 : noms locaux d’appareils', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Renommer PC 2' }));
     const field = screen.getByRole('textbox', { name: 'Nom de l’appareil' });
     fireEvent.change(field, { target: { value: 'Ancien PC du bureau' } });
-    fireEvent.submit(field.closest('form')!);
+    const form = field.closest('form');
+    if (!form) throw new Error('formulaire de nom absent');
+    fireEvent.submit(form);
     expect(await screen.findByRole('button', { name: 'Renommer Ancien PC du bureau' })).toBeInTheDocument();
-    const row = screen.getByText(OTHER).closest('li')!;
+    const row = screen.getByText(OTHER).closest('li');
+    if (!row) throw new Error('ligne appareil absente');
     expect(within(row).getByText('Oublié')).toBeInTheDocument();
     cleanup();
     const next = makeContainer();
@@ -46,6 +49,8 @@ describe('UI-FIX-02 : noms locaux d’appareils', () => {
     vi.spyOn(container.data.repos.sync, 'setMeta').mockRejectedValue(new Error('disk full'));
     expect(await store.getState().renameDevice(OTHER, 'PC du salon')).toBe(false);
     expect(store.getState().deviceNameError).toBe('sync.status.nameSaveFailed');
-    expect(deviceName(store.getState().status.devices[1]!, store.getState().status.devices)).toBe('PC 2');
+    const other = store.getState().status.devices.find((device) => device.deviceId === OTHER);
+    if (!other) throw new Error('appareil absent');
+    expect(deviceName(other, store.getState().status.devices)).toBe('PC 2');
   });
 });

@@ -11,3 +11,17 @@ Nouvelle tâche et Détail : corriger seulement ces défauts, pas de refonte ava
 ## Preuves et validations
 
 À consigner par point : preuve rouge avant modification, preuve verte après, limites natives. Lint, typage, revue à froid et CI complète avec couverture obligatoires. Bundle avant push et sur main après fusion ; plafond inchangé. Aucun point « fait » sans ces preuves.
+
+### Passe agent du module et QA locale
+
+- 1 : rouge 32d3b748 ; correction b2ca3887, 47 tests ciblés verts. Complément de couleur calculée e0006982 : « Dossier choisi » ne prouve pas un envoi, neutralisé ; 13 contrôles de géométrie et de couleurs verts.
+- 2 : rouge eb1461b3 puis extension 321dca2f ; correction 4d783a88. Onze conteneurs contrôlés : coquille, feuilles, association, scan, verrouillage, confirmation, choix, date, sauvegardes, export et accueil. Les boîtes conservent leur largeur prévue ; les marges sûres bornent leur défilement.
+- 3 et 4 : rouge 321dca2f, correction 4d783a88 ; 6 tests verts. Un HLC d'instant zéro n'est plus une heure de lecture/publication ; les vraies heures de minuit restent valides. Création : une seule préposition pour aujourd'hui, hier et une date passée.
+- 5 : rouge f5178fa7, correction add83332 ; 52 tests verts. Identité et lecture regroupées, même gabarit et colonne de statut, y compris pour cet appareil.
+- 6 : rouge 635e0df6, correction 5f0ee82a ; 19 tests verts, puis couverture des écrans affectés. Noms par défaut numérotés lisibles ; surnoms locaux persistés dans `sync_meta.ui.deviceNames`, pas dans les journaux partagés. Identifiant complet secondaire ; échec d'enregistrement visible sans faux succès.
+- 7 à 10 : preuves rouges 5e6fbfa5 (dont un ancien attendu de date devenu obsolète, non compté comme défaut nouveau) et db9f4657 pour la destination du bandeau d'expiration. Correction locale : un seul texte sans objectif, choix périmé désactivé au changement de semaine, icône iPhone décorative et modifiable par Modifier, expiration avant Général et renvoi cohérent, noms de champs « date prévue », « heure prévue », « état de la tâche ». « TEST » reste le titre de la tâche, jamais réécrit.
+- QA complémentaire : 171 tests verts sur dix fichiers, puis 94 sur cinq fichiers après adaptation du test d'oubli (l'appareil oublié reste renommable mais pas oubliable de nouveau). Parcours de modification/retrait d'icône : PC et iPhone, 2/2 verts, aucun parcours supprimé. Tests ciblés avec couverture coupée ; validation complète en CI requise.
+
+Le premier lancement local forks a échoué avant tout test (démarrage du worker), jamais compté comme rouge fonctionnel. IPC et construction jsdom natifs vérifiés ; tests exécutés ensuite en threads sans changer les délais. Configuration CI inchangée. Lint a relevé quatre assertions de non-nullité interdites dans les nouveaux tests : remplacées par des gardes, attentes conservées.
+
+Version de lot préparée : 1.0.1 sur PC et iPhone, registre SQL toujours 19. Publication et vérification des artefacts uniquement après revue et CI verte ; pas de nouvelle compilation pour une simple correction documentaire. Vérification physique des dix points à faire par Ali.

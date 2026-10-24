@@ -7,7 +7,7 @@ import { useNavigationStore } from '../app/navigation';
 import { CalendarsSummaryRow } from '../calendars';
 import { HolidaysSummaryRow } from '../events';
 import { FocusSoundSetting } from '../focus/FocusSoundSetting';
-import { formatRecapSummary } from '../reminders';
+import { formatRecapSummary, SigningAboutRow } from '../reminders';
 import { ShortcutsSettingsSection } from '../shortcuts';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
 import { SyncSettingsSection } from '../sync/SyncSettingsSection';
@@ -63,6 +63,7 @@ export function SettingsScreen() {
           {t(errorKey)}
         </p>
       )}
+      <SigningAboutRow />
       <h2 className="ct-settings__section">{t('settings.sectionGeneral')}</h2>
       {/* --- M12 apparence et formats --- */}
       <button

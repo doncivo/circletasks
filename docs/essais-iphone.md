@@ -1,5 +1,7 @@
 # Essais iPhone du lot 1.0
 
+**Paquet A UI-FIX-02 : version 1.0.1 en préparation, pas encore publiée.** Les références 1.0.0 ci-dessous restent celles du lot déjà reçu. Ne pas valider les correctifs A avec l'ancienne IPA ; la section « Vérification du paquet A » s'exécute seulement après réception de la nouvelle version sur PC et iPhone.
+
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
 
 A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
@@ -83,3 +85,18 @@ Les projets Playwright `pc` et `iphone` sont des navigateurs : ils prouvent les 
 
 
 À la fin, vérifier Détails des deux appareils → état cohérent avec les succès et erreurs réellement observés. Exporter le journal depuis l'app et fournir le fichier avec les résultats ; Codex ne lit pas directement les dossiers personnels iCloud ou AppData. Les preuves d'appareil ouvertes (B5, clavier, gardes, aperçus, `%`, I-06) ne sont closes qu'après ces retours.
+
+## Vérification du paquet A — UI-FIX-02
+
+Attendre la remise du lot 1.0.1, mettre le PC à jour par sa bannière, puis l'iPhone par SideStore sans désinstallation. Aucun changement de schéma entre 1.0.0 et 1.0.1 ; A9 reste le trou assumé, pas un essai à lancer. Pour chaque ligne : noter version, heure, résultat observé, capture et code exact si l'attendu n'est pas obtenu.
+
+1. **Couleurs.** En mode avion, ouvrir Synchronisation puis rétablir le réseau → attente neutre, erreurs distinctes et vert uniquement après une synchronisation complète ; sinon noter le libellé et la couleur affichés.
+2. **Zones sûres.** Parcourir et faire défiler chaque onglet, Réglages et ses sous-écrans ; ouvrir Détail, Nouvelle tâche et une confirmation → aucun contenu dans la barre d'état, titre Détail entier, boutons bas accessibles ; sinon noter écran, orientation et position de défilement.
+3. **Jamais lu.** Observer un appareil n'ayant encore aucune modification lue → « Jamais lu », aucune heure inventée ; sinon noter l'appareil et le texte. Ne pas remettre à zéro la synchronisation pour fabriquer ce cas : s'il n'existe pas, noter « non reproduit ».
+4. **Création.** Ouvrir une tâche créée aujourd'hui et une tâche plus ancienne → « Créée aujourd'hui… » ou « Créée le 21 oct.… », jamais « le le » ; sinon copier le texte.
+5. **Appareils.** Comparer les trois lignes d'appareils → même gabarit, statut en colonne, dernière lecture sous le bon nom ; sinon capturer le bloc entier.
+6. **Noms.** Toucher le nom d'un appareil, donner un nom reconnaissable, enregistrer puis fermer et rouvrir l'app → nom conservé et identifiant secondaire inchangé. Ces noms sont locaux à l'appareil qui les modifie ; sinon noter avant/après et toute erreur d'enregistrement.
+7. **Objectif.** Dans une semaine sans objectif, ouvrir Nouvelle tâche puis Détail → interrupteur inactif et une seule explication « Aucun objectif cette semaine », sans chevauchement ; sinon noter la semaine et l'écran. Conserver tout objectif réel existant : s'il manque un contexte sans objectif, noter « non reproduit ».
+8. **Fin de tâche.** Ouvrir une tâche d'essai → seul le bouton « Marquer comme terminée » permet de la terminer, aucun cercle ambigu près du titre ; l'icône se modifie toujours par « Modifier ». Terminer la tâche d'essai → état terminé conservé ; sinon noter les commandes et l'état obtenu.
+9. **Expiration.** Ouvrir Réglages depuis le haut → expiration de signature visible avant Général, sans aller au bas de l'écran ; sinon noter date et emplacement. Si un bandeau d'expiration existe, « Voir » doit mener à cette ligne ; ne pas avancer l'horloge pour le provoquer.
+10. **Conflits.** Ouvrir un conflit existant ou le conflit de la tâche d'essai de M10 → nom explicite du champ (« date prévue », « heure prévue », « état de la tâche »), valeurs et appareils compréhensibles. Le titre de tâche « TEST », s'il existe, reste son vrai titre ; sinon noter le libellé exact. Aucun conflit réel n'est à créer uniquement pour vérifier ce texte.
