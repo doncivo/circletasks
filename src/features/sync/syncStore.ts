@@ -34,7 +34,13 @@ export interface SyncState {
 export const syncStore = defineFeatureStore<SyncState>((container: AppContainer) => {
   const service = container.sync;
   let loadingNames: Promise<void> | null = null;
-  const namedStatus = (status: SyncStatus, names: Readonly<Record<string, string>>): SyncStatus => ({ ...status, devices: status.devices.map((device) => ({ ...device, displayName: names[device.deviceId] })) });
+  const namedStatus = (status: SyncStatus, names: Readonly<Record<string, string>>): SyncStatus => ({
+    ...status,
+    devices: status.devices.map((device) => {
+      const displayName = names[device.deviceId];
+      return displayName === undefined ? device : { ...device, displayName };
+    }),
+  });
   const store = createStore<SyncState>()((set, get) => ({
     deviceNames: {},
     deviceNamesLoaded: false,

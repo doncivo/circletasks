@@ -24,8 +24,7 @@ export function SyncDeviceName({ device, devices }: { readonly device: SyncDevic
       ) : (
         <button type="button" className="ct-sync__nameButton" aria-label={t('sync.status.renameDevice', { name })} disabled={!ready} onClick={() => { setDraft(name); setEditing(true); }}>{name}</button>
       )}
-      {device.self && <span className="ct-sync__deviceRead">{t('sync.status.thisDeviceName')}</span>}
-      <span className="ct-sync__deviceId">{device.deviceId}</span>
+      <span className="ct-sync__deviceId">{device.self && <><span>{t('sync.status.thisDeviceName')}</span>{' · '}</>}{device.deviceId}</span>
     </>
   );
 }

@@ -42,6 +42,11 @@ describe('storedDeviceStatuses : publishedSyncAt', () => {
     expect(device?.lastReadAt).toBeNull();
     expect(device?.publishedSyncAt).toBeNull();
   });
+  it('UI-FIX-02 : une vraie modification à minuit reste une lecture datée', () => {
+    const midnight = '2026-10-24T00:00:00.000Z';
+    const [device] = storedDeviceStatuses([row({ deviceId: OTHER, ackHlc: hlcAt(Date.parse(midnight)) })], {});
+    expect(device?.lastReadAt).toBe(midnight);
+  });
   it('autre appareil : lastSyncHlc du dernier état accepté (last_seen_hlc), distinct de lastReadAt (accusé de sa dernière écriture lue)', () => {
     const published = Date.parse('2026-10-08T07:30:00.000Z');
     const acked = Date.parse('2026-10-08T05:00:00.000Z');

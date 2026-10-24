@@ -86,6 +86,7 @@ export const en: Messages = {
     close: 'Close',
     add: 'Add',
     cancel: 'Cancel',
+    retry: 'Retry',
   },
   files: {
     errorCode: 'Code: {code}',

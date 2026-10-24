@@ -130,6 +130,7 @@ describe('détails (Y-02 critère 17, Y-09 critère 10)', () => {
       const identity = row.querySelector('.ct-sync__deviceIdentity');
       expect(identity).not.toBeNull();
       expect(identity?.querySelector('.ct-sync__deviceRead')).not.toBeNull();
+      expect(within(row as HTMLElement).getByText('Jamais lu')).toBeInTheDocument();
       expect(row.querySelector('.ct-sync__deviceState')).not.toBeNull();
       expect(within(row as HTMLElement).queryByText('00:00')).toBeNull();
     }

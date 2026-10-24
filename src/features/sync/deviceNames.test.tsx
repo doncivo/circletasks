@@ -23,6 +23,18 @@ beforeEach(async () => { db = await openTestDb(SELF, '2026-10-24T10:00:00Z'); co
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); await db.close(); });
 
 describe('UI-FIX-02 : noms locaux d’appareils', () => {
+  it('une préférence illisible est signalée, bloque le renommage puis peut être relue sans écrasement', async () => {
+    await container.data.repos.sync.setMeta('ui.deviceNames', '{incomplete');
+    render(<AppContainerProvider container={container}><SyncDetailsScreen /></AppContainerProvider>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de lire les noms enregistrés');
+    expect(screen.getByRole('button', { name: 'Renommer PC 2' })).toBeDisabled();
+    expect(await container.data.repos.sync.getMeta('ui.deviceNames')).toBe('{incomplete');
+    await container.data.repos.sync.setMeta('ui.deviceNames', '{}');
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    const store = syncStore.get(container);
+    await store.getState().loadDeviceNames();
+    expect(store.getState().deviceNameError).toBeNull();
+  });
   it('noms lisibles par défaut, sans fragment d’identifiant', () => {
     expect(devices.map((device) => deviceName(device, devices))).toEqual(['PC 1', 'PC 2']);
   });

@@ -89,6 +89,7 @@ export const fr = {
     close: 'Fermer',
     add: 'Ajouter',
     cancel: 'Annuler',
+    retry: 'Réessayer',
   },
   // FILES-IOS-01 critère 9 : échec d'enregistrement d'un fichier (export, modèle, rapport, logs), visible avec son code.
   files: {
