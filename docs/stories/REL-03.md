@@ -1,5 +1,9 @@
 # REL-03 — Préparation et publication du lot 1.0
 
+## Paquet A — 1.0.1, suivi du 24 octobre 2026
+
+UI-FIX-02 est intégré par #83 dans b8ddc85f, tête 80970c6c, 48 CI verts (40089223693 / 40089225629), revue approuvée. Nouvelle tâche et Détail attendent toujours les maquettes hors corrections explicitement demandées. Version 1.0.1, schéma 19 et protocole inchangés. Mesure main après fusion et artefacts de publication à vérifier ; ne pas annoncer de build reçu avant leur succès. Une seule compilation iPhone pour le paquet, même source pour PC et iPhone. PC uniquement par bannière. Les paragraphes 1.0.0 ci-dessous restent l'historique du candidat précédent ; ils ne constituent pas une preuve native de la 1.0.1.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.

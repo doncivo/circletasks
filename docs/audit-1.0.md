@@ -4,7 +4,7 @@
 
 Ali constate sur iPhone 1.0.0 une attente iCloud verte (apparence de succès), une lecture nulle présentée comme 00:00 et huit défauts de contenu/ergonomie. Paquet A explicitement demandé, ordre et périmètre dans `docs/stories/UI-FIX-02.md`. En cours, sans validation présumée ; pas de refonte Nouvelle tâche/Détail avant les nouvelles maquettes.
 
-Correctifs locaux et preuves rouges/vertes consignés ; revue de code approuvée, lint et typage verts. Géométrie/couleurs : 14 contrôles, parcours d'icône PC/iPhone : 2/2 ; noms persistants et erreurs de préférence : 4 tests, lecture/horodatage : tests ciblés verts. Lot 1.0.1 préparé sans migration, CI complète et vérification native encore requises. Aucune conformité finale déduite des simulations ; REL-01 à REL-03 restent ouverts sur leurs essais matériels.
+Correctifs intégrés par #83 dans b8ddc85f après 48 CI verts de 80970c6c (40089223693 / 40089225629), revue approuvée, lint et typage verts. Géométrie/couleurs : 14 contrôles, parcours d'icône PC/iPhone : 2/2 ; noms persistants et erreurs de préférence : 4 tests, lecture/horodatage : tests ciblés verts. La CI a fait corriger les références partagées aux noms d'appareils et les attentes des parcours, sans relâcher les assertions métier. Lot 1.0.1 sans migration ; publication et vérification native encore requises. Aucune conformité finale déduite des simulations ; REL-01 à REL-03 restent ouverts sur leurs essais matériels.
 
 ## Décision applicable — 21 octobre 2026
 

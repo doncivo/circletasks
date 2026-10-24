@@ -1,6 +1,6 @@
 # UI-FIX-02 — Paquet A, défauts constatés sur iPhone 1.0.0
 
-Statut : en cours, aucune validation appareil acquise. Estimation initiale : 6 à 8 h actives ; alerte à 12 h. Une branche et une PR pour le paquet ; une compilation iPhone pour le lot terminé.
+Statut : code fusionné par #83 dans b8ddc85f après 48 CI verts de 80970c6c ; vérification sur appareil encore ouverte. Estimation initiale : 6 à 8 h actives ; alerte à 12 h. Une branche et une PR pour le paquet ; une compilation iPhone pour le lot terminé.
 
 ## Passe product-owner — 24 octobre 2026
 

@@ -4,7 +4,7 @@
 
 En cours : dix défauts constatés sur l'iPhone 1.0.0, dans l'ordre de la fiche `docs/stories/UI-FIX-02.md`. Pas de refonte Nouvelle tâche/Détail avant les maquettes. Aucune correction encore validée sur appareil.
 
-Correctifs locaux, preuves rouges/vertes et revue de code consignés ; lint/typage verts. Version de lot préparée 1.0.1, sans changement de schéma ; CI complète, intégration, publication et vérification sur iPhone encore dues. La fiche et le guide donnent les dix vérifications ciblées ; aucun statut « fait » avant les preuves nécessaires.
+Code fusionné par #83 dans b8ddc85f, 48 CI verts sur 80970c6c, revue/lint/typage consignés. Version de lot 1.0.1 sans changement de schéma ; publication et vérification sur iPhone encore dues. La fiche et le guide donnent les dix vérifications ciblées ; aucun statut « fait » sur l'appareil avant les preuves nécessaires.
 
 ## Décision applicable — 21 octobre 2026
 
