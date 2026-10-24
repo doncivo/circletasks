@@ -63,9 +63,22 @@
 }
 
 .ct-sync__device {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 30%);
   gap: 4px 12px;
+  align-items: start;
+}
+
+.ct-sync__deviceIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ct-sync__device > button,
+.ct-sync__device > .ct-sync__forgetAction {
+  grid-column: 1 / -1;
 }
 
 .ct-sync__deviceRead {
@@ -74,7 +87,9 @@
 }
 
 .ct-sync__deviceState {
-  margin-left: auto;
+  margin-left: 0;
+  text-align: right;
+  width: 100%;
 }
 
 .ct-sync__progress {

@@ -92,17 +92,11 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
       <ul className="ct-sync__devices">
         {status.devices.map((device) => (
           <li key={device.deviceId} className="ct-settings__row ct-sync__device" data-status={device.status}>
-            <span className="ct-sync__deviceName">
-              {device.self
-                ? device.lastReadAt
-                  ? t('sync.status.thisDevice', { time: formatSyncTime(device.lastReadAt, nowMs) })
-                  : t('sync.status.thisDeviceNever')
-                : deviceName(device, status.devices)}
+            <span className="ct-sync__deviceIdentity">
+              <span className="ct-sync__deviceName">{device.self ? t('sync.status.thisDeviceName') : deviceName(device, status.devices)}</span>
+              <span className="ct-sync__deviceRead">{device.lastReadAt ? t(device.self ? 'sync.status.lastSync' : 'sync.status.lastRead', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.status.neverRead')}</span>
             </span>
-            {!device.self && (
-              <span className="ct-sync__deviceRead">{device.lastReadAt ? t('sync.status.lastRead', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.status.neverRead')}</span>
-            )}
-            {!device.self && <span className="ct-settings__value ct-sync__deviceState">{device.seen === false ? t('sync.forget.unseenState') : deviceStatusText(device)}</span>}
+            <span className="ct-settings__value ct-sync__deviceState">{device.seen === false ? t('sync.forget.unseenState') : deviceStatusText(device)}</span>
             {!device.self && <SyncDeviceForgetAction device={device} />}
           </li>
         ))}

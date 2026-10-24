@@ -55,6 +55,8 @@ export const syncEngineEn: Pick<Messages['sync'], 'status'> = {
     sectionPending: 'WAITING FOR ICLOUD',
     sectionConflicts: 'CONFLICT LOG',
     thisDevice: 'This device · {time}',
+    thisDeviceName: 'This device',
+    lastSync: 'Last sync: {time}',
     thisDeviceNever: 'This device · never synced',
     lastRead: 'Last change read: {time}',
     neverRead: 'No change read',
