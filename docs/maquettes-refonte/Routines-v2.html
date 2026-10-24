@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Routines</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.pill{height:30px;padding:0 13px;border-radius:15px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.rt{padding:16px 0;border-bottom:1px solid #EFECF5}
+.wk{display:flex;gap:7px;margin-top:11px}
+.d{width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;font:700 12px "DM Sans",sans-serif}
+.d.off{color:#D4CFE0;border:1.5px dashed #ECE8F3}
+.d.todo{color:#2E2150;border:2px solid #2E2150}
+.d.done{color:#FFFFFF;background:#2E2150;border:2px solid #2E2150}
+.meta{font-size:13px;font-weight:500;color:#8C85A3;margin-top:9px}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Jour.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine-v2.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines-v2.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Routines</span></a>
+<a class="tab" href="Evenements-v2.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists-v2.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages-v3.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; box-sizing: border-box;">
+  <div style="height: 56px; flex-shrink: 0;"></div>
+  <div style="padding: 0 20px; flex-grow: 1; overflow: hidden;">
+
+  <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 42px; line-height: 1; font-weight: 700;">Routines</h1>
+  <div style="font-size: 14px; font-weight: 600; color: #8C85A3; margin-top: 7px; padding-bottom: 13px; border-bottom: 1px solid #E8E4F0;">Semaine du 19 au 25 oct. · 7 sur 10 faites</div>
+
+  <div style="display: flex; gap: 7px; padding: 13px 0 2px 0;">
+    <button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+    <button class="pill" style="border: 1.5px solid #CFC9DD; color: #2F6B7A;">Pro</button>
+    <button class="pill" style="border: 1.5px solid #CFC9DD; color: #B5483B;">Perso</button>
+  </div>
+
+  <!-- Les pastilles disent le programme : pointillé = non prévu, contour = prévu, plein = fait -->
+  <div class="rt">
+    <div style="display: flex; align-items: center; gap: 11px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B9770E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18M4 18v-5h16v5M6 13V9h5v4"></path></svg>
+      <span style="font-size: 19px; font-weight: 700; flex-grow: 1;">Aller au lit</span>
+      <button style="height: 34px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 17px; background: #FFFFFF; font: 600 14px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer;">Modifier</button>
+    </div>
+    <div class="wk">
+      <span class="d done">L</span><span class="d done">M</span><span class="d done">M</span><span class="d todo">J</span><span class="d todo">V</span><span class="d off">S</span><span class="d off">D</span>
+    </div>
+    <div class="meta">22:30 · Perso · du lundi au vendredi · 3 sur 5 cette semaine</div>
+  </div>
+
+  <div class="rt">
+    <div style="display: flex; align-items: center; gap: 11px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2F6B7A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12l-1.6 16H7.6z"></path><path d="M7 10.5h10"></path></svg>
+      <span style="font-size: 19px; font-weight: 700; flex-grow: 1;">Boire de l'eau</span>
+      <button style="height: 34px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 17px; background: #FFFFFF; font: 600 14px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer;">Modifier</button>
+    </div>
+    <div class="wk">
+      <span class="d done">L</span><span class="d done">M</span><span class="d done">M</span><span class="d todo">J</span><span class="d todo">V</span><span class="d todo">S</span><span class="d todo">D</span>
+    </div>
+    <div class="meta">08:30 · Perso · tous les jours · 3 sur 7 cette semaine</div>
+  </div>
+
+  <div class="rt" style="border-bottom: 0;">
+    <div style="display: flex; align-items: center; gap: 11px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B5483B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11h14M7.5 11V7.5a4.5 4.5 0 0 1 9 0V11M8 11v9M16 11v9"></path></svg>
+      <span style="font-size: 19px; font-weight: 700; flex-grow: 1;">Sport</span>
+      <button style="height: 34px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 17px; background: #FFFFFF; font: 600 14px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer;">Modifier</button>
+    </div>
+    <div class="wk">
+      <span class="d off">L</span><span class="d done">M</span><span class="d off">M</span><span class="d off">J</span><span class="d todo">V</span><span class="d off">S</span><span class="d off">D</span>
+    </div>
+    <div class="meta">18:00 · Perso · mardi et vendredi · 1 sur 2 cette semaine</div>
+  </div>
+
+  </div>
+
+  <div style="padding: 14px 20px 20px 20px; border-top: 1px solid #E8E4F0; flex-shrink: 0; display: flex; align-items: center; gap: 10px;">
+    <a href="Rapport.html" style="flex-grow: 1; height: 48px; border: 1.5px solid #D9D4E4; border-radius: 24px; display: flex; align-items: center; justify-content: center; text-decoration: none; font: 600 15px 'DM Sans', sans-serif;">Rapport du mois</a>
+    <button style="height: 48px; padding: 0 20px; border: 0; border-radius: 24px; background: #2E2150; color: #FFFFFF; font: 700 15px 'DM Sans', sans-serif; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Routine
+    </button>
+  </div>
+</main>
+</div>
+</body>
+</html>
