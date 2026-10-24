@@ -86,6 +86,7 @@ export const en: Messages = {
     close: 'Close',
     add: 'Add',
     cancel: 'Cancel',
+    retry: 'Retry',
   },
   files: {
     errorCode: 'Code: {code}',
@@ -563,7 +564,7 @@ export const en: Messages = {
     loading: 'Loading',
     signingSoon: 'CircleTasks expires soon: refresh it in SideStore',
     signingExpired: 'The signature has expired: reinstall the app',
-    signingViewLabel: 'View the signature expiry in About',
+    signingViewLabel: 'View the signature expiry in Settings',
   },
   today: {
     dayPrevious: 'Previous day',

@@ -1,5 +1,9 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Priorité — paquet A UI-FIX-02 du 24 octobre 2026
+
+Ali a testé l'iPhone 1.0.0 et demande dix correctifs dans l'ordre de `docs/stories/UI-FIX-02.md`. Branche `ui-fix-paquet-a`, worktree `n-ios-apercus`, base main a8d0282b. Correctifs locaux et preuves rouges consignés ; lint/typage, revue et CI complète encore à terminer, aucune validation native présumée. Version de lot préparée 1.0.1, sans migration ; une compilation iPhone seulement après intégration du paquet. Ne pas modifier la mise en page de Nouvelle tâche/Détail avant les maquettes, hors corrections explicitement listées. Racine personnelle sale `passation-codex` conservée. A9 reste un trou assumé, pas une tâche à relancer ; les paragraphes de préparation A9 ci-dessous sont historiques et annulés.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.

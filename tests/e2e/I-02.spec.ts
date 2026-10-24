@@ -152,12 +152,12 @@ test.describe('I-02 — 440 × 956 : À propos et bandeau sans défilement horiz
     await expect(page.getByRole('heading', { name: 'Récapitulatifs' })).toBeVisible();
   });
 
-  test('bandeau sous 24 h : « Voir » ouvre À propos, sans défilement horizontal', async ({ page }) => {
+  test('bandeau sous 24 h : « Voir » ouvre la tête de Réglages, sans défilement horizontal', async ({ page }) => {
     await signing(page, (hooks) => hooks.source.expireAt('2026-10-08T23:30:00Z'));
     await resume(page);
     await expect(page.locator('.ct-status-banner')).toContainText('expire dans 16 h');
     await expectFitsViewport(page, 'bandeau d’expiration');
-    await page.getByRole('button', { name: 'Voir l’expiration de la signature dans À propos' }).click();
+    await page.getByRole('button', { name: 'Voir l’expiration de la signature dans Réglages' }).click();
     await expect(page.getByText('Moins de 24 h restantes : actualisez CircleTasks dans SideStore')).toBeVisible();
     await expectFitsViewport(page, 'À propos, moins de 24 h');
   });

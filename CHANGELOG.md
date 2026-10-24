@@ -2,6 +2,12 @@
 
 ## Non publié
 
+## 1.0.1
+
+- Paquet A issu des essais sur iPhone 1.0.0 : attente de synchronisation distincte du succès, mention « Jamais lu », appareils alignés avec noms modifiables localement et identifiants secondaires, champs de conflit nommés explicitement.
+- Zones sûres des écrans et des feuilles : le défilement reste sous la barre d'état. Correction du texte de création, du rattachement sans objectif et de la commande circulaire ambiguë sur Détail ; l'icône reste modifiable via « Modifier ». Expiration SideStore remontée en tête de Réglages.
+- Aucun changement de schéma ni de protocole de synchronisation. Correctifs vérifiés automatiquement ; rendu natif à confirmer sur le lot iPhone. La refonte de Nouvelle tâche et Détail attend les maquettes d'Ali.
+
 ## 1.0.0
 
 - Lot candidat iPhone : les vérifications natives du guide `docs/essais-iphone.md` restent à exécuter ; la publication de l'IPA ne vaut pas validation de la recette 1.0.

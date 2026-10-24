@@ -24,6 +24,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1 1 140px;
+  line-height: 1.4;
 }
 
 .ct-goal-attach__status {

@@ -90,13 +90,28 @@ test.describe('T-03 — note et icône', () => {
     await expect(page.getByText(title)).toBeVisible();
   });
 
-  test('je change puis retire l’icône depuis la pastille de la fiche détail (critère 5)', async ({ page }, testInfo) => {
+  test('je change puis retire l’icône depuis la fiche détail (critère 5)', async ({ page }, testInfo) => {
     const title = `Envoyer la facture ${testInfo.project.name} ${Date.now()}`;
     await createPlainTask(page, testInfo, title);
 
     await openDetail(page, title);
     const detail = detailLocator(page, testInfo);
     await expect(detail).toBeVisible();
+
+    if (testInfo.project.name === 'iphone') {
+      await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
+      const editor = page.getByRole('dialog', { name: 'Modifier la tâche' });
+      await editor.getByRole('button', { name: 'Icône document' }).click();
+      await editor.getByRole('button', { name: 'Enregistrer' }).click();
+      await expect(editor).not.toBeVisible();
+      await expect(detail.locator('.ct-task-detail__header svg')).toBeVisible();
+      await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
+      await editor.getByRole('button', { name: 'Icône document, choisie' }).click();
+      await editor.getByRole('button', { name: 'Enregistrer' }).click();
+      await expect(editor).not.toBeVisible();
+      await expect(detail.locator('.ct-task-detail__header svg')).toHaveCount(0);
+      return;
+    }
 
     await detail.getByRole('button', { name: 'Icône' }).click();
     await detail.getByRole('button', { name: 'Icône document' }).click();

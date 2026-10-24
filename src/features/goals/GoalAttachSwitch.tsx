@@ -38,12 +38,15 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
   const today = appDay ?? todayLocal(container.clock);
   const [available, setAvailable] = useState<readonly Goal[]>([]);
   const [attached, setAttached] = useState<Goal | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const context = `${weekStartOf(taskDate ?? today)}/${attachedGoalId ?? ''}`;
+  const [loadedContext, setLoadedContext] = useState<string | null>(null);
+  const loaded = loadedContext === context;
   const [choosing, setChoosing] = useState(false);
 
   useEffect(() => {
     let current = true;
     const run = (): void => {
+      setLoadedContext(null);
       Promise.all([
         container.data.repos.goals.listForWeek(weekStartOf(taskDate ?? today), 'all'),
         attachedGoalId ? container.data.repos.goals.getById(attachedGoalId) : Promise.resolve(null),
@@ -52,13 +55,13 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
           if (!current) return;
           setAvailable(goalsAvailableFor(taskDate, today, week));
           setAttached(goal);
-          setLoaded(true);
+          setLoadedContext(context);
         },
         () => {
           if (!current) return;
           setAvailable([]);
           setAttached(null);
-          setLoaded(true);
+          setLoadedContext(context);
         },
       );
     };
@@ -68,13 +71,14 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
       current = false;
       off();
     };
-  }, [container, taskDate, today, attachedGoalId]);
+  }, [container, taskDate, today, attachedGoalId, context]);
 
   const isOn = attachedGoalId !== null;
   const none = loaded && !isOn && available.length === 0;
   const disabled = !loaded || none;
 
   function toggle(next: boolean): void {
+    if (disabled) return;
     if (!next) {
       onChange(null);
       return;
@@ -83,7 +87,7 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
     else if (available.length > 1) setChoosing(true);
   }
 
-  const status = isOn ? (attached ? t('goals.attachedTo', { title: attached.title }) : t('goals.attachedLoading')) : t('detail.goalNone');
+  const status = none ? t('goals.noneThisWeek') : isOn ? (attached ? t('goals.attachedTo', { title: attached.title }) : t('goals.attachedLoading')) : t('detail.goalNone');
   // OB-03 critère 2 : aucun objectif cette semaine, l'interrupteur est inactif et l'aide le dit.
   const help = none ? t('goals.noneThisWeek') : null;
   const spaceName = (goal: Goal): string => spaces.find((space) => space.id === goal.spaceId)?.name ?? '';
@@ -99,7 +103,6 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
       {variant === 'detail' && (
         <span className="ct-goal-attach__statusBlock">
           <span className="ct-goal-attach__status">{status}</span>
-          {help && <span className="ct-goal-attach__help">{help}</span>}
         </span>
       )}
       <Switch checked={isOn} onChange={toggle} label={t('goals.attachSwitch')} disabled={disabled} />

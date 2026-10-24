@@ -86,15 +86,18 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
       )}
 
       <div className="ct-task-detail__header">
-        <button
-          type="button"
-          className="ct-task-detail__iconButton"
-          aria-label={task.icon ? t('tasks.changeIcon') : t('tasks.iconFieldLabel')}
-          aria-expanded={iconPickerOpen}
-          onClick={() => setIconPickerOpen((open) => !open)}
-        >
-          {task.icon ? <IconView icon={task.icon} size={28} color={resolveIconRefColor(task.icon)} /> : <span className="ct-task-detail__iconPlaceholder" aria-hidden="true" />}
-        </button>
+        {!isMobile && (
+          <button
+            type="button"
+            className="ct-task-detail__iconButton"
+            aria-label={task.icon ? t('tasks.changeIcon') : t('tasks.iconFieldLabel')}
+            aria-expanded={iconPickerOpen}
+            onClick={() => setIconPickerOpen((open) => !open)}
+          >
+            {task.icon ? <IconView icon={task.icon} size={28} color={resolveIconRefColor(task.icon)} /> : <span className="ct-task-detail__iconPlaceholder" aria-hidden="true" />}
+          </button>
+        )}
+        {isMobile && task.icon && <span aria-hidden="true"><IconView icon={task.icon} size={28} color={resolveIconRefColor(task.icon)} /></span>}
         {title.editing ? (
           <form
             className="ct-task-detail__titleField"

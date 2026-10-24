@@ -89,6 +89,7 @@ export const fr = {
     close: 'Fermer',
     add: 'Ajouter',
     cancel: 'Annuler',
+    retry: 'Réessayer',
   },
   // FILES-IOS-01 critère 9 : échec d'enregistrement d'un fichier (export, modèle, rapport, logs), visible avec son code.
   files: {
@@ -526,7 +527,7 @@ export const fr = {
     spaceProjectRow: 'Espace · projet',
     goalRow: 'Objectif',
     goalNone: 'Non rattachée',
-    createdModified: 'Créée le {created} · modifiée {modified}',
+    createdModified: 'Créée {created} · modifiée {modified}',
     stampToday: 'aujourd’hui à {time}',
     stampYesterday: 'hier à {time}',
     stampOn: 'le {date} à {time}',
@@ -576,7 +577,7 @@ export const fr = {
     signingSoon: 'CircleTasks expire bientôt : actualisez-la dans SideStore',
     /** I-02 : signature expirée. */
     signingExpired: 'La signature est expirée : réinstallez l’app',
-    signingViewLabel: 'Voir l’expiration de la signature dans À propos',
+    signingViewLabel: 'Voir l’expiration de la signature dans Réglages',
   },
   today: {
     dayPrevious: 'Jour précédent',

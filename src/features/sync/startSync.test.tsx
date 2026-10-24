@@ -312,8 +312,8 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
     // Après le premier cycle, l'état exposé fait foi.
     set({ phase: 'idle', devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'rollback'), device(LAPTOP, 'windows', 'foreign')] });
     await integration?.refreshed();
-    // Deux PC : nommés avec 4 caractères, comme dans APPAREILS.
-    expect(banner()?.textContent).toBe('PC 6000 : Clé différente (+1)Voir');
+    // Deux PC : noms lisibles numérotés, comme dans APPAREILS.
+    expect(banner()?.textContent).toBe('PC 2 : Clé différente (+1)Voir');
     set({ phase: 'idle', devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'active'), device(LAPTOP, 'windows', 'active')] });
     await integration?.refreshed();
     expect(banner()).toBeNull();

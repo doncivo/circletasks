@@ -3,6 +3,8 @@ import type { RestoreOption } from '../../domain/sync/epoch';
 import { INITIAL_STATUS, type RestoreContext, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { retryFailedReloads } from './reloadRetry';
+import type { DeviceId } from '../../domain/types';
+import type { PlainMessageKey } from '../../i18n';
 
 /**
  * État de la synchronisation pour l'interface (Y-02 critères 16 et 17, Y-03) : reflet de `SyncService.status()`, bouton
@@ -10,6 +12,12 @@ import { retryFailedReloads } from './reloadRetry';
  * restauration. Aucune clé ni aucun texte clair ici.
  */
 export interface SyncState {
+  readonly deviceNames: Readonly<Record<string, string>>;
+  readonly deviceNamesLoaded: boolean;
+  readonly deviceNameBusy: boolean;
+  readonly deviceNameError: PlainMessageKey | null;
+  loadDeviceNames(): Promise<void>;
+  renameDevice(id: DeviceId, name: string): Promise<boolean>;
   readonly available: boolean;
   readonly status: SyncStatus;
   /** Cycle demandé depuis l'interface et pas encore terminé. */
@@ -25,7 +33,62 @@ export interface SyncState {
 
 export const syncStore = defineFeatureStore<SyncState>((container: AppContainer) => {
   const service = container.sync;
+  let loadingNames: Promise<void> | null = null;
+  const namedStatus = (status: SyncStatus, names: Readonly<Record<string, string>>): SyncStatus => ({
+    ...status,
+    devices: status.devices.map((device) => {
+      const displayName = names[device.deviceId];
+      return displayName === undefined ? device : { ...device, displayName };
+    }),
+  });
   const store = createStore<SyncState>()((set, get) => ({
+    deviceNames: {},
+    deviceNamesLoaded: false,
+    deviceNameBusy: false,
+    deviceNameError: null,
+    loadDeviceNames() {
+      if (get().deviceNamesLoaded) return Promise.resolve();
+      if (loadingNames) return loadingNames;
+      loadingNames = (async () => {
+        try {
+          const raw = await container.data.repos.sync.getMeta('ui.deviceNames');
+          const value: unknown = raw === null ? {} : JSON.parse(raw);
+          if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid-device-names');
+          const names: Record<string, string> = Object.create(null) as Record<string, string>;
+          for (const [id, name] of Object.entries(value)) {
+            if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id) || typeof name !== 'string' || !name.trim() || name.length > 80) throw new Error('invalid-device-name');
+            names[id] = name;
+          }
+          set({ deviceNames: names, deviceNamesLoaded: true, deviceNameError: null, status: namedStatus(get().status, names) });
+        } catch {
+          set({ deviceNameError: 'sync.status.nameReadFailed' });
+        } finally {
+          loadingNames = null;
+        }
+      })();
+      return loadingNames;
+    },
+    async renameDevice(id, name) {
+      await get().loadDeviceNames();
+      if (!get().deviceNamesLoaded || get().deviceNameBusy) return false;
+      const trimmed = name.trim();
+      if (!trimmed || trimmed.length > 80 || !get().status.devices.some((device) => device.deviceId === id)) {
+        set({ deviceNameError: 'sync.status.nameInvalid' });
+        return false;
+      }
+      const names = { ...get().deviceNames, [id]: trimmed };
+      set({ deviceNameBusy: true });
+      try {
+        await container.data.repos.sync.setMeta('ui.deviceNames', JSON.stringify(names));
+        set({ deviceNames: names, deviceNameError: null, status: namedStatus(get().status, names) });
+        return true;
+      } catch {
+        set({ deviceNameError: 'sync.status.nameSaveFailed' });
+        return false;
+      } finally {
+        set({ deviceNameBusy: false });
+      }
+    },
     available: service !== null,
     status: service?.status() ?? INITIAL_STATUS,
     busy: false,
@@ -81,6 +144,6 @@ export const syncStore = defineFeatureStore<SyncState>((container: AppContainer)
       set({ restore: null });
     },
   }));
-  service?.subscribe(() => store.setState({ status: service.status() }));
+  service?.subscribe(() => store.setState({ status: namedStatus(service.status(), store.getState().deviceNames) }));
   return store;
 });

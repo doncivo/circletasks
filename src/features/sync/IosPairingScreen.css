@@ -8,7 +8,7 @@
   --ct-ios-pair-done: #8fcb9f;
   --ct-ios-pair-accent: #f2a7a0;
   position: fixed;
-  inset: 0;
+  inset: var(--ct-safe-area-top) var(--ct-safe-area-right) var(--ct-safe-area-bottom) var(--ct-safe-area-left);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -16,7 +16,7 @@
   background: var(--ct-ios-pair-bg);
   color: var(--ct-ios-pair-text);
   font-family: 'DM Sans', system-ui, sans-serif;
-  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  padding: 0;
 }
 
 .ct-ios-pair__bar {

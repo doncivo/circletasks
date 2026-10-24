@@ -34,6 +34,10 @@
   padding: 64px 28px 36px 28px;
 }
 
+.ct-onboarding[data-layout='phone'] {
+  inset: var(--ct-safe-area-top) var(--ct-safe-area-right) var(--ct-safe-area-bottom) var(--ct-safe-area-left);
+}
+
 .ct-onboarding[data-layout='pc'] .ct-onboarding__panel {
   width: 640px;
   max-width: calc(100% - 40px);

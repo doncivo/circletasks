@@ -62,10 +62,10 @@ export function signingAlertFailure(container: AppContainer): PlanFailureReason 
   return memoryOf(container).failure;
 }
 
-/** Action « Voir » du bandeau : l'écran « À propos », où la date, l'état de l'alerte et la marche à suivre sont écrits. */
-const openAbout = (): void => useNavigationStore.getState().navigate({ tab: 'settings', screen: 'about' });
+/** Action « Voir » : expiration en tête de Réglages, avant les sections de configuration. */
+const openSigningSettings = (): void => useNavigationStore.getState().navigate({ tab: 'settings', screen: 'home' });
 
-const setBanner = (state: { readonly detail: 'soon' | 'expired'; readonly message: string } | null): void => useAppStatusStore.getState().setStatus('signingExpiry', state === null ? null : { ...state, onAction: openAbout });
+const setBanner = (state: { readonly detail: 'soon' | 'expired'; readonly message: string } | null): void => useAppStatusStore.getState().setStatus('signingExpiry', state === null ? null : { ...state, onAction: openSigningSettings });
 
 /** Retire le bandeau et arrête sa minuterie (démontage de l'intégration). */
 export function clearSigningBanner(container?: AppContainer): void {

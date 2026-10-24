@@ -123,19 +123,19 @@ describe('journal des conflits (critères 1, 3 et 4)', () => {
     expect(screen.queryByRole('list', { name: 'Journal des conflits' })).toBeNull();
   });
 
-  it('une ligne par conflit d’après Synchro.html : « Envoyer la facture · heure », « 22 sept. », 09:00 gardée · iPhone · 18:04, 10:00 écartée · PC · 17:58, « Restaurer »', async () => {
+  it('une ligne par conflit d’après Synchro.html : « Envoyer la facture · heure prévue », « 22 sept. », 09:00 gardée · iPhone · 18:04, 10:00 écartée · PC · 17:58, « Restaurer »', async () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
     expect(screen.getAllByText('JOURNAL DES CONFLITS')).toHaveLength(1);
-    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure' });
-    expect(within(item).getByText('Envoyer la facture · heure')).toBeTruthy();
+    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
+    expect(within(item).getByText('Envoyer la facture · heure prévue')).toBeTruthy();
     expect(within(item).getByText('22 sept.')).toBeTruthy();
     expect(item.textContent).toContain('09:00 gardée');
     expect(item.textContent).toContain('10:00 écartée');
     expect(within(item).getByText(/^iPhone · /).textContent).toMatch(/18:04/);
     expect(within(item).getByText(/^PC · /).textContent).toMatch(/17:58/);
-    expect(within(item).getByRole('button', { name: 'Restaurer la valeur écartée : Envoyer la facture, heure' }).textContent).toBe('Restaurer');
+    expect(within(item).getByRole('button', { name: 'Restaurer la valeur écartée : Envoyer la facture, heure prévue' }).textContent).toBe('Restaurer');
   });
 
   it('texte entre « » ; élément supprimé ; « Afficher plus » au-delà de 50', async () => {
@@ -164,12 +164,12 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
-    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure' });
+    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
     const button = within(item).getByRole('button', { name: /Restaurer la valeur écartée/ });
     button.focus();
     fireEvent.click(button);
     await within(item).findByText('Restaurée le 5 oct.');
-    expect(within(item).getByRole('status').textContent).toBe('Valeur restaurée : Envoyer la facture, heure');
+    expect(within(item).getByRole('status').textContent).toBe('Valeur restaurée : Envoyer la facture, heure prévue');
     expect(within(item).queryByRole('button')).toBeNull();
     expect(document.activeElement).toBe(item);
     expect((await db.data.repos.tasks.getById(id))?.time).toBe('10:00');
@@ -211,7 +211,7 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
-    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure' });
+    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
     const real = db.driver.transaction.bind(db.driver);
     db.driver.transaction = (() => Promise.reject(new Error('base verrouillée'))) as typeof db.driver.transaction;
     fireEvent.click(within(item).getByRole('button', { name: /Restaurer/ }));
@@ -237,9 +237,9 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
-    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure' });
+    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
     fireEvent.click(within(item).getByRole('button', { name: /Restaurer la valeur écartée/ }));
-    await within(item).findByText('Valeur restaurée : Envoyer la facture, heure');
+    await within(item).findByText('Valeur restaurée : Envoyer la facture, heure prévue');
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     await within(item).findByRole('button', { name: /Restaurer la valeur écartée/ });
     expect(within(item).getByRole('status').textContent).toBe('');
@@ -280,7 +280,7 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
-    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure' });
+    const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
     const button = within(item).getByRole('button', { name: /Restaurer la valeur écartée/ });
     fireEvent.click(button);
     expect(button.getAttribute('aria-busy')).toBe('true');
