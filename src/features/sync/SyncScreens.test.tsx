@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -117,6 +117,23 @@ describe('ligne d’état de Réglages (Y-02 critère 16, Y-05 critère 2)', () 
 });
 
 describe('détails (Y-02 critère 17, Y-09 critère 10)', () => {
+  it('UI-FIX-02 : même gabarit pour soi, un PC actif et un PC oublié ; lecture rattachée à son appareil', () => {
+    sync.setStatus({ devices: [
+      { deviceId: SELF, platform: 'ios', self: true, lastReadAt: null, status: 'active' },
+      { deviceId: IPHONE, platform: 'windows', self: false, lastReadAt: null, status: 'active' },
+      { deviceId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' as DeviceId, platform: 'windows', self: false, lastReadAt: null, status: 'forgotten' },
+    ] });
+    renderIn(<SyncDetailsScreen />);
+    const rows = document.querySelectorAll('.ct-sync__devices > li');
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      const identity = row.querySelector('.ct-sync__deviceIdentity');
+      expect(identity).not.toBeNull();
+      expect(identity?.querySelector('.ct-sync__deviceRead')).not.toBeNull();
+      expect(row.querySelector('.ct-sync__deviceState')).not.toBeNull();
+      expect(within(row as HTMLElement).queryByText('00:00')).toBeNull();
+    }
+  });
   it('appareils avec dernière lecture et statut, fichiers en attente, conflits de la semaine, horloge en avance', () => {
     sync.setStatus({
       phase: 'clock-ahead',
@@ -130,7 +147,7 @@ describe('détails (Y-02 critère 17, Y-09 critère 10)', () => {
     });
     renderIn(<SyncDetailsScreen />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Synchronisation');
-    expect(screen.getByText(/^Cet appareil · /)).toBeTruthy();
+    expect(screen.getByText('Cet appareil')).toBeTruthy();
     expect(screen.getByText('iPhone')).toBeTruthy();
     expect(screen.getByText(/^Dernière modification lue : /)).toBeTruthy();
     expect(screen.getByText('Horloge en avance')).toBeTruthy();
