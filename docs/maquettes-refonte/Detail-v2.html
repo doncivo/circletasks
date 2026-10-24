@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Détail d'une tâche</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+.ib{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.f{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid #EFECF5}
+.k{font-size:15px;font-weight:500;color:#8C85A3;flex-shrink:0;padding-top:1px}
+.v{font-size:15px;font-weight:600;text-align:right}
+.sub{font-size:13px;font-weight:500;color:#8C85A3;margin-top:3px}
+.act{flex:1;height:46px;border:1.5px solid #D9D4E4;border-radius:23px;background:#FFFFFF;font:600 15px "DM Sans",sans-serif;color:#2E2150;cursor:pointer}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; flex-direction: column; background: #FFFFFF; overflow: hidden;">
+
+  <div style="height: 56px; flex-shrink: 0;"></div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 12px; flex-shrink: 0;">
+    <button class="ib" aria-label="Fermer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    <button class="ib" aria-label="Modifier"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg></button>
+  </div>
+
+  <div style="flex-grow: 1; overflow: hidden; padding: 4px 20px 0 20px;">
+
+    <h1 style="margin: 0 0 4px 0; font-family: Fraunces, Georgia, serif; font-size: 34px; line-height: 1.12; font-weight: 700;">Envoyer la facture</h1>
+    <div style="font-size: 14px; font-weight: 600; color: #2F6B7A; padding-bottom: 18px;">Pro</div>
+
+    <!-- Une seule commande pour terminer -->
+    <button style="width: 100%; height: 54px; border: 2px solid #2E2150; border-radius: 27px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 11px; font: 700 17px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer;">
+      <span style="width: 22px; height: 22px; border: 2px solid #2E2150; border-radius: 7px; display: block;"></span>
+      Marquer comme terminée
+    </button>
+
+    <div style="height: 22px;"></div>
+
+    <!-- Échéance et rappel séparés : c'est ce que l'app sait, pas ce qu'elle suppose -->
+    <div class="f">
+      <span class="k">Prévue</span>
+      <span class="v">jeudi 23 oct. à 19:30</span>
+    </div>
+
+    <div class="f">
+      <span class="k">Rappel</span>
+      <span class="v">
+        vendredi 24 oct. à 08:00
+        <span class="sub">Décalé : aucun rappel Pro après 19:00</span>
+      </span>
+    </div>
+
+    <div class="f">
+      <span class="k">Répétition</span>
+      <span class="v">Tous les mois, le 23</span>
+    </div>
+
+    <div class="f">
+      <span class="k">Projet</span>
+      <span class="v" style="color: #8C85A3; font-weight: 500;">Aucun</span>
+    </div>
+
+    <div class="f">
+      <span class="k">Objectif de la semaine</span>
+      <span class="v" style="color: #8C85A3; font-weight: 500;">
+        Aucun objectif défini
+        <span class="sub"><a href="Objectif.html" style="color: #5B43A8; font-weight: 600; text-decoration: none;">En définir un</a></span>
+      </span>
+    </div>
+
+    <div style="padding: 18px 0 0 0;">
+      <div class="k" style="margin-bottom: 7px;">Note</div>
+      <div style="min-height: 76px; border: 1.5px solid #E8E4F0; border-radius: 14px; padding: 12px 14px; font-size: 15px; font-weight: 500; color: #B5AEC6;">Aucune note</div>
+    </div>
+
+    <div style="font-size: 13px; font-weight: 500; color: #B5AEC6; padding-top: 14px;">Créée le 21 oct. à 21:30 · modifiée aujourd'hui à 00:11</div>
+
+  </div>
+
+  <!-- Les actions fréquentes en premier, le Focus après -->
+  <div style="padding: 14px 20px 20px 20px; border-top: 1px solid #E8E4F0; flex-shrink: 0; display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; gap: 9px;">
+      <button class="act">Reporter</button>
+      <button class="act">Un jour</button>
+      <button class="act">Dupliquer</button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <button style="display: flex; align-items: center; gap: 8px; height: 40px; border: 0; background: transparent; font: 600 15px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer; padding: 0;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5.2l3.2 2"></path></svg>
+        Lancer un Focus
+      </button>
+      <button style="height: 40px; border: 0; background: transparent; font: 600 15px 'DM Sans', sans-serif; color: #B5483B; cursor: pointer; padding: 0;">Supprimer</button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

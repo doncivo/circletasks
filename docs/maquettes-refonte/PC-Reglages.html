@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>PC — Réglages</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#F1EEF8;background:#1C1630}
+a{color:#F1EEF8}
+.tab{display:flex;align-items:center;justify-content:center;height:104px;border-radius:0 14px 14px 0;text-decoration:none;color:#241C3D;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:14px}
+.nv{display:block;padding:9px 14px;border-radius:9px;text-decoration:none;font:600 15px "DM Sans",sans-serif;color:#B7AECD}
+.nv[aria-current]{background:#2A2342;color:#F1EEF8}
+h2.s{margin:0 0 4px 0;font-family:Fraunces,Georgia,serif;font-size:22px;font-weight:700}
+.rl{display:flex;align-items:center;gap:20px;padding:14px 0;border-bottom:1px solid #2C2545}
+.lb{flex-grow:1;min-width:0}
+.lb .t{font-size:15px;font-weight:600}
+.lb .d{font-size:13px;font-weight:500;color:#B7AECD;margin-top:3px}
+.vl{font-size:15px;font-weight:500;color:#B7AECD;text-align:right;flex-shrink:0}
+.sw{width:46px;height:27px;border-radius:14px;border:0;display:flex;align-items:center;padding:3px;cursor:pointer;flex-shrink:0}
+.sw span{width:21px;height:21px;border-radius:11px;background:#FFFFFF;display:block}
+.kbd{font:600 12px "DM Sans",sans-serif;border:1px solid #4A4168;border-radius:5px;padding:3px 8px;color:#F1EEF8}
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 900px; display: flex; background: #1C1630; overflow: hidden;">
+
+<nav aria-label="Navigation principale" style="width: 58px; flex-shrink: 0; background: #120E22; display: flex; flex-direction: column; gap: 6px; padding: 18px 0; box-sizing: border-box;">
+<a class="tab" href="PC-Jour.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="PC-Semaine.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="PC-Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="PC-Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="PC-Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="PC-Reglages.html" aria-current="page" style="background: #F1EEF8; margin-right: 0px;"><span>Réglages</span></a>
+</nav>
+
+<!-- Sommaire : sur grand écran, on navigue, on ne fait plus défiler 40 lignes -->
+<div style="width: 220px; flex-shrink: 0; border-right: 1px solid #2C2545; padding: 28px 16px; box-sizing: border-box;">
+  <h1 style="margin: 0 0 18px 14px; font-family: Fraunces, Georgia, serif; font-size: 30px; line-height: 1; font-weight: 700;">Réglages</h1>
+  <a class="nv" href="#" aria-current="page">Général</a>
+  <a class="nv" href="#">Tâches</a>
+  <a class="nv" href="#">Rappels</a>
+  <a class="nv" href="#">Espaces et agendas</a>
+  <a class="nv" href="#">Synchronisation</a>
+  <a class="nv" href="#">Sauvegardes</a>
+  <a class="nv" href="#">Clavier</a>
+  <a class="nv" href="#">À propos</a>
+</div>
+
+<!-- Colonne de réglages : largeur de lecture tenue, valeur près de son étiquette -->
+<div style="flex-grow: 1; padding: 28px 40px; overflow: hidden;">
+  <div style="max-width: 660px;">
+
+    <h2 class="s">Général</h2>
+
+    <div class="rl">
+      <div class="lb"><div class="t">Thème</div></div>
+      <div class="vl">Système</div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6589" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+
+    <div class="rl">
+      <div class="lb"><div class="t">Début de semaine</div></div>
+      <div class="vl">Lundi</div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6589" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+
+    <div class="rl">
+      <div class="lb"><div class="t">Format de l'heure</div></div>
+      <div class="vl">24 h</div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6589" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+
+    <div class="rl">
+      <div class="lb"><div class="t">Fuseau horaire</div><div class="d">Suit celui de Windows</div></div>
+      <div class="vl">Europe/Paris</div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6589" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+
+    <div class="rl">
+      <div class="lb"><div class="t">Onglets visibles</div></div>
+      <div class="vl">5 sur 6</div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6589" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+
+    <div class="rl">
+      <div class="lb"><div class="t">Démarrer avec Windows</div><div class="d">CircleTasks s'ouvre réduit dans la zone de notification</div></div>
+      <button class="sw" aria-label="Démarrer avec Windows" aria-pressed="false" style="background: #3A3155;"><span></span></button>
+    </div>
+
+    <h2 class="s" style="margin-top: 34px;">Clavier</h2>
+
+    <!-- Un raccourci pris par une autre app : on le dit, on ne le barre pas à côté d'un interrupteur allumé -->
+    <div class="rl">
+      <div class="lb"><div class="t">Capture rapide</div><div class="d" style="color:#E4A75A;">Ctrl+Alt+Espace est utilisé par une autre application. Choisissez-en un autre.</div></div>
+      <span class="kbd" style="border-color:#E4A75A;color:#E4A75A;">Ctrl+Alt+Espace</span>
+      <button class="sw" aria-label="Capture rapide" aria-pressed="false" style="background: #3A3155;"><span></span></button>
+    </div>
+
+    <div class="rl" style="border-bottom: 0;">
+      <div class="lb"><div class="t">Tous les raccourcis</div></div>
+      <span class="kbd">Ctrl /</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6589" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+
+  </div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Aujourd'hui</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.pill{height:30px;padding:0 13px;border-radius:15px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+
+/* ligne de l'agenda : heure à gauche, contenu à droite */
+.row{display:flex;align-items:flex-start;gap:14px;padding:11px 0}
+.hr{width:46px;flex-shrink:0;text-align:right;font:600 14px "DM Sans",sans-serif;font-variant-numeric:tabular-nums;padding-top:3px;color:#8C85A3}
+.bd{flex-grow:1;display:flex;align-items:flex-start;gap:12px;min-width:0}
+.ttl{font-size:17px;font-weight:600;line-height:1.3}
+.meta{font-size:13px;font-weight:500;color:#8C85A3;margin-top:2px}
+
+.chk{width:24px;height:24px;border:2px solid #2E2150;border-radius:7px;background:#FFFFFF;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;margin-top:1px}
+.chk.done{background:#2E2150;border-color:#2E2150}
+.chk.faded{border-color:#C8C2D8}
+
+/* passé : tout recule */
+.past .hr{color:#C0B9D0}
+.past .ttl{color:#B5AEC6;font-weight:500}
+.past .ttl.struck{text-decoration:line-through}
+.past .meta{color:#C8C2D8}
+
+/* la ligne « maintenant » */
+.now{display:flex;align-items:center;gap:14px;margin:6px 0 2px 0}
+.now .hr{color:#2E2150;font-weight:700;padding-top:0}
+.now .bar{flex-grow:1;height:2px;background:#2E2150}
+.now .dot{width:9px;height:9px;border-radius:5px;background:#2E2150;flex-shrink:0;margin-left:-4px}
+
+/* ce qui est dû maintenant */
+.due .ttl{font-family:Fraunces,Georgia,serif;font-size:27px;line-height:1.1;font-weight:700}
+.due .hr{color:#2E2150;font-weight:700;padding-top:7px}
+.due .chk{width:28px;height:28px;border-radius:9px;margin-top:4px}
+
+.ev{width:24px;height:24px;border:2px solid #9DBBC9;border-radius:12px;flex-shrink:0;margin-top:1px}
+.dash{color:#C8C2D8;font-weight:600}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Jour.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Tâches</span></a>
+<a class="tab" href="Semaine-v2.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages-v3.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; padding: 50px 20px 24px 20px; box-sizing: border-box;">
+
+  <!-- Date -->
+  <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+    <div>
+      <div style="font-size: 14px; font-weight: 600; color: #8C85A3;">septembre 2026</div>
+      <h1 style="margin: 1px 0 0 0; font-family: Fraunces, Georgia, serif; font-size: 50px; line-height: 1; font-weight: 700;">mercredi 23</h1>
+    </div>
+    <div style="display: flex; margin: -4px -8px 0 0;">
+      <a class="ib" href="Recherche.html" aria-label="Rechercher"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M20 20l-4.2-4.2"></path></svg></a>
+      <button class="ib" aria-label="Plus d'options"><svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5.5" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="12" cy="18.5" r="1.7"></circle></svg></button>
+    </div>
+  </div>
+
+  <!-- Objectif de la semaine, réduit à une ligne -->
+  <a href="Objectif.html" style="display: flex; align-items: baseline; gap: 8px; text-decoration: none; margin-top: 10px; padding-bottom: 14px; border-bottom: 1px solid #E8E4F0;">
+    <span style="font-size: 14px; font-weight: 600; color: #8C85A3;">Objectif</span>
+    <span style="font-size: 14px; font-weight: 600; flex-grow: 1;">Finaliser le PRD CircleTasks</span>
+    <span style="font-size: 14px; font-weight: 700; color: #8C85A3; font-variant-numeric: tabular-nums;">2/5</span>
+  </a>
+
+  <!-- Filtres -->
+  <div style="display: flex; gap: 7px; padding: 13px 0 4px 0;">
+    <button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+    <button class="pill" style="border: 1.5px solid #CFC9DD; color: #2F6B7A;">Pro</button>
+    <button class="pill" style="border: 1.5px solid #CFC9DD; color: #B5483B;">Perso</button>
+  </div>
+
+  <!-- L'agenda -->
+  <div style="flex-grow: 1; overflow: hidden; padding-top: 4px;">
+
+    <div class="row past">
+      <div class="hr">08:30</div>
+      <div class="bd">
+        <button class="chk done faded" aria-label="Rouvrir : Boire de l'eau" aria-pressed="true" style="background:#C8C2D8;border-color:#C8C2D8;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>
+        <div><div class="ttl struck">Boire de l'eau</div></div>
+      </div>
+    </div>
+
+    <div class="row past">
+      <div class="hr">09:00</div>
+      <div class="bd">
+        <button class="chk done faded" aria-label="Rouvrir : Envoyer la facture" aria-pressed="true" style="background:#C8C2D8;border-color:#C8C2D8;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>
+        <div><div class="ttl struck">Envoyer la facture</div></div>
+      </div>
+    </div>
+
+    <div class="row past">
+      <div class="hr">10:00</div>
+      <div class="bd">
+        <span class="ev" style="border-color:#D2DEE4;"></span>
+        <div><div class="ttl">Point client</div><div class="meta">Google Agenda</div></div>
+      </div>
+    </div>
+
+    <!-- Ce qui est dû : en retard, donc en tête -->
+    <div class="row due">
+      <div class="hr">14:00</div>
+      <div class="bd">
+        <button class="chk" aria-label="Terminer : Appeler le notaire"></button>
+        <div>
+          <div class="ttl">Appeler le notaire</div>
+          <div class="meta" style="color:#B5483B;font-weight:600;margin-top:5px;">En retard de 32 min · Perso</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Maintenant -->
+    <div class="now" aria-label="Il est 14 h 32">
+      <div class="hr">14:32</div>
+      <span class="dot"></span>
+      <div class="bar"></div>
+    </div>
+
+    <div class="row">
+      <div class="hr">18:00</div>
+      <div class="bd">
+        <button class="chk" aria-label="Terminer : Sport"></button>
+        <div><div class="ttl">Sport</div><div class="meta">Routine · tous les mardis et vendredis</div></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="hr dash">—</div>
+      <div class="bd">
+        <button class="chk" aria-label="Terminer : Préparer le dépôt GitHub"></button>
+        <div><div class="ttl">Préparer le dépôt GitHub</div><div class="meta" style="color:#2F6B7A;font-weight:600;">Pro</div></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="hr dash">—</div>
+      <div class="bd">
+        <button class="chk" aria-label="Terminer : Faire mon lit"></button>
+        <div><div class="ttl">Faire mon lit</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Ajouter -->
+  <div style="display: flex; align-items: center; gap: 10px; padding-top: 12px;">
+    <label style="flex-grow: 1; position: relative; display: block;">
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Nouvelle tâche</span>
+      <input type="text" placeholder="Ajouter une tâche" style="width: 100%; height: 50px; border: 1.5px solid #E8E4F0; border-radius: 25px; background: #FFFFFF; padding: 0 18px; font: 500 16px 'DM Sans', sans-serif; color: #2E2150; box-sizing: border-box;">
+    </label>
+    <a href="Scan.html" class="ib" aria-label="Scanner une liste" style="width: 50px; height: 50px; border: 1.5px solid #E8E4F0; border-radius: 25px; flex-shrink: 0;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg></a>
+    <a href="Ajout.html" aria-label="Ajouter une tâche détaillée" style="width: 50px; height: 50px; border-radius: 25px; background: #2E2150; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></a>
+  </div>
+
+</main>
+</div>
+</body>
+</html>
