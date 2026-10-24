@@ -1,5 +1,11 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+## Paquet A — publication vérifiée du 24 octobre 2026
+
+PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.
+
+Bundle main après #83 : **58/58, 339 198 normalisés, 339 190 bruts, marge 19 202 octets**, plafond et liste de modules inchangés ; +722 octets pour le paquet. CI applicative 48/48, lint, typage et revue approuvée. **Vérification native du paquet et clôture REL-01 à REL-03 encore ouvertes** ; ne pas écrire « fait ». A9 reste le trou assumé décidé par Ali, A6b « vérifié en usage après la 1.0 » est futur, pas exécuté. Suivi documentaire sur rel-03-paquet-a-1-0-1 ; aucune recompilation pour ces textes.
+
 ## UI-FIX-02 — défauts de séance du 24 octobre 2026
 
 Ali constate sur iPhone 1.0.0 une attente iCloud verte (apparence de succès), une lecture nulle présentée comme 00:00 et huit défauts de contenu/ergonomie. Paquet A explicitement demandé, ordre et périmètre dans `docs/stories/UI-FIX-02.md`. En cours, sans validation présumée ; pas de refonte Nouvelle tâche/Détail avant les nouvelles maquettes.
