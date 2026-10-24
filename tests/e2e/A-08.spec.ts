@@ -32,14 +32,14 @@ test.describe('A-08 — fiche détail', () => {
     await expect(fiche.getByRole('button', { name: 'Dupliquer la tâche' })).toBeVisible();
     await expect(fiche.getByRole('button', { name: /^Supprimer/ })).toBeVisible();
     await expect(fiche.getByRole('button', { name: /Focus/ })).toHaveCount(1); // M10 (F-01) : « Lancer un Focus » / « Focus 25 min »
-    await expect(fiche).toContainText('Créée le');
+    await expect(fiche).toContainText('Créée aujourd’hui');
     if (isPhone(testInfo)) {
       await expect(page.getByRole('dialog', { name: 'Détail de la tâche' })).toHaveAttribute('aria-modal', 'true');
       await expect(fiche.getByText('Date', { exact: true })).toBeVisible();
       await fiche.getByRole('button', { name: 'Fermer' }).click();
     } else {
       await expect(rowOf(page, title)).toHaveAttribute('data-selected', 'true');
-      await expect(fiche.getByText('Non rattachée')).toBeVisible();
+      await expect(fiche.getByText('Aucun objectif cette semaine')).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(listTitle(page, title)).toBeFocused();
     }
