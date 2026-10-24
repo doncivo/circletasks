@@ -29,6 +29,10 @@
 
 .ct-sync__sub {
   font-size: 13px;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-sync__sub[data-tone='success'] {
   color: var(--ct-color-achieved-text);
 }
 

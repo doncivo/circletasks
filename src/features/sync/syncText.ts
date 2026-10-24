@@ -299,6 +299,13 @@ export function isTroublePhase(status: SyncStatus): boolean {
   );
 }
 
+/** Le vert et l'annonce de succès exigent un cycle complet, sans travail ou erreur restant visible. */
+export function syncStatusTone(status: SyncStatus): 'success' | 'neutral' | 'danger' {
+  if (isTroublePhase(status)) return 'danger';
+  const incomplete = Boolean(status.warnings?.length || status.pendingFiles.length || status.stateUnreadable || status.ownDelete?.length || status.forget?.failure || status.reset?.failure || status.devices.some((device) => !device.self && device.status === 'corrupt'));
+  return status.phase === 'idle' && status.lastSyncAt !== null && !incomplete ? 'success' : 'neutral';
+}
+
 /**
  * Ligne de l'emplacement « version » (Y-07 critère 10, D2) : « {appareil} utilise une version plus récente de l'app », avec le numéro
  * d'application publié s'il est connu ; jamais un numéro de migration.
