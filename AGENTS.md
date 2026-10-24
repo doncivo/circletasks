@@ -53,7 +53,13 @@ Codex assure lui-même product-owner → agent du module → qa-test → code-re
 
 Exception explicite à la compilation iPhone unique par lot : l’essai SideStore N → N+1 utilise l’IPA déjà installée comme N ; une seule nouvelle compilation fournit N+1.
 
+<<<<<<< Updated upstream
 ## A9 — décision d'Ali du 21 octobre 2026
 
 A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
 Avant toute mise à jour changeant le schéma, le guide exige la vérification d'une sauvegarde iCloud récente (S1 à S4 de docs/essais-iphone.md). Ne jamais présenter cette vérification comme une restauration éprouvée.
+=======
+## Perimetre d'ecriture
+
+Interdiction absolue de lire, ecrire ou supprimer quoi que ce soit hors de C:\Dev\circletasks-kit et de ses worktrees. En particulier %APPDATA%\fr.circletasks.planner contient les donnees reelles d'Ali : ne jamais y toucher, sous aucun pretexte, y compris pour un diagnostic. Si une information s'y trouve, demander a Ali de l'extraire lui-meme.
+>>>>>>> Stashed changes
