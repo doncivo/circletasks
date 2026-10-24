@@ -1,5 +1,5 @@
 import { Undo2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { pendingFileCount } from '../../domain/sync/pendingFiles';
 import { isPublishBlockedCause, publishCauseText } from '../../i18n/syncPublishCauseText';
@@ -18,8 +18,9 @@ import { SyncDetailsReset } from './SyncDetailsReset';
 import { SyncDetailsRescue } from './SyncDetailsRescue';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
+import { SyncDeviceName } from './SyncDeviceName';
 import { syncStore } from './syncStore';
-import { deviceName, deviceStatusText, formatSyncTime, ownPlatform, warningText } from './syncText';
+import { deviceStatusText, formatSyncTime, ownPlatform, warningText } from './syncText';
 import './SyncDetailsScreen.css';
 
 /** Remplacements facultatifs des emplacements (tests) ; par défaut, chaque story rend son composant d'emplacement. */
@@ -52,6 +53,9 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
   const container = useAppContainer();
   const navigate = useNavigationStore((s) => s.navigate);
   const status = useFeatureStore(syncStore, (s) => s.status);
+  const loadNames = useFeatureStore(syncStore, (s) => s.loadDeviceNames);
+  const nameError = useFeatureStore(syncStore, (s) => s.deviceNameError);
+  useEffect(() => { void loadNames(); }, [loadNames]);
   const nowMs = container.clock.nowMs();
   const pendingCount = pendingFileCount(status.pendingFiles);
   const key = useKeyInfo();
@@ -89,13 +93,15 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
       {slots.pairing ?? <SyncDetailsPairing />}
       {slots.version ?? <SyncDetailsVersion />}
       <h2 className="ct-settings__section">{t('sync.status.sectionDevices')}</h2>
+      <p className="ct-settings__hint">{t('sync.status.namesLocal')}</p>
+      {nameError && <p role="alert" className="ct-settings__error">{t(nameError)} {nameError === 'sync.status.nameReadFailed' && <button type="button" onClick={() => void loadNames()}>{t('common.retry')}</button>}</p>}
       <ul className="ct-sync__devices">
         {status.devices.map((device) => (
           <li key={device.deviceId} className="ct-settings__row ct-sync__device" data-status={device.status}>
-            <span className="ct-sync__deviceIdentity">
-              <span className="ct-sync__deviceName">{device.self ? t('sync.status.thisDeviceName') : deviceName(device, status.devices)}</span>
+            <div className="ct-sync__deviceIdentity">
+              <SyncDeviceName device={device} devices={status.devices} />
               <span className="ct-sync__deviceRead">{device.lastReadAt ? t(device.self ? 'sync.status.lastSync' : 'sync.status.lastRead', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.status.neverRead')}</span>
-            </span>
+            </div>
             <span className="ct-settings__value ct-sync__deviceState">{device.seen === false ? t('sync.forget.unseenState') : deviceStatusText(device)}</span>
             {!device.self && <SyncDeviceForgetAction device={device} />}
           </li>

@@ -76,6 +76,41 @@
   min-width: 0;
 }
 
+.ct-sync__deviceId {
+  font-size: 11px;
+  color: var(--ct-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ct-sync__nameButton {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  padding: 0;
+  min-height: var(--ct-hit-target-min);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.ct-sync__nameForm,
+.ct-sync__nameForm label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ct-sync__nameForm input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+}
+
 .ct-sync__device > button,
 .ct-sync__device > .ct-sync__forgetAction {
   grid-column: 1 / -1;

@@ -41,12 +41,14 @@ export function formatSyncAge(lastSyncAt: string, nowMs: number): string {
 }
 
 /** Nom affiché d'un appareil. */
-export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'seen'>, all: readonly Pick<SyncDeviceStatus, 'platform' | 'seen'>[]): string {
+export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'seen' | 'displayName'>, all: readonly (Pick<SyncDeviceStatus, 'platform' | 'seen'> & Partial<Pick<SyncDeviceStatus, 'deviceId'>>)[]): string {
+  if (device.displayName) return device.displayName;
   // Y-10 (audit a) : appareil jamais lu, nom neutre et 8 caractères, jamais une plateforme inventée.
-  if (device.seen === false) return t('sync.forget.unseenName', { short: String(device.deviceId).slice(0, 8) });
+  if (device.seen === false) return t('sync.status.deviceUnidentified');
   const platform = t(device.platform === 'ios' ? 'sync.status.deviceIphone' : 'sync.status.devicePc');
-  const twins = all.filter((d) => d.platform === device.platform && d.seen !== false).length > 1;
-  return twins ? t('sync.status.deviceNamed', { platform, short: String(device.deviceId).slice(0, 4) }) : platform;
+  const peers = all.filter((d) => d.platform === device.platform && d.seen !== false).sort((a, b) => String(a.deviceId ?? '').localeCompare(String(b.deviceId ?? '')));
+  const number = Math.max(0, peers.findIndex((d) => d.deviceId === device.deviceId)) + 1;
+  return peers.length > 1 ? t('sync.status.deviceNumbered', { platform, number }) : platform;
 }
 
 /**
