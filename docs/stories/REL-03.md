@@ -1,5 +1,17 @@
 # REL-03 — Préparation et publication du lot 1.0
 
+## Refonte 1.0.2 — publication vérifiée
+
+UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
+
+Builds réels **40300455346 (iPhone) / 40300455500 (PC)** verts. IPA **7363893 octets**, SHA-256 **89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675**, concordants avec l'asset et source SideStore ; version/build 1.0.2, fr.circletasks.planner, iOS minimum 18.0, contrat cinq plugins contrôlés. EXE **6406556 octets**, SHA-256 **aa231a03b9c5cb13e944ed7fec0ece26ac7dd0b99d01ff5bee239ed2e84a18d7**, signature Ed25519 et endpoint updater 1.0.2 vérifiés sans exécution. PC uniquement par bannière ; iPhone par SideStore sans désinstallation.
+
+**Rendu natif de la refonte encore ouvert** : quatre contrôles seulement dans docs/essais-iphone.md. Les essais 1.0.1 sont acceptés par Ali, sans les réattribuer à 1.0.2. A9 reste le trou assumé ; A6b reste une vérification future en usage après la 1.0. Suivi documentaire sur rel-03-refonte-1-0-2 ; aucune recompilation pour ces textes.
+
+### Revue distincte de la remise 1.0.2
+
+Passe documentaire approuvée après confrontation du diff avec les deux runs réussis et les artefacts téléchargés : version, identifiant, contrat des cinq plugins, tailles et empreintes correspondent à la publication. Signature Ed25519 et endpoint PC vérifiés ; aucun EXE exécuté. Aucun code applicatif modifié par cette remise, aucune nouvelle compilation. Bundle avant push documentaire : 62/62 verts ; lint, typage et couverture de la source applicative verte, nouvelle CI complète obligatoire pour cette PR. Quatre observations natives demeurent explicitement ouvertes, sans attribuer la recette 1.0.1 à 1.0.2.
+
 ## Verdict du candidat 1.0.1 — 26 octobre 2026
 
 Recette native acceptée par Ali dans la conversation : dix contrôles du paquet A et autres essais natifs du guide réussis. Les vérifications automatiques, audit et publication de 1.0.1 sont consignés dans les sections ci-dessous et UI-FIX-02 ; ce retour clôt le volet physique attendu de cette livraison. A9 : non exécuté, risque accepté ; A6b : vérification future en usage après la 1.0, non exécutée et non bloquante. Aucun détail individuel de séance inventé. La refonte 1.0.2 relève d'UI-REFONTE-01 et reste à vérifier séparément.

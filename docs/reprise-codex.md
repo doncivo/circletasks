@@ -1,6 +1,20 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
-## Reprise prioritaire — UI-REFONTE-01, 26 octobre 2026
+## Refonte 1.0.2 — publication vérifiée
+
+UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
+
+Builds réels **40300455346 (iPhone) / 40300455500 (PC)** verts. IPA **7363893 octets**, SHA-256 **89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675**, concordants avec l'asset et source SideStore ; version/build 1.0.2, fr.circletasks.planner, iOS minimum 18.0, contrat cinq plugins contrôlés. EXE **6406556 octets**, SHA-256 **aa231a03b9c5cb13e944ed7fec0ece26ac7dd0b99d01ff5bee239ed2e84a18d7**, signature Ed25519 et endpoint updater 1.0.2 vérifiés sans exécution. PC uniquement par bannière ; iPhone par SideStore sans désinstallation.
+
+**Rendu natif de la refonte encore ouvert** : quatre contrôles seulement dans docs/essais-iphone.md. Les essais 1.0.1 sont acceptés par Ali, sans les réattribuer à 1.0.2. A9 reste le trou assumé ; A6b reste une vérification future en usage après la 1.0. Suivi documentaire sur rel-03-refonte-1-0-2 ; aucune recompilation pour ces textes.
+
+Suite autorisée : terminer la PR documentaire de rel-03-refonte-1-0-2, attendre sa CI, fusionner et remesurer main. Ensuite seuls les quatre contrôles physiques du guide demandent Ali. Les préparations ci-dessous sont historiques ; les deux builds sont déjà publiés et ne doivent pas être relancés.
+
+## Historique de préparation — remise après fusion #86
+
+Main f473e113, #86 fusionnée après **48 CI verts de 5a97e8c6**, runs 40297597829 / 40297604155 ; arbre intégré identique à la tête revue. Bundle main **62/62, 333 973 normalisés, 333 984 bruts, marge 24 427**, plafond inchangé. Branche active de preuve documentaire **rel-03-refonte-1-0-2**, même worktree n-ios-apercus. Un seul push des tags v1.0.2 et ios-v1.0.2 sur f473e113 a lancé **iOS 40300455346 / Windows 40300455500**, en cours au dernier relevé. **Ne jamais relancer ni dispatcher un second build.** Attendre les sorties, télécharger dans .codex-tmp/node_modules/runtime/release-1.0.2, puis vérifier IPA/Info.plist/source et signature EXE/endpoint sans exécution. Scripts temporaires verify-refonte-release.mjs et document-refonte-release.mjs prêts dans le même runtime ; ce dernier exige les vrais source/run IDs et proof.json. Actualiser les sept documents, bundle avant push, secrets, PR documentaire/CI/fusion et mesure main ; aucune recompilation pour les textes. Guide de quatre contrôles montré avant compilation et déjà sur main. Attendre les deux candidats vérifiés avant de remettre la main à Ali pour le rendu natif ; ne pas rouvrir les essais 1.0.1 acceptés, A9 ni A6b.
+
+## Historique de développement — UI-REFONTE-01, 26 octobre 2026
 
 Ali demande la refonte de Nouvelle tâche et Détail uniquement, selon Ajout-v2 et Detail-v2 de #84 (bd3a80bf). Branche UI-REFONTE-01, worktree n-ios-apercus, PR #86 ouverte, base main 9ddb7781. La tête initiale a70393fe avait échoué en CI (40293615923 / 40293695880) : anciens accès aux options repliées, contraste dynamique, charge du banc perf et affichage des rappels inactifs. Complément corrigé et relu : **144 ciblés, six e2e, perf 700 ms CPU ×4, lint/typage, bundle 62/62 verts**. Mesure finale **333 973 normalisés, 333 984 bruts, marge 24 427**, dix autorisations retirées et une attribution CSS existante justifiée. Prochain : commiter/pousser le complément s'il reste local (sans force), attendre les deux CI complètes sur la tête réelle de #86, fusion --merge et mesure main ; un seul build iPhone 1.0.2 et un PC, contrôler/remettre les artefacts, puis intégrer leurs preuves documentaires sans recompilation. Aucun build 1.0.2 ni tag encore lancé. Schéma toujours 19. PR #84 intacte, autres écrans hors périmètre. Guide : quatre contrôles natifs nouveaux seulement ; essais 1.0.1 acceptés par Ali. A9 trou assumé, A6b futur. Racine personnelle sale conservée.
 

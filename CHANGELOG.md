@@ -6,7 +6,7 @@
 
 - Nouvelle tâche sur iPhone : titre prioritaire, date et heure compactes, espace visible, options repliées et action Ajouter la tâche au-dessus du clavier.
 - Détail : échéance et heures des rappels séparées, explication du décalage silencieux, projet distinct, actions courantes avant Focus et suppression. Les comportements PC restent conservés.
-- Aucun changement de schéma (19) ni du protocole de synchronisation. Vérifications automatiques en cours ; rendu sur appareil à confirmer avec ce lot.
+- Aucun changement de schéma (19) ni du protocole de synchronisation. Vérifications automatiques et publication PC/iPhone validées ; quatre contrôles du rendu sur appareil restent à confirmer avec ce lot.
 
 ## 1.0.1
 

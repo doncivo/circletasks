@@ -1,5 +1,13 @@
 # Journal de développement CircleTasks
 
+## Refonte 1.0.2 — publication vérifiée
+
+UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
+
+Builds réels **40300455346 (iPhone) / 40300455500 (PC)** verts. IPA **7363893 octets**, SHA-256 **89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675**, concordants avec l'asset et source SideStore ; version/build 1.0.2, fr.circletasks.planner, iOS minimum 18.0, contrat cinq plugins contrôlés. EXE **6406556 octets**, SHA-256 **aa231a03b9c5cb13e944ed7fec0ece26ac7dd0b99d01ff5bee239ed2e84a18d7**, signature Ed25519 et endpoint updater 1.0.2 vérifiés sans exécution. PC uniquement par bannière ; iPhone par SideStore sans désinstallation.
+
+**Rendu natif de la refonte encore ouvert** : quatre contrôles seulement dans docs/essais-iphone.md. Les essais 1.0.1 sont acceptés par Ali, sans les réattribuer à 1.0.2. A9 reste le trou assumé ; A6b reste une vérification future en usage après la 1.0. Suivi documentaire sur rel-03-refonte-1-0-2 ; aucune recompilation pour ces textes.
+
 ## UI-REFONTE-01 — correction des premiers retours CI
 
 Tête a70393fe, runs 40293615923 / 40293695880 : anciens accès aux options et libellés de création dans les parcours Projet/Espace/Un jour et les gardes de largeur ; adaptations ciblées, assertions de données conservées. Le test SD-03 a aussi révélé une régression réelle du nouveau rendu : les avances inactives étaient cachées derrière le seul texte Inactif. Leur affichage grisé est rétabli, sans changer les lignes de base ; test d'origine conservé.
