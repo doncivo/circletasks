@@ -36,6 +36,12 @@ async function press(page: Page, wheel: Locator, key: string, times: number): Pr
 
 /** iPhone : règle les roues de `scope` (feuille « Nouvelle tâche » ou « Choisir une date ») sur la date et l'heure voulues. */
 export async function setWheels(page: Page, scope: Locator, target: { date?: string; time?: string }): Promise<void> {
+  const compact = scope.locator('.ct-task-schedule');
+  const compactTask = await scope.getAttribute('aria-label') === 'Nouvelle tâche';
+  if ((target.date || target.time) && compactTask) {
+    const date = compact.getByRole('button', { name: /Date :/ });
+    if (await date.getAttribute('aria-expanded') !== 'true') await date.click();
+  }
   if (target.date) {
     const diff = dayDiff(await browserToday(page), target.date);
     await press(page, scope.getByRole('spinbutton', { name: 'Jour' }), diff >= 0 ? 'ArrowUp' : 'ArrowDown', Math.abs(diff));
@@ -45,6 +51,7 @@ export async function setWheels(page: Page, scope: Locator, target: { date?: str
     await press(page, scope.getByRole('spinbutton', { name: 'Heures' }), 'ArrowUp', (hour ?? 0) + 1);
     await press(page, scope.getByRole('spinbutton', { name: 'Minutes' }), 'ArrowUp', Math.round((minute ?? 0) / 5));
   }
+  if ((target.date || target.time) && compactTask) await compact.locator('.ct-task-schedule__close').click();
 }
 
 /** PC : saisie libre dans le champ « Date » de la saisie rapide (validée au départ du champ). */

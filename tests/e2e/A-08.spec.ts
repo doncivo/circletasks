@@ -35,7 +35,7 @@ test.describe('A-08 — fiche détail', () => {
     await expect(fiche).toContainText('Créée aujourd’hui');
     if (isPhone(testInfo)) {
       await expect(page.getByRole('dialog', { name: 'Détail de la tâche' })).toHaveAttribute('aria-modal', 'true');
-      await expect(fiche.getByText('Date', { exact: true })).toBeVisible();
+      await expect(fiche.getByText('Prévue', { exact: true })).toBeVisible();
       await fiche.getByRole('button', { name: 'Fermer' }).click();
     } else {
       await expect(rowOf(page, title)).toHaveAttribute('data-selected', 'true');
@@ -98,7 +98,7 @@ test.describe('A-08 — fiche détail', () => {
     await detail(page).getByRole('button', { name: 'Modifier' }).click();
     await edit.getByLabel('Titre').fill('Modifiée');
     await edit.getByRole('button', { name: 'Perso' }).click();
-    await edit.getByRole('button', { name: 'Enregistrer' }).click();
+    await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(edit).toHaveCount(0);
     await expect(detail(page).getByRole('heading', { name: 'Modifiée' })).toBeVisible();
     await detail(page).getByRole('button', { name: 'Fermer' }).click();

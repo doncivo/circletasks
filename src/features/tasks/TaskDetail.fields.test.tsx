@@ -274,12 +274,13 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       const sheet = screen.getByRole('dialog', { name: 'Détail de la tâche' });
       expect(sheet).toHaveAttribute('aria-modal', 'true');
       expect(within(sheet).getByRole('button', { name: 'Fermer' })).toBeInTheDocument();
-      expect(within(sheet).getByText('DÉTAIL')).toBeInTheDocument();
+      expect(within(sheet).queryByText('DÉTAIL')).toBeNull();
       expect(within(sheet).getByRole('button', { name: 'Modifier' })).toBeInTheDocument();
-      expect(within(sheet).getByText('Date')).toBeInTheDocument();
+      expect(within(sheet).getByText('Prévue')).toBeInTheDocument();
       expect(within(sheet).getByText('Mer. 23 sept. · 09:00')).toBeInTheDocument();
       expect(within(sheet).queryByLabelText('Date de la tâche')).toBeNull();
-      expect(within(sheet).getByText('Espace · projet')).toBeInTheDocument();
+      expect(within(sheet).getByText('Projet')).toBeInTheDocument();
+      expect(within(sheet).getByText('Pro')).toBeInTheDocument();
       expect(within(sheet).getByLabelText('Note')).toBeEnabled();
       // Q15 : la répétition est en lecture seule sur iPhone (modification par « Modifier »).
       expect(within(sheet).queryByRole('button', { name: 'Répéter…' })).toBeNull();

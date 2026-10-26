@@ -79,7 +79,7 @@ test.describe('ES-05 — déplacer un élément', () => {
       const edit = page.getByRole('dialog', { name: 'Modifier la tâche' });
       await edit.getByRole('button', { name: 'Perso', exact: true }).click();
       await expect(edit.getByText('Projet : aucun')).toBeVisible();
-      await edit.getByRole('button', { name: 'Enregistrer' }).click();
+      await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(edit).toHaveCount(0);
       await expect(fiche.getByText('Perso')).toBeVisible();
     } else {

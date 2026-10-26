@@ -29,6 +29,8 @@ test.describe('T-14 correctif : roue des heures au doigt, puis rappel (N-02)', (
     await openToday(page);
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Heure :/ }).click();
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     await dialog.getByLabel('Titre').fill('Rappel au doigt');
     const hours = dialog.getByRole('spinbutton', { name: 'Heures' });
     const minutes = dialog.getByRole('spinbutton', { name: 'Minutes' });
@@ -52,7 +54,7 @@ test.describe('T-14 correctif : roue des heures au doigt, puis rappel (N-02)', (
     await expect(dialog.getByRole('checkbox', { name: '30 min' })).toHaveAttribute('aria-checked', 'true');
     // La roue des jours n'a pas bougé pendant les gestes sur les autres roues : la tâche est bien celle d'aujourd'hui.
     await expect(dialog.getByRole('spinbutton', { name: 'Jour' })).toHaveAttribute('aria-valuetext', /Aujourd/);
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
 
     const row = page.locator('.ct-list-row', { hasText: 'Rappel au doigt' });
@@ -60,13 +62,15 @@ test.describe('T-14 correctif : roue des heures au doigt, puis rappel (N-02)', (
     await page.locator('.ct-today__list').getByRole('button', { name: 'Rappel au doigt', exact: true }).click();
     const fiche = page.getByRole('dialog', { name: 'Détail de la tâche' });
     await expect(fiche).toBeVisible();
-    await expect(fiche.locator('.ct-task-detail__chip')).toHaveText(['À l’heure', '30 min avant']);
+    await expect(fiche.locator('.ct-task-detail__reminderTime > .ct-task-detail__sub:nth-child(2)')).toHaveText(['À l’heure', '30 min avant']);
   });
 
   test('un geste qui s’arrête entre deux rangées se cale sur la plus proche sans revenir en arrière', async ({ page }) => {
     await openToday(page);
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Heure :/ }).click();
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     const hours = dialog.getByRole('spinbutton', { name: 'Heures' });
     const viewport = hours.locator('.ct-wheel__viewport');
     await expect(dialog).toBeVisible();

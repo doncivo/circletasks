@@ -1,5 +1,9 @@
 # REL-01 — Recette des douze parcours clés
 
+## Verdict du candidat 1.0.1 — 26 octobre 2026
+
+Recette native acceptée par Ali dans la conversation : dix contrôles du paquet A et autres essais natifs du guide réussis. Les vérifications automatiques, audit et publication de 1.0.1 sont consignés dans les sections ci-dessous et UI-FIX-02 ; ce retour clôt le volet physique attendu de cette livraison. A9 : non exécuté, risque accepté ; A6b : vérification future en usage après la 1.0, non exécutée et non bloquante. Aucun détail individuel de séance inventé. La refonte 1.0.2 relève d'UI-REFONTE-01 et reste à vérifier séparément.
+
 Module : QA de livraison · Statut : automatisation intégrée #78 ; **recette physique ouverte** · Estimation **2 h actives**, alerte **3 h** ; les essais physiques sont séparés.
 
 ## Passe product-owner — 2026-10-21

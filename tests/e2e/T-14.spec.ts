@@ -27,6 +27,7 @@ async function openSheet(page: Page) {
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
   const dialog = dialogOf(page);
   await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: /Date :/ }).click();
   return dialog;
 }
 
@@ -46,14 +47,14 @@ test.describe('T-14 — sélecteur de date par appareil', () => {
       const dialog = await openSheet(page);
       const days = dialog.getByRole('spinbutton', { name: 'Jour' });
       await expect(days).toHaveAttribute('aria-valuetext', 'Aujourd’hui');
-      await expect(dialog.getByRole('button', { name: 'Aujourd’hui' })).toHaveAttribute('aria-pressed', 'true');
+      await expect(dialog.getByRole('button', { name: 'Aujourd’hui', exact: true })).toHaveAttribute('aria-pressed', 'true');
       await expect(dialog.getByText('Jeu. 24 sept.')).toBeVisible();
 
       await press(page, days, 'ArrowUp', 1);
       await expect(days).toHaveAttribute('aria-valuetext', 'Jeu. 24 sept.');
       await expect(dialog.getByRole('button', { name: 'Demain' })).toHaveAttribute('aria-pressed', 'true');
       await press(page, days, 'ArrowUp', 1);
-      await expect(dialog.getByRole('button', { name: 'Aujourd’hui' })).toHaveAttribute('aria-pressed', 'false');
+      await expect(dialog.getByRole('button', { name: 'Aujourd’hui', exact: true })).toHaveAttribute('aria-pressed', 'false');
       await expect(dialog.getByRole('button', { name: 'Demain' })).toHaveAttribute('aria-pressed', 'false');
     });
 
@@ -93,12 +94,12 @@ test.describe('T-14 — sélecteur de date par appareil', () => {
       await dialog.getByLabel('Titre').fill('Avec heure');
       await press(page, dialog.getByRole('spinbutton', { name: 'Heures' }), 'ArrowUp', 11);
       await press(page, dialog.getByRole('spinbutton', { name: 'Minutes' }), 'ArrowUp', 1);
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(page.locator('.ct-list-row', { hasText: 'Avec heure' })).toContainText('10:05');
 
       dialog = await openSheet(page);
       await dialog.getByLabel('Titre').fill('Sans heure');
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(page.locator('.ct-list-row', { hasText: 'Sans heure' })).not.toContainText(':');
     });
 
@@ -107,10 +108,10 @@ test.describe('T-14 — sélecteur de date par appareil', () => {
       await dialog.getByRole('button', { name: 'Demain' }).click();
       await expect(dialog.getByRole('spinbutton', { name: 'Jour' })).toHaveAttribute('aria-valuetext', 'Jeu. 24 sept.');
 
-      await dialog.getByRole('button', { name: 'Un jour' }).click();
+      await dialog.getByRole('button', { name: 'Un jour', exact: true }).click();
       for (const name of ['Jour', 'Heures', 'Minutes']) await expect(dialog.getByRole('spinbutton', { name })).toHaveAttribute('aria-disabled', 'true');
       await dialog.getByLabel('Titre').fill('Un de ces jours');
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(dialog).not.toBeVisible();
       await expect(page.getByText('Un de ces jours')).toHaveCount(0);
 

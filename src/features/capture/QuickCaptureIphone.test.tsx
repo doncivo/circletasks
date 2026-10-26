@@ -167,7 +167,7 @@ describe('Feuille « Nouvelle tâche » : base occupée et échec (critères 2 e
   };
   const submit = async (): Promise<void> => {
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
       await Promise.resolve();
     });
   };

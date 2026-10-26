@@ -1,5 +1,9 @@
 # REL-03 — Préparation et publication du lot 1.0
 
+## Verdict du candidat 1.0.1 — 26 octobre 2026
+
+Recette native acceptée par Ali dans la conversation : dix contrôles du paquet A et autres essais natifs du guide réussis. Les vérifications automatiques, audit et publication de 1.0.1 sont consignés dans les sections ci-dessous et UI-FIX-02 ; ce retour clôt le volet physique attendu de cette livraison. A9 : non exécuté, risque accepté ; A6b : vérification future en usage après la 1.0, non exécutée et non bloquante. Aucun détail individuel de séance inventé. La refonte 1.0.2 relève d'UI-REFONTE-01 et reste à vérifier séparément.
+
 ## Paquet A — 1.0.1, suivi du 24 octobre 2026
 
 UI-FIX-02 est intégré par #83 dans b8ddc85f, tête 80970c6c, 48 CI verts (40089223693 / 40089225629), revue approuvée. Nouvelle tâche et Détail attendent toujours les maquettes hors corrections explicitement demandées. Version 1.0.1, schéma 19 et protocole inchangés. Bundle main après fusion : 58/58, 339 198 octets normalisés, 339 190 bruts, marge 19 202 ; coût du paquet 722 octets. Une seule compilation iPhone, run 40090523848 vert, et PC 40090523636 vert, tags ios-v1.0.1 / v1.0.1 sur cette même source. Les paragraphes 1.0.0 ci-dessous sont historiques, pas une preuve native de la 1.0.1.

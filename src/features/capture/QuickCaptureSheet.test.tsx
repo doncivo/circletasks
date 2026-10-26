@@ -31,7 +31,7 @@ describe('Capture rapide : feuille d’ajout iPhone (Q-06, Q-02)', () => {
     const title = await openSheet();
     fireEvent.change(title, { target: { value: 'Appeler le notaire demain 10h #perso' } });
     expect(await screen.findByText('demain · 10:00')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(async () => expect((await created()).length).toBe(1));
     expect((await created())[0]).toMatchObject({ title: 'Appeler le notaire', spaceId: SPACE_PERSO_ID, date: addDays(h.today, 1), time: '10:00' });
     // Heure donnée : « À l'heure » est cochée d'office (QB-08).
@@ -41,11 +41,12 @@ describe('Capture rapide : feuille d’ajout iPhone (Q-06, Q-02)', () => {
 
   it('la date choisie à la main dans la feuille l’emporte : le texte reste le titre (critère 12)', async () => {
     const title = await openSheet();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Date :/ }));
     // Puce « Demain » du sélecteur de date.
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Demain' }));
     fireEvent.change(title, { target: { value: 'Appeler après-demain' } });
     expect(screen.queryByRole('group', { name: 'Ce qui sera appliqué' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(async () => expect((await created()).length).toBe(1));
     expect((await created())[0]).toMatchObject({ title: 'Appeler après-demain', date: addDays(h.today, 1) });
   });
@@ -53,6 +54,6 @@ describe('Capture rapide : feuille d’ajout iPhone (Q-06, Q-02)', () => {
   it('« #pro » seul : Enregistrer est inactif (titre vide, critère 7)', async () => {
     const title = await openSheet();
     fireEvent.change(title, { target: { value: '#pro' } });
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajouter la tâche' })).toBeDisabled();
   });
 });

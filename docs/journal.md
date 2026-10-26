@@ -1,5 +1,17 @@
 # Journal de développement CircleTasks
 
+## UI-REFONTE-01 — correction des premiers retours CI
+
+Tête a70393fe, runs 40293615923 / 40293695880 : anciens accès aux options et libellés de création dans les parcours Projet/Espace/Un jour et les gardes de largeur ; adaptations ciblées, assertions de données conservées. Le test SD-03 a aussi révélé une régression réelle du nouveau rendu : les avances inactives étaient cachées derrière le seul texte Inactif. Leur affichage grisé est rétabli, sans changer les lignes de base ; test d'origine conservé.
+
+Le contraste d'espace était une variable CSS non résolue par la garde. La vue calcule désormais noir ou blanc sur la couleur réelle (≥ 4,5:1), vérification des huit couleurs et quatre cas limites plus liaison au bouton rendu ; aucune exception CSS ajoutée. Le banc de feuille complète ouvre explicitement les options et la date pour conserver les icônes visibles et trois roues : budget 700 ms à CPU ×4 et cinq mesures inchangés, essai vert. Le choix de date se termine par Terminé, distinct de Fermer la feuille. Hors ligne dans le navigateur : assets préchargés comme ceux embarqués localement dans Tauri, puis coupure HTTP réelle maintenue ; la création locale reste testée. Résultats du complément : 144 ciblés, six e2e et performance verts ; lint/typage verts, bundle avant push en cours. Aucun délai, retry automatique, seuil ou test instable écarté.
+
+## 26 octobre 2026 — recette 1.0.1 reçue, refonte autorisée
+
+Ali confirme dans la conversation la réussite des dix contrôles du paquet A et des autres essais natifs du guide. Attestation utilisateur, sans inventer de captures ni d'heures individuelles. Le paquet A et la recette du candidat 1.0.1 sont acceptés ; A9 reste le trou assumé, A6b reste une vérification future en usage après la 1.0. Les preuves automatiques et les artefacts déjà vérifiés restent ceux de #83 / #85.
+
+Nouvelle demande : refonte de Nouvelle tâche et Détail, story UI-REFONTE-01, branche du même nom dans n-ios-apercus. Références Ajout-v2 / Detail-v2 de la PR #84, autres écrans exclus. Candidat 1.0.2 sans migration, schéma 19. Nouveau rendu non encore validé sur appareil ; ne pas lui attribuer la recette de 1.0.1. Estimation 6 à 8 h actives, alerte 12 h. Tests ciblés, revue, CI, bundle et publication à terminer avant remise.
+
 ## Paquet A — publication vérifiée du 24 octobre 2026
 
 PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.
@@ -409,3 +421,7 @@ Bundle avant le premier push : 58/58, 339 198 normalisés, 339 199 bruts, marge 
 ## 2026-10-24 — REL-03, préparation de la remise du paquet A
 
 #83 fusionnée dans b8ddc85f après 48 contrôles verts de 80970c6c, runs 40089223693 / 40089225629. Lint, typage et revue consignés. Les trois lignes de périmètre d'AGENTS ajoutées sur main par cfa2c8f0 sont conservées ; les fichiers applicatifs et dépendances ne diffèrent pas de la tête approuvée. Mesure du bundle sur main avant les tags de livraison. Version 1.0.1 sans changement de schéma ni de protocole ; build iPhone unique et build PC à effectuer sur le même commit. Pas de validation native revendiquée ; A9 reste le risque accepté, pas un banc à reprendre.
+
+### UI-REFONTE-01 — diagnostic du banc de fuseaux
+
+La passe ciblée locale en threads compte 871 verts et cinq échecs : quatre anciens accès aux options repliées/chargées à la demande, adaptés puis 63/63 verts ; un test floatingTime modifie process.env.TZ. Sous worker thread Windows, cette mutation ne change pas le fuseau de Date comme dans un processus indépendant. Même fichier inchangé exécuté avec le pool forks habituel : 3/3 verts. Aucun test sauté, aucun délai augmenté, aucune relance automatique ni changement du pool CI. La passe threads n'est pas revendiquée comme suite complète verte.

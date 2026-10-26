@@ -91,9 +91,10 @@ describe('Accès à « Un jour » depuis Aujourd’hui (SD-01 critères 1, 2, 5,
     renderSomeday(h.container);
     fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Date : Un jour' }));
     expect(within(dialog).getByRole('button', { name: 'Un jour' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Renouveler le passeport' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(async () => expect(await h.container.data.repos.tasks.listSomeday('all')).toHaveLength(1));
     const [task] = await h.container.data.repos.tasks.listSomeday('all');
     expect(task).toMatchObject({ title: 'Renouveler le passeport', someday: true, date: null, time: null });

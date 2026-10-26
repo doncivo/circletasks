@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFocusTrap } from './useFocusTrap';
 import './Sheet.css';
 
@@ -12,6 +12,8 @@ export interface SheetProps {
   className?: string;
   /** Élément focalisé à l'ouverture, dans le geste d'ouverture (Q-05) ; absent : premier élément focusable. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /** Cadre visible fourni par une feuille sensible au clavier, sans changer les autres feuilles. */
+  backdropStyle?: CSSProperties;
 }
 
 /**
@@ -23,11 +25,11 @@ export interface SheetProps {
  *   <TaskForm />
  * </Sheet>
  */
-export function Sheet({ open, onClose, label, children, className, initialFocusRef }: SheetProps) {
+export function Sheet({ open, onClose, label, children, className, initialFocusRef, backdropStyle }: SheetProps) {
   const containerRef = useFocusTrap<HTMLElement>({ active: open, onEscape: onClose, ...(initialFocusRef ? { initialFocus: initialFocusRef } : {}) });
   if (!open) return null;
   return (
-    <div className="ct-sheet__backdrop">
+    <div className="ct-sheet__backdrop" style={backdropStyle}>
       <section
         ref={containerRef}
         tabIndex={-1}

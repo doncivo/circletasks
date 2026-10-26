@@ -17,7 +17,10 @@ test.describe('OB-03 — rattacher une tâche à un objectif', () => {
     await rowOf(page, 'Relire le PRD').getByRole('button', { name: 'Relire le PRD', exact: true }).click();
     const fiche = detailOf(page);
     await expect(fiche.getByText('Aucun objectif cette semaine')).toBeVisible();
-    await expect(attachSwitch(fiche)).toBeDisabled();
+    if (isPhone(testInfo)) {
+      await expect(attachSwitch(fiche)).toHaveCount(0);
+      await expect(fiche.getByRole('button', { name: 'En définir un' })).toBeVisible();
+    } else await expect(attachSwitch(fiche)).toBeDisabled();
   });
 
   test('un seul objectif ouvert : rattachement direct, icône cible sur la ligne, liste de l’écran Objectif, détachement (critères 1, 3, 4, 5, 7)', async ({ page }, testInfo) => {
@@ -79,10 +82,11 @@ test.describe('OB-03 — rattacher une tâche à un objectif', () => {
     await insertGoals(page, [{ title: 'Finaliser le PRD CircleTasks', weekStart: await browserWeek(page) }]);
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     await dialog.getByLabel('Titre').fill('Écrire le plan');
     await attachSwitch(dialog).click();
     await expect(dialog.getByText('Rattachée : Finaliser le PRD CircleTasks')).toBeVisible();
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
     await expect(rowOf(page, 'Écrire le plan').getByRole('img', { name: 'Rattachée à l’objectif' })).toBeVisible();
   });

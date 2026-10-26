@@ -2,6 +2,12 @@
 
 ## Non publié
 
+## 1.0.2
+
+- Nouvelle tâche sur iPhone : titre prioritaire, date et heure compactes, espace visible, options repliées et action Ajouter la tâche au-dessus du clavier.
+- Détail : échéance et heures des rappels séparées, explication du décalage silencieux, projet distinct, actions courantes avant Focus et suppression. Les comportements PC restent conservés.
+- Aucun changement de schéma (19) ni du protocole de synchronisation. Vérifications automatiques en cours ; rendu sur appareil à confirmer avec ce lot.
+
 ## 1.0.1
 
 - Paquet A issu des essais sur iPhone 1.0.0 : attente de synchronisation distincte du succès, mention « Jamais lu », appareils alignés avec noms modifiables localement et identifiants secondaires, champs de conflit nommés explicitement.

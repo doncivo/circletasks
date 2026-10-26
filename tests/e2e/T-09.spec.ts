@@ -33,10 +33,11 @@ async function createTask(page: Page, info: Info, title: string, repeat: 'Une fo
   if (isIphone(info)) {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     await dialog.getByLabel('Titre').fill(title);
     await expect(dialog.getByRole('radio', { name: 'Une fois' })).toHaveAttribute('aria-checked', 'true');
     await dialog.getByRole('radio', { name: repeat }).click();
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }
@@ -78,11 +79,12 @@ test.describe('T-09 : récurrence des tâches', () => {
     if (isIphone(info)) {
       await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
       await dialog.getByLabel('Titre').fill(title);
       await dialog.getByRole('radio', { name: 'Hebdo' }).click();
       await expect(dialog.getByRole('button', { name: 'mercredi' })).toHaveAttribute('aria-pressed', 'true');
       await dialog.getByRole('button', { name: 'lundi' }).click();
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(dialog).not.toBeVisible();
     } else {
       await createTask(page, info, title);
@@ -119,6 +121,7 @@ test.describe('T-09 : récurrence des tâches', () => {
     if (isIphone(info)) {
       await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       scope = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+      await scope.getByRole('button', { name: /Plus d.options/ }).click();
       await scope.getByLabel('Titre').fill(custom);
     } else {
       await createTask(page, info, custom);
@@ -129,7 +132,7 @@ test.describe('T-09 : récurrence des tâches', () => {
     await scope.getByRole('radio', { name: 'Tous les N jours' }).click();
     await scope.getByLabel('Nombre de jours').fill('3');
     await expect(scope.getByTestId('recurrence-summary')).toHaveText('Tous les 3 jours');
-    await scope.getByRole('button', { name: isIphone(info) ? 'Enregistrer' : 'Valider' }).click();
+    await scope.getByRole('button', { name: isIphone(info) ? 'Ajouter la tâche' : 'Valider' }).click();
     if (!isIphone(info)) await closeDetail(page, scope);
     detail = await openDetail(page, custom);
     await expect(detail.getByText('Tous les 3 jours', { exact: true })).toBeVisible();

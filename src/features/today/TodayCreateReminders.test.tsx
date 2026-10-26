@@ -17,10 +17,12 @@ describe('Rappels de la feuille Nouvelle tâche (N-02)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Appeler le notaire' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     return dialog;
   }
 
   const giveHour = (dialog: HTMLElement): void => {
+    fireEvent.click(within(dialog).getByRole('button', { name: /Heure :/ }));
     const hourWheel = within(dialog).getByRole('spinbutton', { name: 'Heures' });
     for (let i = 0; i < 10; i += 1) fireEvent.keyDown(hourWheel, { key: 'ArrowUp' }); // 09:00
   };
@@ -32,7 +34,7 @@ describe('Rappels de la feuille Nouvelle tâche (N-02)', () => {
     expect(atTime).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(atTime);
     expect(atTime).toHaveAttribute('aria-checked', 'false');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const [task] = await h.container.data.repos.tasks.listForDay(h.today, 'all');
     expect(task).toBeDefined();
@@ -46,7 +48,7 @@ describe('Rappels de la feuille Nouvelle tâche (N-02)', () => {
     expect(atTime).toHaveAttribute('aria-disabled', 'false');
     expect(atTime).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(within(dialog).getByRole('checkbox', { name: '30 min' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const [task] = await h.container.data.repos.tasks.listForDay(h.today, 'all');
     const rows = await h.container.data.repos.reminders.listForTarget({ type: 'task', id: (task?.id as TaskId) });
@@ -65,7 +67,7 @@ describe('Rappels de la feuille Nouvelle tâche (N-02)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Plus…' }));
     expect(within(dialog).getAllByRole('checkbox').map((box) => box.textContent)).toEqual(['À l’heure', '5 min', '15 min', '30 min', '1 heure', '1 jour']);
     fireEvent.click(within(dialog).getByRole('checkbox', { name: '1 jour' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const [task] = await h.container.data.repos.tasks.listForDay(h.today, 'all');
     const rows = await h.container.data.repos.reminders.listForTarget({ type: 'task', id: (task?.id as TaskId) });

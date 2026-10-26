@@ -1,5 +1,11 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+## 26 octobre 2026 — recette 1.0.1 reçue, refonte autorisée
+
+Ali confirme dans la conversation la réussite des dix contrôles du paquet A et des autres essais natifs du guide. Attestation utilisateur, sans inventer de captures ni d'heures individuelles. Le paquet A et la recette du candidat 1.0.1 sont acceptés ; A9 reste le trou assumé, A6b reste une vérification future en usage après la 1.0. Les preuves automatiques et les artefacts déjà vérifiés restent ceux de #83 / #85.
+
+Nouvelle demande : refonte de Nouvelle tâche et Détail, story UI-REFONTE-01, branche du même nom dans n-ios-apercus. Références Ajout-v2 / Detail-v2 de la PR #84, autres écrans exclus. Candidat 1.0.2 sans migration, schéma 19. Nouveau rendu non encore validé sur appareil ; ne pas lui attribuer la recette de 1.0.1. Estimation 6 à 8 h actives, alerte 12 h. Tests ciblés, revue, CI, bundle et publication à terminer avant remise.
+
 ## Paquet A — publication vérifiée du 24 octobre 2026
 
 PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.

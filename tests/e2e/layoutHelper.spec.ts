@@ -37,6 +37,7 @@ test.describe('expectFitsViewport : le contrôle de mise en page contrôle vraim
 
   test('la rangée d’icônes désignée défile sans faire échouer le contrôle, mais seulement si elle tient elle-même dans la fenêtre', async ({ page }) => {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).tap();
+    await page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByRole('button', { name: /Plus d.options/ }).click();
     await expect(page.locator('.ct-icon-picker')).toBeVisible();
     await expectFitsViewport(page, 'feuille avec la rangée d’icônes');
     await page.evaluate(() => {
