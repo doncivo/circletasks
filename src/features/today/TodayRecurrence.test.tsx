@@ -61,10 +61,11 @@ describe('TodayScreen : répétition (T-09)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     expect(within(dialog).getByRole('radio', { name: 'Une fois' })).toHaveAttribute('aria-checked', 'true');
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Envoyer la facture' } });
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Mensuel' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
 
     const row = (await screen.findByText('Envoyer la facture')).closest('.ct-list-row') as HTMLElement;
     await waitFor(() => expect(row).toHaveTextContent('mensuelle'));

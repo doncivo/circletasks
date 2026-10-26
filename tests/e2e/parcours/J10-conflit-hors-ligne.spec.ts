@@ -107,7 +107,7 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
   await hours.focus();
   await iphone.page.keyboard.press('ArrowUp');
   await expect(hours).toHaveAttribute('aria-valuetext', '9 heures');
-  await edit.getByRole('button', { name: 'Enregistrer' }).click();
+  await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
   await expect(edit).toHaveCount(0);
   await detail(iphone.page).getByRole('button', { name: 'Fermer' }).click();
   await expect(taskRow(iphone.page, TITLE)).toContainText('09:00');

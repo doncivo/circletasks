@@ -52,7 +52,7 @@ test.describe('N-01 — rappel à l’heure d’une tâche (iPhone, planificateu
     await detail.getByRole('button', { name: 'Modifier' }).click();
     const edit = page.getByRole('dialog', { name: 'Modifier la tâche' });
     await edit.getByRole('checkbox', { name: '30 min' }).click();
-    await edit.getByRole('button', { name: 'Enregistrer' }).click();
+    await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect.poll(async () => (await taskRequests(page)).map((request) => request.fireAt)).toEqual(['2026-09-23T09:30', '2026-09-23T10:00']);
     expect((await taskRequests(page)).find((request) => request.fireAt === '2026-09-23T10:00')?.id).toBe(created?.id);
 

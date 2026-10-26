@@ -20,6 +20,7 @@ test.describe('N-02 — avances de rappel', () => {
       await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
       await dialog.getByLabel('Titre').fill('Appeler le notaire');
+      await dialog.getByRole('button', { name: /Plus d.options/ }).click();
       const atTime = dialog.getByRole('checkbox', { name: 'À l’heure' });
       await expect(atTime).toHaveAttribute('aria-disabled', 'true');
       await expect(atTime).toHaveAttribute('aria-checked', 'false');
@@ -30,7 +31,7 @@ test.describe('N-02 — avances de rappel', () => {
       await dialog.getByRole('button', { name: 'Plus…' }).click();
       await expect(dialog.getByRole('checkbox')).toHaveCount(6);
       await dialog.getByRole('checkbox', { name: '1 jour' }).click();
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+      await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(dialog).not.toBeVisible();
     } else {
       // Saisie en ligne avec une heure : « À l'heure » est cochée d'office (QB-08).
@@ -43,12 +44,12 @@ test.describe('N-02 — avances de rappel', () => {
     await createTimed(page, testInfo);
     if (isPhone(testInfo)) {
       const detail = page.getByRole('dialog', { name: 'Détail de la tâche' });
-      await expect(detail.locator('.ct-task-detail__chip')).toHaveText(['À l’heure', '30 min avant', '1 jour avant']);
+      await expect(detail.locator('.ct-task-detail__reminderTime > .ct-task-detail__sub:nth-child(2)')).toHaveText(['À l’heure', '30 min avant', '1 jour avant']);
       await detail.getByRole('button', { name: 'Modifier' }).click();
       const edit = page.getByRole('dialog', { name: 'Modifier la tâche' });
       await edit.getByRole('checkbox', { name: '1 jour' }).click();
-      await edit.getByRole('button', { name: 'Enregistrer' }).click();
-      await expect(detail.locator('.ct-task-detail__chip')).toHaveText(['À l’heure', '30 min avant']);
+      await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
+      await expect(detail.locator('.ct-task-detail__reminderTime > .ct-task-detail__sub:nth-child(2)')).toHaveText(['À l’heure', '30 min avant']);
       return;
     }
     const panel = page.getByRole('complementary', { name: 'Détail de la tâche' });
@@ -65,6 +66,7 @@ test.describe('N-02 — avances de rappel', () => {
     test.skip(!isPhone(testInfo), 'Bloc Rappel de la feuille d’ajout : iPhone ; sur PC, la fiche n’édite pas les rappels sans heure.');
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     for (const name of ['À l’heure', '30 min', '1 heure']) {
       await expect(dialog.getByRole('checkbox', { name })).toHaveAttribute('aria-disabled', 'true');
     }

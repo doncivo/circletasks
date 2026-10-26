@@ -19,7 +19,7 @@ async function createTask(page: Page, testInfo: Info, title: string): Promise<vo
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }

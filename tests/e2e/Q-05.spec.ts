@@ -52,7 +52,7 @@ test.describe('Q-05 — capture rapide', () => {
     await expect(dialog.getByLabel('Titre')).toBeFocused();
     const height = 520;
     await page.setViewportSize({ width: 440, height });
-    const save = dialog.getByRole('button', { name: 'Enregistrer' });
+    const save = dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ });
     await expect(save).toBeVisible();
     const box = await save.boundingBox();
     expect(box).not.toBeNull();
@@ -70,7 +70,7 @@ test.describe('Q-05 — capture rapide', () => {
     await expect(dialog.locator('.ct-icon-picker')).toBeVisible();
     await expectFitsViewport(page, 'feuille de capture vide');
     await dialog.getByLabel('Titre').fill(`Appeler le notaire demain 10h #perso ${'ExtraordinairementLong'.repeat(8)}`);
-    await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ })).toBeEnabled();
     await expectFitsViewport(page, 'feuille de capture, titre long');
   });
 

@@ -37,7 +37,7 @@ async function createPlainTask(page: Page, testInfo: { project: { name: string }
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: 'Ajouter la tâche' }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }
@@ -62,10 +62,11 @@ test.describe('T-03 — note et icône', () => {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     const phoneButton = dialog.getByRole('button', { name: 'Icône téléphone' });
     await phoneButton.click();
     await expect(phoneButton).toHaveAttribute('aria-pressed', 'true');
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: 'Ajouter la tâche' }).click();
     await expect(dialog).not.toBeVisible();
 
     const row = page.locator('.ct-list-row', { hasText: title });
@@ -81,10 +82,11 @@ test.describe('T-03 — note et icône', () => {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     await dialog.getByRole('button', { name: 'Icône téléphone' }).click();
     await dialog.getByRole('radio', { name: 'Emoji' }).click();
     await dialog.getByRole('button', { name: 'Emoji goutte d’eau' }).click();
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: 'Ajouter la tâche' }).click();
     await expect(dialog).not.toBeVisible();
 
     await expect(page.getByText(title)).toBeVisible();
@@ -102,12 +104,12 @@ test.describe('T-03 — note et icône', () => {
       await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
       const editor = page.getByRole('dialog', { name: 'Modifier la tâche' });
       await editor.getByRole('button', { name: 'Icône document' }).click();
-      await editor.getByRole('button', { name: 'Enregistrer' }).click();
+      await editor.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(editor).not.toBeVisible();
       await expect(detail.locator('.ct-task-detail__header svg')).toBeVisible();
       await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
       await editor.getByRole('button', { name: 'Icône document, choisie' }).click();
-      await editor.getByRole('button', { name: 'Enregistrer' }).click();
+      await editor.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
       await expect(editor).not.toBeVisible();
       await expect(detail.locator('.ct-task-detail__header svg')).toHaveCount(0);
       return;

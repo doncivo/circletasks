@@ -35,7 +35,7 @@ async function createTimedTask(page: Page, testInfo: Info, title: string, time: 
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await setWheels(page, dialog, { time });
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }

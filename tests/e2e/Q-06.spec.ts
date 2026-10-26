@@ -32,7 +32,7 @@ test.describe('Q-06 / Q-02 — saisie rapide', () => {
     await expect(preview).toContainText('demain · 10:00');
     await expect(preview).toContainText('Perso');
     if (phone) {
-      await page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByRole('button', { name: 'Enregistrer' }).click();
+      await page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     } else {
       await field.press('Enter');
       await expect(field).toHaveValue('');

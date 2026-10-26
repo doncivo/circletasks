@@ -37,7 +37,7 @@ test.describe('ES-02 — espace des nouveaux éléments', () => {
     const form = routineForm(page, 'Nouvelle routine');
     await form.getByRole('button', { name: 'Perso', exact: true }).click();
     await form.getByLabel('Nom de la routine').fill('Lire 20 minutes');
-    await form.getByRole('button', { name: 'Enregistrer' }).click();
+    await form.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(form).not.toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Ajouté dans Perso' })).toBeVisible();
     await expect(filter(page).getByRole('button', { name: 'Pro', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -67,7 +67,7 @@ test.describe('ES-02 — espace des nouveaux éléments', () => {
     await expect(dialog.getByRole('button', { name: 'Pro', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await dialog.getByRole('button', { name: 'Perso', exact: true }).click();
     await dialog.getByLabel('Titre').fill('Courses du soir');
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Ajouté dans Perso' })).toBeVisible();
     await expect(filter(page).getByRole('button', { name: 'Pro', exact: true })).toHaveAttribute('aria-pressed', 'true');

@@ -24,6 +24,10 @@ export interface GoalAttachSwitchProps {
    * (PC-Aujourdhui.html : état à gauche, interrupteur à droite).
    */
   readonly variant: 'sheet' | 'detail';
+  /** Maquette Détail v2 : aucune commande inopérante ; lien vers les objectifs. */
+  readonly hideUnavailableSwitch?: boolean;
+  readonly defineGoalLabel?: string;
+  readonly onDefineGoal?: () => void;
 }
 
 /**
@@ -31,7 +35,7 @@ export interface GoalAttachSwitchProps {
  * la semaine de la tâche : rattachement direct ; plusieurs (tous espaces confondus) : liste à choisir, fermer sans choisir laisse
  * l'interrupteur désactivé (QB-13) ; aucun : interrupteur inactif avec l'aide « Aucun objectif cette semaine ».
  */
-export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }: GoalAttachSwitchProps) {
+export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant, hideUnavailableSwitch = false, defineGoalLabel, onDefineGoal }: GoalAttachSwitchProps) {
   const container = useAppContainer();
   const appDay = useAppStore((s) => s.day);
   const spaces = useAppStore((s) => s.spaces);
@@ -94,7 +98,7 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
 
   return (
     <div className="ct-goal-attach" data-variant={variant}>
-      {variant === 'sheet' && (
+      {variant === 'sheet' && !(hideUnavailableSwitch && none) && (
         <span className="ct-goal-attach__label">
           <Icon icon={Target} size={22} color="var(--ct-color-goal)" />
           {t('goals.attachSwitch')}
@@ -105,7 +109,8 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
           <span className="ct-goal-attach__status">{status}</span>
         </span>
       )}
-      <Switch checked={isOn} onChange={toggle} label={t('goals.attachSwitch')} disabled={disabled} />
+      {!(hideUnavailableSwitch && none) && <Switch checked={isOn} onChange={toggle} label={t('goals.attachSwitch')} disabled={disabled} />}
+      {hideUnavailableSwitch && none && defineGoalLabel && onDefineGoal && <button type="button" className="ct-goal-attach__define" onClick={onDefineGoal}>{defineGoalLabel}</button>}
       {variant === 'sheet' && (
         <span className="ct-goal-attach__help" data-visible={isOn || none}>
           {isOn ? status : (help ?? '')}

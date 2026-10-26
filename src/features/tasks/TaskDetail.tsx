@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
 import { t } from '../../i18n';
-import { DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
+import { DetailPanel, useDetailSlot, useLayout } from '../../ui';
+import { TaskViewportSheet } from './TaskViewportSheet';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -78,12 +79,13 @@ export function TaskDetail() {
 
   if (!taskId) return null;
 
-  function handleClose(): void {
+  function handleClose(): boolean {
     // Échap pendant une saisie en place : annule la saisie sans fermer la fiche (A-08 critère 8).
-    if (cancelInlineRef.current?.()) return;
+    if (cancelInlineRef.current?.()) return false;
     // Note modifiée sur une occurrence récurrente : la question « cette occurrence / toutes les suivantes » s'affiche, la fiche reste ouverte.
-    if (flushNoteRef.current()) return;
+    if (flushNoteRef.current()) return false;
     closeDetail();
+    return true;
   }
 
   // La tâche affichée (`task.id`) sert de clé à `TaskDetailBody` : changer de tâche remonte un composant frais plutôt que de
@@ -125,8 +127,8 @@ export function TaskDetail() {
   }
 
   return (
-    <Sheet open onClose={handleClose} label={t('tasks.detailLabel')} className="ct-sheet--tall">
+    <TaskViewportSheet open onClose={handleClose} label={t('tasks.detailLabel')} className="ct-sheet--tall ct-sheet--task-detail">
       {content}
-    </Sheet>
+    </TaskViewportSheet>
   );
 }

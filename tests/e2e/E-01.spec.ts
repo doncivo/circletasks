@@ -70,7 +70,7 @@ test.describe('E-01 — événements datés', () => {
     await back.getByRole('radio', { name: 'Annuel' }).check();
     await back.getByRole('checkbox', { name: 'La veille' }).check();
     await back.getByRole('button', { name: 'Perso', exact: true }).click();
-    await back.getByRole('button', { name: 'Enregistrer' }).click();
+    await back.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(back).toBeHidden();
     await expect(eventRow(page, 'Dîner de famille')).toContainText('Annuel');
     await expect(eventRow(page, 'Dîner de famille')).toContainText('Aujourd’hui');
@@ -89,7 +89,7 @@ test.describe('E-01 — événements datés', () => {
     await sheet.getByRole('checkbox', { name: /Journée entière/ }).uncheck();
     await expect(sheet.getByText('Début', { exact: true })).toBeVisible();
     await expect(sheet.getByText('Fin', { exact: true })).toBeVisible();
-    await sheet.getByRole('button', { name: 'Enregistrer' }).click();
+    await sheet.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(sheet).toBeHidden();
     await expect(eventRow(page, 'Atelier')).toContainText('09:00 – 10:00');
   });
@@ -102,7 +102,7 @@ test.describe('E-01 — événements datés', () => {
     const edit = page.getByRole('dialog', { name: 'Modifier l’événement' }).or(page.getByRole('complementary', { name: 'Modifier l’événement' }));
     await expect(edit.getByRole('radio', { name: 'Mensuel' })).toBeChecked();
     await edit.getByLabel('Titre', { exact: true }).fill('Comité stratégique');
-    await edit.getByRole('button', { name: 'Enregistrer' }).click();
+    await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(eventRow(page, 'Comité stratégique').first()).toBeVisible();
     await expect(eventRow(page, 'Comité')).toHaveCount(0);
 

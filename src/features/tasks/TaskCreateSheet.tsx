@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { startTransition, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { startTransition, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import { newEntityId, uuidGenerator } from '../../domain/id';
@@ -7,13 +7,13 @@ import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/remin
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
 import type { GoalId, LocalDate, ProjectId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { AddSegments, Button, DatePicker, Icon, IconChooser, QuickInputField, QuickPreview, RecurrencePicker, Sheet, SpaceSegmented, type AddSegment } from '../../ui';
+import { AddSegments, Button, Icon, QuickInputField, QuickPreview, Sheet, type AddSegment } from '../../ui';
 import { DictationButton, DictationHelp, ListeningSheet, useDictation, useQuickInput } from '../capture';
 import { useNoticeStore } from '../app/notice';
-import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
-import { ReminderBlock } from '../reminders';
-import { ProjectSelect } from '../spaces';
 import type { NewTaskSchedule } from './taskUseCases';
+import { lazyScreen } from '../app/lazyScreens';
+import type { TaskCreateOptionsProps } from './TaskCreateOptions';
+export const LazyTaskCreateOptions = lazyScreen<TaskCreateOptionsProps>(() => import('./TaskCreateOptions').then((m) => ({ default: m.TaskCreateOptions })), undefined, { onDemand: true });
 
 /**
  * Planification choisie dans le sélecteur de date (T-14) : aucun choix = jour affiché ; « Un jour » = tâche
@@ -73,8 +73,8 @@ export interface TaskCreateSheetProps {
 }
 
 /**
- * Feuille « Nouvelle tâche » (iPhone, Ajout.html) : titre, icône, roues de date (« Aujourd'hui » / jour affiché, sans heure,
- * Q9), répétition, espace. Montée à l'ouverture seulement : son état part de zéro à chaque fois.
+ * Hôte de « Nouvelle tâche » (Ajout-v2) : le titre reçoit le focus dans le geste ; les sélecteurs et leurs textes sont chargés à
+ * l'ouverture. L'état de création demeure ici, y compris quand les options sont repliées.
  */
 export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], initialSomeday = false, initialTitle = '', onSegmentChange, onClose, onCreate }: TaskCreateSheetProps) {
   const [choiceTouched, setChoiceTouched] = useState(false);
@@ -106,6 +106,17 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const fieldsRef = useRef<HTMLDivElement>(null);
   // Bas de la feuille rendu après le premier affichage (transition) : l'ouverture ne paie que l'en-tête, le champ Titre et l'aperçu (Q-05, mesure @perf).
   const [rest, setRest] = useState(false);
+  const [submitLabel, setSubmitLabel] = useState<string | null>(null);
+  const [viewportFrame, setViewportFrame] = useState<CSSProperties>();
+  useLayoutEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return undefined;
+    const update = (): void => setViewportFrame({ top: viewport.offsetTop, height: viewport.height, bottom: 'auto' });
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    return () => { viewport.removeEventListener('resize', update); viewport.removeEventListener('scroll', update); };
+  }, []);
   // Q-03 : le micro de l'app n'apparaît que si le plugin Speech existe (ordre 5) ; le micro du clavier iOS dicte dans le champ sans code.
   const dictation = useDictation({ layout: 'mobile', inputRef: titleRef, onText: (spoken) => setTitle(title === '' ? spoken : `${title} ${spoken}`) });
   const valid = validateTaskTitle(quick.parse.title).ok;
@@ -236,8 +247,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   }
 
   return (
-    <Sheet open onClose={onClose} label={t('tasks.newTask')} initialFocusRef={titleRef} className="ct-sheet--tall">
-      <form className="ct-task-sheet" onSubmit={submit}>
+    <Sheet backdropStyle={{ ...viewportFrame, paddingTop: 'max(12px, var(--ct-safe-area-top))', background: 'var(--ct-color-surface)' }} open onClose={onClose} label={t('tasks.newTask')} initialFocusRef={titleRef} className="ct-sheet--tall ct-sheet--task-create">
+      <form className="ct-task-sheet ct-task-create" onSubmit={submit}>
         <div className="ct-task-sheet__header">
           <h2 className="ct-task-sheet__heading">{t('tasks.newTask')}</h2>
           <button type="button" className="ct-task-sheet__close" aria-label={t('common.close')} onClick={onClose}>
@@ -258,6 +269,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
               readOnly={waiting}
               maxLength={TASK_TITLE_MAX_LENGTH}
               enterKeyHint="done"
+              variant="plain"
+              inputClassName="ct-task-create__title"
               onKeyDown={handleTitleKeyDown}
               context={quick.suggestionContext}
               {...(dictation.noticeVisible ? { describedBy: dictation.helpId } : {})}
@@ -267,43 +280,15 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
           <DictationHelp dictation={dictation} />
           <ListeningSheet dictation={dictation} />
           <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
-          {/* Q-05 : le bas de la feuille (icône, date, répétition, rappels, espace, objectif) se rend dans une transition, après le premier affichage :
-              le champ Titre est utilisable et focalisé dans le geste, les roues et sélecteurs arrivent à l'image suivante. */}
-          {rest && (
-            <>
-              {/* Choix Icône / Emoji (T-03, Ajout.html). */}
-              <IconChooser value={icon} onChange={setIcon} />
-              {/* Puces et roues jour / heure / minutes (T-14, Ajout.html). */}
-              <DatePicker value={choice} today={today} onChange={changeChoice} />
-              <RecurrencePicker value={recurrence} onChange={setRecurrence} startDate={choice.date ?? viewedDate} />
-              {/* Rappels (N-02, Ajout.html) : grisés sans heure (QB-07) ; « À l'heure » cochée d'office à la première heure (QB-08). */}
-              <ReminderBlock
-                time={choice.date === null ? null : choice.time}
-                offsets={offsets}
-                warnFor={{ spaceId, date: choice.date }}
-                onToggle={(offset) => {
-                  setOffsetsTouched(true);
-                  setOffsets((current) => toggleReminderOffset(current, offset));
-                }}
-              />
-              {/* Espace puis projet (Ajout.html) : changer d'espace remet « Projet : aucun » (ES-04 critère 4). */}
-              <div className="ct-task-sheet__spaceRow">
-                <SpaceSegmented
-                  layout="compact"
-                  items={spaces}
-                  value={spaceId}
-                  onChange={(id) => {
-                    if (id !== spaceId) setProjectId(null);
-                    setSpaceId(id);
-                  }}
-                  label={t('detail.spaceChoiceLabel')}
-                />
-                <ProjectSelect spaceId={spaceId} value={projectId} onChange={setProjectId} />
-              </div>
-              {/* Rattacher à mon objectif (OB-03, Ajout.html) : la semaine de référence est celle de la date choisie. */}
-              <GoalAttachSwitch variant="sheet" taskDate={choice.date} attachedGoalId={goalId} onChange={setGoalId} />
-            </>
-          )}
+          {/* Q-05 : le titre est immédiatement utilisable ; UI-REFONTE-01 : les sélecteurs arrivent à la demande, hors du départ. */}
+          {rest && <LazyTaskCreateOptions
+            choice={choice} today={today} viewedDate={viewedDate} changeChoice={changeChoice}
+            spaces={spaces} spaceId={spaceId} onSpace={(id) => { if (id !== spaceId) setProjectId(null); setSpaceId(id); }}
+            projectId={projectId} setProjectId={setProjectId} icon={icon} setIcon={setIcon}
+            recurrence={recurrence} setRecurrence={setRecurrence} offsets={offsets}
+            onOffset={(offset) => { setOffsetsTouched(true); setOffsets((current) => toggleReminderOffset(current, offset)); }}
+            goalId={goalId} setGoalId={setGoalId} onReady={setSubmitLabel}
+          />}
         </div>
         <div className="ct-task-sheet__spacer" />
         {notice && (
@@ -316,10 +301,10 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
             )}
           </div>
         )}
-        {/* Collé en bas de la feuille : « Enregistrer » reste visible quand le clavier réduit la fenêtre (Q-05). */}
+        {/* Hors du défilement des champs : l'action reste au-dessus du clavier. */}
         <div className="ct-task-sheet__footer">
-          <Button type="submit" fullWidth disabled={!valid || !spaceId}>
-            {t('tasks.save')}
+          <Button type="submit" fullWidth disabled={!valid || !spaceId || submitLabel === null}>
+            {submitLabel ?? t('app.loading')}
           </Button>
         </div>
       </form>
