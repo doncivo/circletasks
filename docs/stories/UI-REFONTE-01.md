@@ -1,6 +1,6 @@
 # UI-REFONTE-01 — Nouvelle tâche et Détail
 
-Statut : en cours, aucune validation ni publication revendiquée. Demande d'Ali du 26 octobre 2026 : « fait la refonte ». Estimation 6 à 8 h actives ; alerte à 12 h.
+Statut : code fusionné par #86 dans f473e113 après 48 CI verts de 5a97e8c6 ; builds 1.0.2 en cours, rendu natif encore ouvert. Demande d'Ali du 26 octobre 2026 : « fait la refonte ». Estimation 6 à 8 h actives ; alerte à 12 h.
 
 ## Passe product-owner
 
