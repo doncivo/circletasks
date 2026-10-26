@@ -81,7 +81,6 @@
         "src/ui/ListSkeleton.tsx",
         "src/ui/QuickInputField.tsx",
         "src/ui/QuickPreview.tsx",
-        "src/ui/RecurrencePicker.tsx",
         "src/ui/Sheet.tsx",
         "src/ui/SomedayIcon.tsx",
         "src/ui/SpacePills.tsx",
@@ -179,7 +178,6 @@
         "src/domain/holidays/holidays.ts",
         "src/domain/holidays/lunarTable.ts",
         "src/domain/id.ts",
-        "src/domain/iphoneReminderWarning.ts",
         "src/domain/itemFilter.ts",
         "src/domain/localDate.ts",
         "src/domain/model/externalEvent.ts",
@@ -188,14 +186,12 @@
         "src/domain/model/settings.ts",
         "src/domain/naturalDate.ts",
         "src/domain/notificationId.ts",
-        "src/domain/notificationInstant.ts",
         "src/domain/notificationLedger.ts",
         "src/domain/notificationStatus.ts",
         "src/domain/omitKey.ts",
         "src/domain/orphanSecrets.ts",
         "src/domain/projectRules.ts",
         "src/domain/quickInput.ts",
-        "src/domain/quietHours.ts",
         "src/domain/recurrenceEdit.ts",
         "src/domain/recurrenceLabel.ts",
         "src/domain/recurrenceNext.ts",
@@ -431,7 +427,6 @@
         "src/features/focus/sounds.ts",
         "src/features/focus/useFocusShortcut.ts",
         "src/features/focus/useNow.ts",
-        "src/features/goals/GoalAttachSwitch.tsx",
         "src/features/goals/GoalReviewCards.tsx",
         "src/features/goals/GoalSection.tsx",
         "src/features/goals/GoalTasks.tsx",
@@ -439,10 +434,6 @@
         "src/features/goals/goalUseCases.ts",
         "src/features/goals/goalsSource.ts",
         "src/features/goals/goalsStore.ts",
-        "src/features/reminders/IphoneReminderWarning.tsx",
-        "src/features/reminders/ReminderBlock.tsx",
-        "src/features/reminders/ReminderChoices.css",
-        "src/features/reminders/ReminderChoices.tsx",
         "src/features/reminders/actionWake.ts",
         "src/features/reminders/focusEndText.ts",
         "src/features/reminders/notificationRunner.ts",
@@ -475,7 +466,6 @@
         "src/features/someday/somedayStore.ts",
         "src/features/someday/useSomedayTasks.ts",
         "src/features/spaces/ProjectFilterMenu.tsx",
-        "src/features/spaces/ProjectSelect.tsx",
         "src/features/spaces/spaceFilter.ts",
         "src/features/spaces/useSpaceDefaults.ts",
         "src/features/sync/RestoreChoiceHost.tsx",
@@ -524,5 +514,11 @@
       ]
     }
   ],
-  "ajouts": []
+  "ajouts": [
+    {
+      "fichier": "src/ui/DateField.css",
+      "story": "UI-REFONTE-01",
+      "raison": "CSS inchangé du champ Date du premier affichage PC ; ses 25 classes étaient déjà dans les CSS initiaux de 1.0.1. Le découpage des options le fait apparaître dans la carte JS ; aucun écran secondaire ajouté au départ."
+    }
+  ]
 }
