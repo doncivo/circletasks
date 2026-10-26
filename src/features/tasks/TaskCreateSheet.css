@@ -10,7 +10,7 @@
 .ct-task-create__title:focus-visible { outline: 2px solid var(--ct-color-accent); outline-offset: 3px; }
 .ct-task-create .ct-task-sheet__spaceRow .ct-space-segmented { flex: 1; border: 1.5px solid var(--ct-color-border-strong); border-radius: 22px; padding: 0; overflow: hidden; background: transparent; }
 .ct-task-create .ct-space-segmented[data-layout='compact'] .ct-space-segmented__button { flex: 1; height: 44px; border-radius: 0; }
-.ct-task-create .ct-space-segmented__button[aria-pressed='true'] { background: var(--ct-space-color); color: var(--ct-color-accent-on); box-shadow: none; }
+.ct-task-create .ct-space-segmented__button[aria-pressed='true'] { box-shadow: none; }
 .ct-task-create__more { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 50px; flex-shrink: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--ct-color-border); background: transparent; color: var(--ct-color-text); text-align: left; font: 600 15px var(--ct-font-text); cursor: pointer; }
 .ct-task-create__moreHint { font-weight: 500; color: var(--ct-color-text-secondary); }
 .ct-task-create__more[aria-expanded='true'] svg { transform: rotate(180deg); }

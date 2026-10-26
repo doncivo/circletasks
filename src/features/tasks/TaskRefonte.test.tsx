@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { asLocalDate, asLocalTime } from '../../domain/types';
 import { defaultRecurrence } from '../../domain/recurrenceRules';
+import { contrastRatio, SPACE_PALETTES } from '../../domain/spaceRules';
+import { selectedSpaceStyle } from './TaskCreateOptions';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -35,6 +37,7 @@ describe('UI-REFONTE-01 — écrans iPhone', () => {
     expect(await screen.findByRole('button', { name: 'Ajouter la tâche' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Date :/ })).toBeVisible();
     expect(screen.getByRole('button', { name: /Heure :/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Pro' })).toHaveStyle({ backgroundColor: '#2f6b7a', color: '#ffffff' });
     expect(screen.queryByRole('spinbutton')).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Rattacher à mon objectif' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Plus d.options/ }));
@@ -51,7 +54,7 @@ describe('UI-REFONTE-01 — écrans iPhone', () => {
     fireEvent.keyDown(screen.getByRole('spinbutton', { name: 'Heures' }), { key: 'ArrowUp' });
     const editor = screen.getByRole('spinbutton', { name: 'Heures' }).closest('.ct-task-schedule__editor');
     if (!(editor instanceof HTMLElement)) throw Error('editor absent');
-    fireEvent.click(within(editor).getByRole('button', { name: 'Fermer' }));
+    fireEvent.click(within(editor).getByRole('button', { name: 'Terminé' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(save.mock.calls[0]?.[0]).toMatchObject({ title: 'Essai compact', choice: { date: h.today, time: '00:00' }, reminderOffsets: [0] });
@@ -108,5 +111,14 @@ describe('UI-REFONTE-01 — écrans iPhone', () => {
     await detail();
     await screen.findByText('Aucun objectif cette semaine');
     expect(screen.queryByRole('button', { name: 'En définir un' })).toBeNull();
+  });
+
+  it('garantit 4,5:1 sur chaque couleur de palette et sur les anciennes teintes claires', () => {
+    for (const color of [...SPACE_PALETTES.flat().map((choice) => choice.hex), '#ffff00', '#ffffff', '#777777', '#000000']) {
+      const style = selectedSpaceStyle(color);
+      expect(style.backgroundColor).toBe(color);
+      if (typeof style.color !== 'string') throw Error('foreground absent');
+      expect(contrastRatio(style.color, color), color).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

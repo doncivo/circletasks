@@ -33,7 +33,7 @@ describe('Espace des nouveaux éléments (ES-02)', () => {
     expect(pressed(dialog, 'Pro')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Perso' }));
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Courses du soir' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     const [task] = await h.container.data.repos.tasks.listForDay(h.today, 'all');
@@ -51,7 +51,7 @@ describe('Espace des nouveaux éléments (ES-02)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Appeler maman' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(await screen.findByText('Appeler maman')).toBeInTheDocument();
     expect(screen.queryByText(/Ajouté dans/)).toBeNull();
@@ -82,7 +82,7 @@ describe('Espace des nouveaux éléments (ES-02)', () => {
     expect(within(dialog).getByRole('button', { name: 'Perso', pressed: true })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Pro' }));
     fireEvent.change(within(dialog).getByLabelText('Nom de la routine'), { target: { value: 'Revue des e-mails' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await h.container.data.repos.routines.listForFilter('all'))[0]?.spaceId).toBe(SPACE_PRO_ID);
     expect(useAppStore.getState().spaceFilter).toBe(SPACE_PERSO_ID);

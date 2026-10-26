@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type CSSProperties } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
@@ -11,6 +11,12 @@ import { ReminderBlock } from '../reminders';
 import { ProjectSelect } from '../spaces';
 import { TaskSchedulePicker } from './TaskSchedulePicker';
 import './TaskCreateSheet.css';
+import { contrastRatio } from '../../domain/spaceRules';
+
+/** Texte AA sur la couleur réelle de l'espace, y compris si une ancienne donnée contient une teinte hors palette. */
+export function selectedSpaceStyle(color: string): CSSProperties {
+  return { backgroundColor: color, color: contrastRatio(color, '#ffffff') >= 4.5 ? '#ffffff' : '#000000' };
+}
 
 export interface TaskCreateOptionsProps {
   choice: DateChoice; today: LocalDate; viewedDate: LocalDate; changeChoice: (value: DateChoice) => void;
@@ -28,10 +34,11 @@ export function TaskCreateOptions(p: TaskCreateOptionsProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreId = useId();
   const { onReady } = p;
+  const selectedSpace = p.spaces.find((space) => space.id === p.spaceId);
   useEffect(() => onReady(tTaskRefonte('add')), [onReady]);
   return <>
     <TaskSchedulePicker value={p.choice} today={p.today} onChange={p.changeChoice} />
-    <div className="ct-task-sheet__spaceRow"><SpaceSegmented layout="compact" items={p.spaces} value={p.spaceId} onChange={p.onSpace} label={t('detail.spaceChoiceLabel')} /></div>
+    <div className="ct-task-sheet__spaceRow"><SpaceSegmented layout="compact" items={p.spaces} value={p.spaceId} onChange={p.onSpace} label={t('detail.spaceChoiceLabel')} {...(selectedSpace ? { selectedStyle: selectedSpaceStyle(selectedSpace.color) } : {})} /></div>
     <button type="button" className="ct-task-create__more" aria-expanded={moreOpen} aria-controls={moreId} onClick={() => setMoreOpen(!moreOpen)}><span>{tTaskRefonte('more')}<span className="ct-task-create__moreHint"> — {tTaskRefonte('moreHint')}</span></span><Icon icon={ChevronDown} size={20} /></button>
     <div id={moreId} className="ct-task-create__options" hidden={!moreOpen}>
       <RecurrencePicker value={p.recurrence} onChange={p.setRecurrence} startDate={p.choice.date ?? p.viewedDate} />

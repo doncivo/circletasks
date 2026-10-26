@@ -66,7 +66,8 @@ test.describe('Q-05 — capture rapide', () => {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).tap();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await expect(dialog.getByLabel('Titre')).toBeFocused();
-    // Le bas de la feuille arrive à l'image suivante (transition) : mesuré une fois monté.
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
+    // La rangée d'icônes reste contrôlée une fois les options ouvertes.
     await expect(dialog.locator('.ct-icon-picker')).toBeVisible();
     await expectFitsViewport(page, 'feuille de capture vide');
     await dialog.getByLabel('Titre').fill(`Appeler le notaire demain 10h #perso ${'ExtraordinairementLong'.repeat(8)}`);
@@ -188,9 +189,15 @@ test.describe('Q-05 — mesures iPhone @perf', () => {
       page.evaluate(async () => {
         const button = document.querySelector<HTMLButtonElement>('.ct-fab');
         if (!button) throw new Error('bouton + introuvable');
+        let expanded = false;
         const complete = (): boolean => {
           const dialog = document.querySelector('[role="dialog"]');
-          return dialog !== null && dialog.querySelector('.ct-icon-picker') !== null && dialog.querySelectorAll('.ct-wheel').length >= 3;
+          const more = dialog?.querySelector<HTMLButtonElement>('.ct-task-create__more');
+          const date = dialog?.querySelector<HTMLButtonElement>('.ct-task-schedule__chips button');
+          // La maquette replie ces commandes : les ouvrir garde la charge historique (icônes + trois roues) et le budget de 700 ms.
+          if (!expanded && more && date) { expanded = true; more.click(); date.click(); return false; }
+          const icons = dialog?.querySelector<HTMLElement>('.ct-icon-picker');
+          return dialog !== null && icons !== null && icons !== undefined && icons.getClientRects().length > 0 && dialog.querySelectorAll('.ct-wheel').length >= 3;
         };
         const begin = performance.now();
         const shown = new Promise<void>((resolve, reject) => {

@@ -1,5 +1,9 @@
 # UI-FIX-02 — Paquet A, défauts constatés sur iPhone 1.0.0
 
+## Validation native reçue — 26 octobre 2026
+
+Ali confirme dans la conversation la réussite des dix contrôles du paquet A sur l'iPhone 1.0.1, puis des autres essais natifs du guide. Paquet A accepté et volet natif clos sur cette version ; les statuts d'attente conservés ci-dessous sont historiques. Preuves automatiques et artefacts : #83 / #85, 48 CI verts et bundle main vérifié. Aucune capture ni heure individuelle inventée. A9 reste le risque accepté, A6b reste une vérification future non bloquante. La refonte 1.0.2 est suivie séparément par UI-REFONTE-01 et ne reprend pas cette validation native à son compte.
+
 ## Paquet A — publication vérifiée du 24 octobre 2026
 
 PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.

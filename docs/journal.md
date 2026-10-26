@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## UI-REFONTE-01 — correction des premiers retours CI
+
+Tête a70393fe, runs 40293615923 / 40293695880 : anciens accès aux options et libellés de création dans les parcours Projet/Espace/Un jour et les gardes de largeur ; adaptations ciblées, assertions de données conservées. Le test SD-03 a aussi révélé une régression réelle du nouveau rendu : les avances inactives étaient cachées derrière le seul texte Inactif. Leur affichage grisé est rétabli, sans changer les lignes de base ; test d'origine conservé.
+
+Le contraste d'espace était une variable CSS non résolue par la garde. La vue calcule désormais noir ou blanc sur la couleur réelle (≥ 4,5:1), vérification des huit couleurs et quatre cas limites plus liaison au bouton rendu ; aucune exception CSS ajoutée. Le banc de feuille complète ouvre explicitement les options et la date pour conserver les icônes visibles et trois roues : budget 700 ms à CPU ×4 et cinq mesures inchangés, essai vert. Le choix de date se termine par Terminé, distinct de Fermer la feuille. Hors ligne dans le navigateur : assets préchargés comme ceux embarqués localement dans Tauri, puis coupure HTTP réelle maintenue ; la création locale reste testée. Résultats du complément : 144 ciblés, six e2e et performance verts ; lint/typage verts, bundle avant push en cours. Aucun délai, retry automatique, seuil ou test instable écarté.
+
 ## 26 octobre 2026 — recette 1.0.1 reçue, refonte autorisée
 
 Ali confirme dans la conversation la réussite des dix contrôles du paquet A et des autres essais natifs du guide. Attestation utilisateur, sans inventer de captures ni d'heures individuelles. Le paquet A et la recette du candidat 1.0.1 sont acceptés ; A9 reste le trou assumé, A6b reste une vérification future en usage après la 1.0. Les preuves automatiques et les artefacts déjà vérifiés restent ceux de #83 / #85.

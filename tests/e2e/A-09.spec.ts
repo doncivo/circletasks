@@ -19,6 +19,13 @@ test.describe('A-09 — état de l’app', () => {
 
   test('« Hors ligne » apparaît sans bloquer l’app, puis disparaît au retour du réseau (critères 3, 4, 8)', async ({ page, context }, testInfo) => {
     await expect(page.getByText('Hors ligne')).toHaveCount(0);
+    if (testInfo.project.name === 'iphone') {
+      // Les assets natifs sont locaux ; le banc HTTP doit les livrer avant la coupure réseau réelle.
+      await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+      const sheet = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+      await expect(sheet.getByRole('button', { name: 'Ajouter la tâche' })).toBeVisible();
+      await sheet.getByRole('button', { name: 'Fermer', exact: true }).click();
+    }
     await context.setOffline(true);
     const banner = page.locator('.ct-status-banner').filter({ hasText: 'Hors ligne' });
     await expect(banner).toBeVisible();

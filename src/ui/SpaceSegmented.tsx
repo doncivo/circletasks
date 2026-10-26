@@ -12,13 +12,15 @@ export interface SpaceSegmentedProps {
   label: string;
   /** `fill` : les boutons se partagent la largeur (fenêtre d'ajout) ; `compact` : largeur du texte (ligne de formulaire). */
   layout?: 'fill' | 'compact';
+  /** Variante remplie : couleurs calculées et contrôlées par l'appelant, uniquement sur le choix actif. */
+  selectedStyle?: CSSProperties;
 }
 
 /**
  * Sélecteur segmenté d'espace (Ajout.html, ModifierRoutine.html) : composant commun de toutes les fenêtres d'ajout et de
  * modification (ES-02). Choisir un espace ne change jamais le filtre actif.
  */
-export function SpaceSegmented({ items, value, onChange, label, layout = 'fill' }: SpaceSegmentedProps) {
+export function SpaceSegmented({ items, value, onChange, label, layout = 'fill', selectedStyle }: SpaceSegmentedProps) {
   return (
     <div className="ct-space-segmented" data-layout={layout} role="group" aria-label={label}>
       {items.map((space) => (
@@ -27,7 +29,7 @@ export function SpaceSegmented({ items, value, onChange, label, layout = 'fill' 
           type="button"
           aria-pressed={value === space.id}
           className="ct-space-segmented__button"
-          style={{ '--ct-space-color': space.color } as CSSProperties}
+          style={{ '--ct-space-color': space.color, ...(value === space.id ? selectedStyle : {}) } as CSSProperties}
           onClick={() => onChange(space.id)}
         >
           {space.name}

@@ -24,7 +24,7 @@ export function TaskSchedulePicker({ value, today, onChange }: { value: DateChoi
       </div>
       {open && <div id={panel} className="ct-task-schedule__editor">
         <DatePicker value={value} today={today} onChange={(next) => onChange(next ?? { date: today, time: null })} />
-        <button type="button" className="ct-task-schedule__close" onClick={() => setOpen(null)}>{t('common.close')}</button>
+        <button type="button" className="ct-task-schedule__close" onClick={() => setOpen(null)}>{tTaskRefonte('scheduleDone')}</button>
       </div>}
     </div>
   );

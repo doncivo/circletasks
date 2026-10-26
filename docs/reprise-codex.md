@@ -1,5 +1,9 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## Reprise prioritaire — UI-REFONTE-01, 26 octobre 2026
+
+Ali demande la refonte de Nouvelle tâche et Détail uniquement, selon Ajout-v2 et Detail-v2 de #84 (bd3a80bf). Branche UI-REFONTE-01, worktree n-ios-apercus, PR #86 ouverte, base main 9ddb7781. La tête initiale a70393fe avait échoué en CI (40293615923 / 40293695880) : anciens accès aux options repliées, contraste dynamique, charge du banc perf et affichage des rappels inactifs. Complément corrigé et relu : **144 ciblés, six e2e, perf 700 ms CPU ×4, lint/typage, bundle 62/62 verts**. Mesure finale **333 973 normalisés, 333 984 bruts, marge 24 427**, dix autorisations retirées et une attribution CSS existante justifiée. Prochain : commiter/pousser le complément s'il reste local (sans force), attendre les deux CI complètes sur la tête réelle de #86, fusion --merge et mesure main ; un seul build iPhone 1.0.2 et un PC, contrôler/remettre les artefacts, puis intégrer leurs preuves documentaires sans recompilation. Aucun build 1.0.2 ni tag encore lancé. Schéma toujours 19. PR #84 intacte, autres écrans hors périmètre. Guide : quatre contrôles natifs nouveaux seulement ; essais 1.0.1 acceptés par Ali. A9 trou assumé, A6b futur. Racine personnelle sale conservée.
+
 ## 26 octobre 2026 — recette 1.0.1 reçue, refonte autorisée
 
 Ali confirme dans la conversation la réussite des dix contrôles du paquet A et des autres essais natifs du guide. Attestation utilisateur, sans inventer de captures ni d'heures individuelles. Le paquet A et la recette du candidat 1.0.1 sont acceptés ; A9 reste le trou assumé, A6b reste une vérification future en usage après la 1.0. Les preuves automatiques et les artefacts déjà vérifiés restent ceux de #83 / #85.

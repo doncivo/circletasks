@@ -10,7 +10,10 @@ import type { LocalDate } from '../../domain/types';
 /** Heure locale flottante identique au planificateur ; ne prétend pas prouver une notification reçue. */
 export function TaskReminderSchedule({ task, reminders, space, today }: { task: Task; reminders: readonly ReminderOffsetMin[]; space: Space | undefined; today: LocalDate }) {
   if (reminders.length === 0) return <>{t('detail.remindersNone')}</>;
-  if (!canHaveReminders(task) || task.status !== 'todo' || task.date === null || task.time === null) return <span className="ct-task-detail__reminderInactive">{tTaskRefonte('inactive')}</span>;
+  if (!canHaveReminders(task) || task.status !== 'todo' || task.date === null || task.time === null) return <span className="ct-task-detail__chips" title={tTaskRefonte('inactive')}>
+    {sortReminderOffsets(reminders).map((offset) => <span key={offset} className="ct-task-detail__chip" data-inactive="true">{tDynamic(`detail.reminderOffset${String(offset)}` as 'detail.reminderOffset0')}</span>)}
+    <span className="ct-task-detail__sub">{tTaskRefonte('inactive')}</span>
+  </span>;
   const { date, time } = task;
   return <span className="ct-task-detail__reminderSchedule">
     {sortReminderOffsets(reminders).map((offset) => {
