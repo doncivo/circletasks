@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
 import type { ReminderOffsetMin, Routine } from '../../domain/model';
+import { routineQuietSummary } from '../../domain/quietShift';
 import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate, RoutineId } from '../../domain/types';
 import { t } from '../../i18n';
+import { routineQuietLineText } from '../../i18n/quietShiftText';
 import { CompactToggle, ConfirmDialog, EmptyState, Fab, Kbd, Sheet, SpacePills, openNow, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
@@ -17,6 +19,7 @@ import { RoutineReport } from './RoutineReport';
 import { RoutineStreakBox } from './RoutineStreakBox';
 import { RoutinesArchived } from './RoutinesArchived';
 import { onRoutinesChanged } from './routineEvents';
+import { loadRoutineOffsets } from './routineReminderOffsets';
 import { routinesStore } from './routineStore';
 import type { RoutineInput } from './routineUseCases';
 import './RoutinesScreen.css';
@@ -66,6 +69,8 @@ export function RoutinesScreen() {
   const create = useFeatureStore(routinesStore, (s) => s.create);
   const update = useFeatureStore(routinesStore, (s) => s.update);
   const reminderOffsets = useFeatureStore(routinesStore, (s) => s.reminderOffsets);
+  // N-FIX-04 : avances vivantes par routine, relues à chaque nouvelle liste (toute écriture de routine recharge la liste).
+  const [offsetsByRoutine, setOffsetsByRoutine] = useState<ReadonlyMap<RoutineId, readonly ReminderOffsetMin[]>>(() => new Map<RoutineId, readonly ReminderOffsetMin[]>());
   const toggleDay = useFeatureStore(routinesStore, (s) => s.toggleDay);
   const refresh = useFeatureStore(routinesStore, (s) => s.refresh);
   const setArchived = useFeatureStore(routinesStore, (s) => s.setArchived);
@@ -81,6 +86,16 @@ export function RoutinesScreen() {
   // ES-02 : espace proposé à la modification (celui de la routine) ; la création passe par la feuille Ajout (E-01 : segment Routine).
   const defaultSpaceId = useDefaultSpaceId();
   const taskSheet = useStandaloneTaskSheet(today);
+
+  useEffect(() => {
+    let alive = true;
+    void loadRoutineOffsets(container).then((offsets) => {
+      if (alive) setOffsetsByRoutine(offsets);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [container, routines]);
 
   useEffect(() => {
     void load(spaceFilter);
@@ -233,6 +248,9 @@ export function RoutinesScreen() {
                 onEdit={() => void openEdit(routine.id as RoutineId)}
                 onOpen={() => setReportId(routine.id as RoutineId)}
                 onToggleDay={(date) => void toggleDay(routine.id as RoutineId, date)}
+                quietLine={routineQuietLineText(
+                  routineQuietSummary(routine, offsetsByRoutine.get(routine.id as RoutineId) ?? [], spaces.find((space) => space.id === routine.spaceId)?.quietHours ?? [], today, pausesOf.get(routine.id as RoutineId) ?? []),
+                )}
               />
             </div>
           ))}

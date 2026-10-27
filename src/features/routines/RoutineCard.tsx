@@ -28,6 +28,8 @@ export interface RoutineCardProps {
   readonly onOpen: () => void;
   /** Valide ou rouvre un jour de la semaine (R-03) : ronds d'aujourd'hui et des jours passés seulement (QB-03). */
   readonly onToggleDay: (date: LocalDate) => void;
+  /** N-FIX-04 : ligne « Rappels décalés … » (tous ou certains jours), null quand aucun rappel n'est décalé. */
+  readonly quietLine?: string | null;
 }
 
 const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -37,7 +39,7 @@ const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text
  * prévus en pointillés), compteur « faits / prévus » de la semaine en cours, ligne « heure · espace · fréquence ». Tout est calculé
  * à l'affichage par src/domain (aucune occurrence stockée).
  */
-export function RoutineCard({ routine, spaces, done, pauses, today, layout, compact, selected, onEdit, onOpen, onToggleDay }: RoutineCardProps) {
+export function RoutineCard({ routine, spaces, done, pauses, today, layout, compact, selected, onEdit, onOpen, onToggleDay, quietLine = null }: RoutineCardProps) {
   const weekStart = mondayOf(today);
   const rounds = useMemo(() => weekRounds(routine, done, weekStart, today, pauses), [routine, done, weekStart, today, pauses]);
   const counter = useMemo(() => weekCounter(routine, done, weekStart, pauses), [routine, done, weekStart, pauses]);
@@ -102,6 +104,12 @@ export function RoutineCard({ routine, spaces, done, pauses, today, layout, comp
         <p className="ct-routine-card__info">
           {layout === 'mobile' && routine.time && <Clock size={18} strokeWidth={1.8} aria-hidden="true" />}
           <span>{info.join(t('routines.infoSeparator'))}</span>
+        </p>
+      )}
+      {/* N-FIX-04 : rappels décalés par les plages silencieuses de l'espace (tous, ou seulement certains jours), toujours dit. */}
+      {quietLine !== null && (
+        <p className="ct-routine-card__info ct-routine-card__quiet" role="note">
+          <span>{quietLine}</span>
         </p>
       )}
     </article>

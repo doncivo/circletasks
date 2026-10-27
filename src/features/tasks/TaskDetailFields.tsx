@@ -11,6 +11,8 @@ import { DateEditor, TextField, spaceTextColor, type Layout } from '../../ui';
 import { useAppStore } from '../app/appStore';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { IphoneReminderWarning, ReminderChoices } from '../reminders';
+import { QuietShiftNotice } from '../reminders/QuietShiftNotice';
+import { reminderFireAt } from '../../domain/recurrenceNext';
 import { ProjectSelect } from '../spaces';
 import { DetailRow } from './DetailRow';
 import { TaskRepeatRow } from './TaskRepeatRow';
@@ -294,6 +296,10 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
       {repeat}
       <DetailRow label={t('detail.remindersRow')}>
         <RemindersValue task={task} reminders={reminders} setReminders={setReminders} cancelInlineRef={cancelInlineRef} />
+        {/* N-FIX-04 : sur la fiche PC (modification), un rappel couvert par une plage silencieuse est annoncé avec sa cause. */}
+        {task.status === 'todo' && task.date !== null && task.time !== null && (
+          <QuietShiftNotice spaceId={task.spaceId} fireAts={reminders.map((offset) => reminderFireAt(task.date as LocalDate, task.time as NonNullable<Task['time']>, offset))} />
+        )}
         {task.status === 'todo' && <IphoneReminderWarning spaceId={task.spaceId} date={task.date} time={task.time} offsets={reminders} />}
       </DetailRow>
       <DetailRow label={t('detail.spaceRow')}>
