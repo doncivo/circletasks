@@ -13,7 +13,7 @@ import {
   remainingFraction,
 } from '../../domain/focusSession';
 import { t } from '../../i18n';
-import { formatFocusDuration, formatFocusToday } from '../../i18n/formatFocus';
+import { formatFocusDuration, formatFocusTodayLive } from '../../i18n/formatFocus';
 import type { FocusWindowAction, FocusWindowState, SoundPlayer } from '../../platform/focus';
 import { Icon } from '../../ui';
 import { useFocusTrap } from '../../ui/useFocusTrap';
@@ -237,23 +237,25 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0, 
         </div>
       ) : (
         <div className="ct-focus__actions">
+          {/* UI-FIX-06 : Pause (puis Reprendre) est l'action principale pendant la session ; Terminer la tâche reste au trait. */}
           <button
             type="button"
-            className={`ct-focus__button${paused ? ' ct-focus__button--resume' : ''}`}
+            className={`ct-focus__button ct-focus__button--primary${paused ? ' ct-focus__button--resume' : ''}`}
             aria-label={paused ? t('focus.resumeLabel') : t('focus.pauseLabel')}
             onClick={() => onAction({ type: paused ? 'resume' : 'pause' })}
           >
             {paused ? t('focus.resume') : t('focus.pause')}
           </button>
           {state.canFinishTask && (
-            <button type="button" className="ct-focus__button ct-focus__button--finish" onClick={() => onAction({ type: 'finishTask' })}>
+            <button type="button" className="ct-focus__button" onClick={() => onAction({ type: 'finishTask' })}>
               {t('focus.finishTask')}
             </button>
           )}
         </div>
       )}
 
-      <span className="ct-focus__footer">{formatFocusToday(state.today.minutes, state.today.sessions)}</span>
+      {/* UI-FIX-06 : la session active compte dès la première seconde ; le total persistant reste celui des sessions terminées. */}
+      <span className="ct-focus__footer">{formatFocusTodayLive(state.today, ended ? null : Math.floor(elapsedActiveMs(record, now) / 1000))}</span>
 
       {confirming && (
         <StopConfirm

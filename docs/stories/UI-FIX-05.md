@@ -2,7 +2,7 @@
 
 Module : M17 Objectif de la semaine · Palier : après la 1.0 par la règle de tri (défaut visible), avancé par Ali dans l'ordre du 27 octobre 2026 après UI-FIX-04 · Agent : spaces-goals · Ouverte le 2026-10-27 par Claude Code.
 
-Statut : **code sur la branche `ui-fix-05-objectif-ajout`, tests du module, lint et typage verts ; e2e, bundle, CI complète et fusion requises**. Estimation : 1 h active ; alerte à 1 h 30.
+Statut : **fait** — PR #94 fusionnée le 2026-10-27 (runs 40550343167 relancé après annulation WebKit et 40550351616, 48 contrôles verts), `main` 89a1f9c6, bundle de `main` mesuré à 335 256 normalisés, marge 23 144 ; observation sur l'iPhone au prochain lot. Estimation : 1 h active ; alerte à 1 h 30.
 
 ## Demande d'Ali (liste du 27 octobre 2026, défaut 15)
 
