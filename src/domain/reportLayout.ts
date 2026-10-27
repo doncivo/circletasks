@@ -52,6 +52,8 @@ export interface ReportTile {
   readonly label: string;
   readonly value: string;
   readonly sub?: string;
+  /** Phrase d'absence de données, sur plusieurs lignes en corps de texte. */
+  readonly empty?: boolean;
 }
 
 export interface ReportBar {
@@ -123,7 +125,17 @@ export function reportLayout(texts: ReportTexts): ReportLayout {
     const x = PAD + index * (tileW + GAP);
     ops.push({ kind: 'rect', x, y: tileTop, w: tileW, h: tileH, radius: 14, fill: 'tile' });
     ops.push({ kind: 'text', x: x + 14, y: tileTop + 26, text: tile.label, size: 12, weight: 700, font: 'text', color: 'secondary', align: 'left', letterSpacing: 0.6, maxWidth: tileW - 28 });
-    ops.push({ kind: 'text', x: x + 14, y: tileTop + 62, text: tile.value, size: 28, weight: 700, font: 'title', color: 'ink', align: 'left', maxWidth: tileW - 28, ...(tile.sub ? { suffix: tile.sub } : {}) });
+    if (tile.empty) {
+      const lines: string[] = [];
+      for (const word of tile.value.split(' ')) {
+        const last = lines.at(-1);
+        if (last !== undefined && last.length + word.length + 1 <= 22) lines[lines.length - 1] = `${last} ${word}`;
+        else lines.push(word);
+      }
+      lines.forEach((line, row) => ops.push({ kind: 'text', x: x + 14, y: tileTop + 46 + row * 15, text: line, size: 12, weight: 400, font: 'text', color: 'ink', align: 'left', maxWidth: tileW - 28 }));
+    } else {
+      ops.push({ kind: 'text', x: x + 14, y: tileTop + 62, text: tile.value, size: 28, weight: 700, font: 'title', color: 'ink', align: 'left', maxWidth: tileW - 28, ...(tile.sub ? { suffix: tile.sub } : {}) });
+    }
   });
 
   // Graphique (colonne de gauche)

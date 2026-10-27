@@ -129,8 +129,8 @@ test.describe('ES-08 — filtre unique espace + projet (parcours clé 6)', () =>
     await projectFilterMenu(page).selectOption({ label: 'Mission client' });
     await expect(tileOf(page, 'Tâches faites : 1 sur 2')).toBeVisible();
     await expect(page.getByTestId('month-rate')).toHaveText('Mois : 50 %');
-    await expect(tileOf(page, 'Routines : aucune occurrence prévue')).toContainText('—');
-    await expect(tileOf(page, 'Objectifs : aucun objectif')).toContainText('—');
+    await expect(page.locator('[data-tile="routines"]')).toContainText('Non compté pour un projet');
+    await expect(page.locator('[data-tile="goals"]')).toContainText('Non compté pour un projet');
     await expect(page.getByRole('group', { name: 'ROUTINES — JOURS COMPLÉTÉS' })).toHaveCount(0);
     // Perso : le projet est remis à « tous ».
     await filterPill(page, 'Perso').click();

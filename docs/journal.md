@@ -1,5 +1,11 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — UI-FIX-03, Rapport du mois
+
+Demande 11/12/14 reproduite avant correctif e01b756e : quatre échecs DOM sur les phrases absentes et le titre du ratio ; navigateur iPhone confirme le retour à droite. Correction en QA : phrases adaptées à l'absence ou au filtre, retour à gauche sur mobile, titre Taux d'achèvement. Exports alignés sur l'écran avec phrases sur plusieurs lignes. Aucun calcul métier ni schéma modifié. Les résultats verts, revue et CI restent à consigner.
+
+QA locale terminée : 59 ciblés, 13 e2e initiaux et cinq complémentaires verts ; lint/typage et 62 gardes bundle verts. Oracles corrigés : ancien nom du tableau accessible, sélection des textes d'export limitée aux tuiles, position du retour comparée au bord gauche de son en-tête plutôt qu'à une borne absolue ignorant la marge. Pas de test instable ni de délai ajouté. Revue approuvée dans UI-FIX-03 ; CI et fusion encore attendues.
+
 ## Refonte 1.0.2 — publication vérifiée
 
 UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
