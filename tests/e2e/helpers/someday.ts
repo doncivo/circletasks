@@ -41,6 +41,19 @@ export async function insertSomeday(page: Page, items: readonly DirectSomeday[])
 /** Icône horloge d'Aujourd'hui (nom accessible « Un jour » ou « Un jour, 6 tâches »). */
 export const somedayButton = (page: Page): Locator => page.getByRole('button', { name: /^Un jour(,|$)/ });
 
+/** UI-REFONTE-02 : libellé de la commande « Un jour » (« Un jour, 1 tâche ») : icône PC, ou entrée du menu « Plus d’options » sur iPhone (refermé ensuite). */
+export async function somedayLabel(page: Page): Promise<string> {
+  const more = page.getByRole('button', { name: 'Plus d’options' });
+  if (!(await more.isVisible())) return (await somedayButton(page).getAttribute('aria-label')) ?? '';
+  await more.click();
+  const menu = page.getByRole('dialog', { name: 'Plus d’options' });
+  await expect(menu).toBeVisible();
+  const label = (await menu.getByRole('menuitem', { name: /^Un jour(,|$)/ }).textContent())?.trim() ?? '';
+  await menu.getByRole('button', { name: 'Fermer' }).click();
+  await expect(menu).toBeHidden();
+  return label;
+}
+
 /** Liste des tâches de « Un jour » (écran iPhone ou panneau PC). */
 export const somedayList = (page: Page): Locator => page.getByRole('list', { name: 'Tâches de « Un jour »' });
 

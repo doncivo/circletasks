@@ -33,7 +33,8 @@ test.describe('Q-04 — scan de tâches', () => {
     const scan = await page.getByRole('button', { name: 'Scan tâches' }).boundingBox();
     expect(field && scan).toBeTruthy();
     if (isPhone(testInfo)) {
-      expect(scan?.y ?? 0).toBeGreaterThan((field?.y ?? 0) + (field?.height ?? 0) - 1);
+      // UI-REFONTE-02 : rangée champ + Scanner + « + » (Jour.html) ; le bouton est à droite du champ, sur la même ligne.
+      expect(scan?.x ?? 0).toBeGreaterThan((field?.x ?? 0) + (field?.width ?? 0) - 1);
       expect(scan?.height).toBeGreaterThanOrEqual(40);
     } else {
       expect(scan?.x ?? 0).toBeGreaterThan((field?.x ?? 0) + (field?.width ?? 0) - 1);

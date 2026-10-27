@@ -184,7 +184,7 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
    * ENTRE deux mots seulement, sans déborder, et sans chevaucher ses voisins, qui restent dans l'écran.
    */
   const zoomed = [
-    ['Tâches', '2026-10-28', 'main h1.ct-today__day', ['.ct-today__badge', '.ct-today__headerActions']],
+    ['Tâches', '2026-10-28', 'main h1.ct-today__day', ['.ct-today__headerActions']], // UI-REFONTE-02 : plus de badge sur iPhone
     ['Semaine', '2026-09-30', 'main h1.ct-week__range', ['.ct-week__arrows']],
   ] as const;
   for (const [tab, day, selector, neighbours] of zoomed) {

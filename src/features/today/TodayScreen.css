@@ -637,14 +637,13 @@
 }
 
 .ct-agenda__line {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  display: block;
 }
 
 .ct-agenda__hour {
   width: 46px;
   flex-shrink: 0;
+  align-self: flex-start;
   padding-top: 15px;
   text-align: right;
   font-size: var(--ct-font-size-text-sm);
@@ -657,17 +656,17 @@
   color: var(--ct-color-agenda-past);
 }
 
-.ct-agenda__body {
-  flex-grow: 1;
-  min-width: 0;
-}
-
 /* Vue compacte (A-06) : la ligne garde sa hauteur de 44 px et son titre de 16 px. */
-.ct-agenda__body .ct-list-row:not([data-compact='true']) {
+.ct-agenda__line .ct-list-row:not([data-compact='true']) {
   padding: 11px 0;
 }
 
-.ct-agenda__body .ct-list-row:not([data-compact='true']) .ct-list-row__title {
+.ct-agenda__line .ct-list-row[data-compact='true'] .ct-agenda__hour {
+  padding-top: 0;
+  align-self: center;
+}
+
+.ct-agenda__line .ct-list-row:not([data-compact='true']) .ct-list-row__title {
   font-size: var(--ct-font-size-text-lg);
   font-weight: var(--ct-font-weight-semibold);
   line-height: 1.3;
@@ -695,7 +694,7 @@
 }
 
 /* Plus spécifique que la taille courante des titres de l'agenda. */
-.ct-agenda__line[data-phase='due'] .ct-agenda__body .ct-list-row:not([data-compact='true']) .ct-list-row__title {
+.ct-agenda__line[data-phase='due'] .ct-list-row:not([data-compact='true']) .ct-list-row__title {
   font-family: var(--ct-font-title);
   font-size: 1.6875rem; /* 27px */
   font-weight: var(--ct-font-weight-bold);

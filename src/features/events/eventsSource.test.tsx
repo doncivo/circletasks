@@ -85,7 +85,8 @@ describe('Événements dans Aujourd’hui et la Semaine (E-01 critères 6, 7, 10
     await seedEvent(h, { title: 'Demain', date: '2026-10-03' });
     renderToday(h.container);
     const band = await screen.findByRole('button', { name: /Point client/ });
-    expect(band).toHaveTextContent('10:00');
+    // UI-REFONTE-02 : l'heure est dans la colonne de la ligne, pas dans le bouton du titre.
+    expect(band.closest('.ct-list-row')).toHaveTextContent('10:00');
     expect(screen.queryByText('Demain')).toBeNull();
     fireEvent.click(band);
     expect(useNavigationStore.getState().detail).toMatchObject({ type: 'event' });

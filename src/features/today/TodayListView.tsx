@@ -97,7 +97,7 @@ export function TodayListView(props: TodayListViewProps) {
     );
   }
 
-  function renderRow(row: TodayRow, movable: boolean, lateMinutes: number | null = null) {
+  function renderRow(row: TodayRow, movable: boolean, lateMinutes: number | null = null, hour: React.ReactNode = null) {
     const inAgenda = agenda != null;
     if (row.kind === 'routine') {
       return swiped(
@@ -113,7 +113,7 @@ export function TodayListView(props: TodayListViewProps) {
           showSpace={spaceFilter === 'all'}
           checkable={props.routinesCheckable}
           disabled={props.routinesDisabled}
-          agenda={inAgenda}
+          agenda={inAgenda ? { hour } : null}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId)}
         />,
       );
@@ -133,7 +133,7 @@ export function TodayListView(props: TodayListViewProps) {
         opened={props.openedTaskId === task.id}
         compact={compact}
         inline={inline}
-        {...(inAgenda ? { agenda: { lateMinutes } } : {})}
+        {...(inAgenda ? { agenda: { lateMinutes, hour } } : {})}
         onToggleDone={() => props.onToggleDone(task.id)}
         onOpen={() => props.onOpen(task.id)}
         onToggleSelect={() => edit.toggle(task.id)}
@@ -153,7 +153,7 @@ export function TodayListView(props: TodayListViewProps) {
   }
 
   /** Événement dans l'agenda (E-01 à E-04, M8) : rond au trait, titre, source ou « Toute la journée », compte à rebours (E-04). */
-  function renderEvent(event: TodayEventEntry, view: TodayAgendaView) {
+  function renderEvent(event: TodayEventEntry, view: TodayAgendaView, hour: React.ReactNode) {
     const countdown = bandCountdownTag(event, view.date, view.today);
     const source = event.calendarName ?? (event.allDay || event.startTime === null ? t('today.eventAllDay') : null);
     const subtitle =
@@ -174,6 +174,7 @@ export function TodayListView(props: TodayListViewProps) {
       <ListRow
         title={event.title}
         className="ct-agenda__eventRow"
+        prefix={hour}
         leading={<span className="ct-agenda__eventMark" data-kind={event.kind} aria-hidden="true" />}
         {...(subtitle !== undefined ? { subtitle } : {})}
         {...(interactive ? { onActivate: () => view.onOpenEvent(event.id as EventId) } : {})}
@@ -217,8 +218,7 @@ export function TodayListView(props: TodayListViewProps) {
             if (line.kind === 'event') {
               return (
                 <div key={line.id} role="listitem" className="ct-agenda__line" data-phase={line.phase}>
-                  {hour}
-                  <div className="ct-agenda__body">{renderEvent(line.event, agenda)}</div>
+                  {renderEvent(line.event, agenda, hour)}
                 </div>
               );
             }
@@ -235,8 +235,7 @@ export function TodayListView(props: TodayListViewProps) {
                 {...(movable ? reorder.sortable.itemProps(row.id) : {})}
                 {...(movable ? reorder.sortable.dragProps(row.id, 'row') : {})}
               >
-                {hour}
-                <div className="ct-agenda__body">{renderRow(row, movable, line.lateMinutes)}</div>
+                {renderRow(row, movable, line.lateMinutes, hour)}
               </div>
             );
           })}

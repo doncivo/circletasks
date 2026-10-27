@@ -29,8 +29,8 @@ export interface TodayTaskRowProps {
   readonly compact: boolean;
   /** PC : « HH:MM · Espace » à droite du titre, sur une seule ligne. */
   readonly inline: boolean;
-  /** Agenda (UI-REFONTE-02) : heure hors de la sous-ligne, pas d'icône ; `lateMinutes` pour une tâche due. */
-  readonly agenda?: { readonly lateMinutes: number | null };
+  /** Agenda (UI-REFONTE-02) : colonne d'heure (ou tiret) en tête de ligne, heure hors de la sous-ligne, pas d'icône ; `lateMinutes` pour une tâche due. */
+  readonly agenda?: { readonly lateMinutes: number | null; readonly hour: ReactNode };
   readonly onToggleDone: () => void;
   readonly onOpen: () => void;
   readonly onToggleSelect: () => void;
@@ -40,6 +40,7 @@ export interface TodayTaskRowProps {
 }
 
 export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode, selected, opened, compact, inline, agenda, onToggleDone, onOpen, onToggleSelect, onRemove, handle }: TodayTaskRowProps) {
+  const prefix = agenda ? { prefix: agenda.hour } : {};
   const done = task.status === 'done';
   const color = task.icon ? resolveIconRefColor(task.icon) : undefined;
   const base = editMode && done ? t('today.doneBadge') : taskSubtitle(task, { spaces, showSpace, rule, hideTime: agenda !== undefined });
@@ -61,6 +62,7 @@ export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode
       compact={compact}
       inlineSubtitle={inline}
       {...(compact ? { time: task.time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle })}
+      {...prefix}
       leading={
         editMode ? (
           <SelectCircle selected={selected} onToggle={onToggleSelect} label={t(selected ? 'today.deselect' : 'today.select', { title: task.title })} />
@@ -98,8 +100,8 @@ export interface TodayRoutineRowProps {
   readonly checkable: boolean;
   /** Jour futur : seuls aujourd'hui et les jours passés se valident (R-03 critère 11, QB-03) ; la case est inactive. */
   readonly disabled?: boolean;
-  /** Agenda (UI-REFONTE-02) : « Routine · mar., ven. », heure dans la colonne, pas d'icône. */
-  readonly agenda?: boolean;
+  /** Agenda (UI-REFONTE-02) : colonne d'heure en tête de ligne, « Routine » en sous-ligne, pas d'icône. */
+  readonly agenda?: { readonly hour: ReactNode } | null;
   readonly onToggle: () => void;
 }
 
@@ -124,7 +126,7 @@ function routineAgendaSubtitle(routine: Routine, spaces: readonly Space[], showS
 }
 
 /** Routine du jour (M4) : « HH:MM · Routine », icône à droite ; jamais sélectionnable ni déplaçable (Q13). */
-export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, spaces, showSpace, checkable, disabled = false, agenda = false, onToggle }: TodayRoutineRowProps) {
+export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, spaces, showSpace, checkable, disabled = false, agenda = null, onToggle }: TodayRoutineRowProps) {
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
   const subtitle = agenda ? routineAgendaSubtitle(routine, spaces, showSpace) : routineSubtitle(routine, time, { spaces, showSpace });
   return (
@@ -134,6 +136,7 @@ export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline
       compact={compact}
       inlineSubtitle={inline}
       {...(compact ? { time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle })}
+      {...(agenda ? { prefix: agenda.hour } : {})}
       {...(checkable
         ? { leading: <Checkbox compact={compact} checked={done} disabled={disabled} onChange={onToggle} label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })} /> }
         : {})}

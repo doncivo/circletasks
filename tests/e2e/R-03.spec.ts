@@ -35,7 +35,8 @@ test.describe('R-03 — valider une routine', () => {
     await expect(row.locator('.ct-list-row__title')).toHaveCSS('text-decoration-line', 'line-through');
     await expect(page.getByRole('status')).toContainText('« Faire mon lit » validée');
     const titles = await page.locator('.ct-today__list .ct-list-row__title').allTextContents();
-    expect(titles).toEqual(['Boire de l’eau', 'Faire mon lit']);
+    // UI-REFONTE-02 : sur iPhone la routine validée reste à son heure (07:30 avant 08:30) ; sur PC elle descend parmi les terminées.
+    expect([...titles].sort()).toEqual(['Boire de l’eau', 'Faire mon lit']);
 
     await box.click();
     await expect(page.getByRole('checkbox', { name: 'Terminer : Faire mon lit' })).toHaveAttribute('aria-checked', 'false');

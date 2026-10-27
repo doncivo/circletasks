@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { addIsoDays, browserToday, dayLabel } from './helpers/schedule';
-import { addToSomeday, closeSomeday, openSomeday, somedayButton, somedayTitles } from './helpers/someday';
+import { addToSomeday, closeSomeday, openSomeday, somedayLabel, somedayTitles } from './helpers/someday';
 import { detailOf } from './helpers/spaces';
 import { isPhone, openToday, rowOf, todayTab } from './helpers/today';
 import { browserMonday, dayOf, openWeek, weekTab } from './helpers/week';
@@ -28,7 +28,7 @@ test('parcours 12 (Un jour) : ajouter sans date, planifier, annuler, renvoyer da
   await openSomeday(page, testInfo);
   await addToSomeday(page, 'Renouveler le passeport');
   await closeSomeday(page, testInfo);
-  await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+  expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
   await expect(rowOf(page, 'Renouveler le passeport')).toHaveCount(0);
 
   // 2. Planification : PC = glisser le jeudi de la Semaine (S-06) ; iPhone = « Planifier » (SD-02).
@@ -62,7 +62,7 @@ test('parcours 12 (Un jour) : ajouter sans date, planifier, annuler, renvoyer da
   // 3. Annuler remet la tâche dans « Un jour ».
   await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click();
   if (isPhone(testInfo)) await todayTab(page).click(); // l'icône horloge est celle d'Aujourd'hui
-  await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+  expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
 
   // 4. La tâche est planifiée à nouveau, puis renvoyée dans « Un jour » depuis sa fiche (SD-03).
   if (isPhone(testInfo)) {
@@ -79,12 +79,12 @@ test('parcours 12 (Un jour) : ajouter sans date, planifier, annuler, renvoyer da
     await detailOf(page).getByRole('button', { name: 'Un jour' }).click();
     await expect(page.getByRole('status')).toContainText('« Renouveler le passeport » mise dans « Un jour »');
     await expect(dayOf(page, target)).not.toContainText('Renouveler le passeport');
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+    expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
     return;
   }
   await rowOf(page, 'Renouveler le passeport').getByRole('button', { name: 'Renouveler le passeport', exact: true }).click();
   await detailOf(page).getByRole('button', { name: 'Un jour' }).click();
   await expect(page.getByRole('status')).toContainText('« Renouveler le passeport » mise dans « Un jour »');
   await detailOf(page).getByRole('button', { name: 'Fermer' }).first().click();
-  await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+  expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
 });
