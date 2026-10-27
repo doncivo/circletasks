@@ -35,6 +35,16 @@ function texts(overrides: Partial<ReportTexts> = {}): ReportTexts {
 const textsOf = (ops: readonly ReportOp[]): string[] => ops.flatMap((op) => (op.kind === 'text' ? [op.text] : []));
 
 describe('reportLayout (H-03 critères 5 et 6)', () => {
+  it('UI-FIX-03 : conserve les phrases vides entières dans les limites des tuiles', () => {
+    const values = ['Aucune routine ce mois-ci', 'Aucune occurrence prévue ce mois-ci', 'Aucun objectif', 'Non compté pour un projet'];
+    const result = reportLayout(texts({ tiles: values.map(value => ({ label: 'VIDE', value, empty: true })) }));
+    const lines = result.ops.filter(op => op.kind === 'text' && op.size === 12 && op.weight === 400 && op.y < 276);
+    expect(lines.map(op => op.kind === 'text' ? op.text : '').join(' ')).toBe(values.join(' '));
+    for (const op of lines) if (op.kind === 'text') {
+      expect(op.y).toBeLessThan(148 + 84);
+      expect(op.maxWidth).toBeGreaterThan(0);
+    }
+  });
   const layout = reportLayout(texts());
 
   it('reprend titre, tuiles, graphique, carte de chaleur et taux des routines', () => {

@@ -29,6 +29,10 @@
 
 .ct-sync__sub {
   font-size: 13px;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-sync__sub[data-tone='success'] {
   color: var(--ct-color-achieved-text);
 }
 
@@ -58,10 +62,58 @@
   padding: 0;
 }
 
-.ct-sync__device {
+.ct-sync .ct-sync__device {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 30%);
+  gap: 4px 12px;
+  align-items: start;
+}
+
+.ct-sync__deviceIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ct-sync__deviceId {
+  font-size: 11px;
+  color: var(--ct-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ct-sync__nameButton {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  padding: 0;
+  min-height: var(--ct-hit-target-min);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.ct-sync__nameForm,
+.ct-sync__nameForm label {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ct-sync__nameForm input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.ct-sync__device > button,
+.ct-sync__device > .ct-sync__forgetAction {
+  grid-column: 1 / -1;
 }
 
 .ct-sync__deviceRead {
@@ -70,7 +122,13 @@
 }
 
 .ct-sync__deviceState {
-  margin-left: auto;
+  margin-left: 0;
+  text-align: right;
+  width: 100%;
+  min-height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .ct-sync__progress {

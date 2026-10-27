@@ -11,6 +11,8 @@ import { replanNotifications } from '../reminders/replanNotifications';
 import { clearSigningBanner } from '../reminders/signingNotice';
 import { setupReminders, type ReminderHarness } from '../reminders/testKit';
 import { AboutSection } from './AboutSection';
+import { SettingsScreen } from './SettingsScreen';
+import { SigningAboutRow } from '../reminders/SigningAbout';
 
 /**
  * I-02 critères 7 et 8 : la ligne « Expire le … » de « À propos » (iPhone), l'état « date inconnue » dans « À propos » et dans Réglages >
@@ -45,9 +47,20 @@ describe('À propos : expiration de la signature (I-02)', () => {
       <AppContainerProvider container={h.container}>
         <AppStatusBanner />
         <AboutSection />
+        <SigningAboutRow />
         <RemindersStatusSection />
       </AppContainerProvider>,
     );
+
+  it('UI-FIX-02 : expiration visible en tête de Réglages, avant Général, en un seul exemplaire', async () => {
+    source.expireAt('2026-10-14T08:00:00Z');
+    await replanNotifications(h.container, 'open');
+    render(<AppContainerProvider container={h.container}><SettingsScreen /></AppContainerProvider>);
+    const expiry = await screen.findByText('Expire le mer. 14 oct. à 10:00 · dans 6 jours');
+    const general = screen.getByRole('heading', { name: 'GÉNÉRAL' });
+    expect(expiry.compareDocumentPosition(general) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(screen.getAllByText('Expire le mer. 14 oct. à 10:00 · dans 6 jours')).toHaveLength(1);
+  });
 
   it('expiration dans 6 jours : « Expire le … à 10:00 · dans 6 jours » et l’alerte prévue (24 h, heure murale)', async () => {
     source.expireAt('2026-10-14T08:00:00Z');
@@ -120,7 +133,7 @@ describe('À propos : expiration de la signature (I-02)', () => {
     expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'reminders' });
   });
 
-  it('bandeau d’expiration sous 24 h : « Voir » ouvre À propos', async () => {
+  it('bandeau d’expiration sous 24 h : « Voir » ouvre la tête de Réglages', async () => {
     source.expireAt('2026-10-08T20:00:00Z');
     await replanNotifications(h.container, 'open');
     render(
@@ -128,8 +141,8 @@ describe('À propos : expiration de la signature (I-02)', () => {
         <AppStatusBanner />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Voir l’expiration de la signature dans À propos' }));
-    expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'about' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir l’expiration de la signature dans Réglages' }));
+    expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'home' });
   });
 
   it('alerte non planifiée : « L’alerte n’a pas pu être planifiée »', async () => {
@@ -141,6 +154,7 @@ describe('À propos : expiration de la signature (I-02)', () => {
     render(
       <AppContainerProvider container={failing.container}>
         <AboutSection />
+        <SigningAboutRow />
       </AppContainerProvider>,
     );
     expect(await screen.findByText('L’alerte n’a pas pu être planifiée : vous ne serez peut-être pas prévenu')).toBeInTheDocument();
@@ -167,6 +181,7 @@ describe('À propos : expiration de la signature (I-02)', () => {
     render(
       <AppContainerProvider container={pc.container}>
         <AboutSection />
+        <SigningAboutRow />
         <RemindersStatusSection />
       </AppContainerProvider>,
     );
@@ -186,6 +201,7 @@ describe('À propos : ligne rafraîchie tant qu’elle est affichée (revue I-02
     render(
       <AppContainerProvider container={h.container}>
         <AboutSection />
+        <SigningAboutRow />
       </AppContainerProvider>,
     );
     expect(await screen.findByText(/· dans 2 jours$/)).toBeInTheDocument();

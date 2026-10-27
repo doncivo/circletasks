@@ -62,9 +62,9 @@ describe('Q-05 QA : ouverture et fermeture de la feuille', () => {
   it('Q-05 critère 5 : titre fait d’espaces seulement : « Enregistrer » désactivé, Entrée fait trembler, rien n’est créé', async () => {
     renderToday(h.container);
     fireEvent.click(await fab());
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajouter la tâche' })).toBeDisabled();
     fireEvent.change(field(), { target: { value: '     ' } });
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajouter la tâche' })).toBeDisabled();
     fireEvent.keyDown(field(), { key: 'Enter' });
     expect(field().closest('.ct-task-sheet__titleRow')).toHaveAttribute('data-shake', 'true');
     fireEvent.submit(field().closest('form') as HTMLFormElement);
@@ -81,7 +81,7 @@ describe('Q-05 QA : ouverture et fermeture de la feuille', () => {
     expect(field()).toHaveAttribute('maxlength', String(TASK_TITLE_MAX_LENGTH));
     const title = 'é'.repeat(TASK_TITLE_MAX_LENGTH);
     fireEvent.change(field(), { target: { value: title } });
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(screen.queryByLabelText('Titre')).toBeNull());
     const tasks = await h.container.data.repos.tasks.listForDay(h.today, 'all');
     expect(tasks).toHaveLength(1);
@@ -92,7 +92,7 @@ describe('Q-05 QA : ouverture et fermeture de la feuille', () => {
     renderToday(h.container);
     fireEvent.click(await fab());
     fireEvent.change(field(), { target: { value: 'x'.repeat(TASK_TITLE_MAX_LENGTH + 1) } });
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ajouter la tâche' })).toBeDisabled();
     fireEvent.keyDown(field(), { key: 'Enter' });
     fireEvent.submit(field().closest('form') as HTMLFormElement);
     await act(async () => {
@@ -161,7 +161,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     renderSheet(onCreate, onClose);
     type('Acheter du pain');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await click('Enregistrer');
+    await click('Ajouter la tâche');
     await notReady();
     for (let i = 0; i < 5; i += 1) {
       await click('Réessayer');
@@ -195,7 +195,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     renderSheet(onCreate, onClose);
     type('Payer le loyer');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await click('Enregistrer');
+    await click('Ajouter la tâche');
     await notReady();
     await act(async () => {
       finishers[0]?.(false);
@@ -204,7 +204,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     expect(screen.getByRole('alert')).toHaveTextContent('La tâche n’a pas pu être enregistrée');
     expect(field()).toHaveValue('Payer le loyer');
     expect(onClose).not.toHaveBeenCalled();
-    await click('Enregistrer');
+    await click('Ajouter la tâche');
     expect(onCreate).toHaveBeenCalledTimes(2);
     await act(async () => {
       finishers[1]?.(true);
@@ -218,7 +218,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     const onClose = vi.fn();
     renderSheet(onCreate, onClose);
     type('Rapide');
-    await click('Enregistrer');
+    await click('Ajouter la tâche');
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -229,7 +229,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     const onClose = vi.fn();
     const view = renderSheet(onCreate, onClose);
     type('Pendant la sauvegarde');
-    await click('Enregistrer');
+    await click('Ajouter la tâche');
     view.unmount();
     await act(async () => {
       finish(true);

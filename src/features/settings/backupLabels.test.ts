@@ -33,9 +33,9 @@ describe('libellé de l’appareil d’une sauvegarde', () => {
     expect(backupDeviceLabel(OTHER_PC, 'windows', context({ devices: [device(PHONE, 'ios'), device(OTHER_PC, 'windows')] }))).toBe('PC');
   });
 
-  it('deux PC : plateforme et 4 caractères', () => {
+  it('deux PC connus : noms lisibles numérotés comme dans Appareils', () => {
     const twins = context({ devices: [device(OWN, 'windows'), device(OTHER_PC, 'windows')] });
-    expect(backupDeviceLabel(OTHER_PC, 'windows', twins)).toBe('PC 56d4');
+    expect(backupDeviceLabel(OTHER_PC, 'windows', twins)).toBe('PC 1');
   });
 
   it('identité oubliée : « PC 56d4 (oublié) » même sans jumeau, iPhone compris', () => {
@@ -77,7 +77,7 @@ describe('libellé de l’époque d’une sauvegarde', () => {
 
   it('ouvreur en jumeau : « PC 56d4 » ; ouvreur oublié : « PC 56d4 (oublié) » ; soi-même : « cet appareil »', () => {
     const twins = context({ devices: [device(OWN, 'windows'), device(OTHER_PC, 'windows')], currentEpoch: null });
-    expect(backupEpochLabel(`e0003-${OTHER_PC}`, twins).text).toBe('époque 3, ouverte par PC 56d4');
+    expect(backupEpochLabel(`e0003-${OTHER_PC}`, twins).text).toBe('époque 3, ouverte par PC 1');
     const forgotten = context({ devices: [device(OWN, 'windows'), device(FORGOTTEN, 'windows', { status: 'forgotten' })], currentEpoch: null });
     expect(backupEpochLabel(`e0003-${FORGOTTEN}`, forgotten).text).toBe('époque 3, ouverte par PC 56d4 (oublié)');
     expect(backupEpochLabel(`e0003-${OWN}`, forgotten).text).toBe('époque 3, ouverte par cet appareil');

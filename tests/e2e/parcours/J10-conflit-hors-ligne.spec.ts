@@ -107,7 +107,7 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
   await hours.focus();
   await iphone.page.keyboard.press('ArrowUp');
   await expect(hours).toHaveAttribute('aria-valuetext', '9 heures');
-  await edit.getByRole('button', { name: 'Enregistrer' }).click();
+  await edit.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
   await expect(edit).toHaveCount(0);
   await detail(iphone.page).getByRole('button', { name: 'Fermer' }).click();
   await expect(taskRow(iphone.page, TITLE)).toContainText('09:00');
@@ -125,8 +125,8 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
     await expect(side.page.getByText('1 conflit cette semaine')).toBeVisible();
     await expect(conflictItems(side.page)).toHaveCount(1);
     const item = conflictItems(side.page).first();
-    await expect(item).toHaveAccessibleName(`Conflit : ${TITLE}, heure`);
-    await expect(item).toContainText(`${TITLE} · heure`);
+    await expect(item).toHaveAccessibleName(`Conflit : ${TITLE}, heure prévue`);
+    await expect(item).toContainText(`${TITLE} · heure prévue`);
     await expect(item.locator('.ct-conflicts__value--kept')).toContainText('09:00 gardée');
     await expect(item.locator('.ct-conflicts__value--kept')).toContainText(/iPhone · \d{2}:\d{2}/);
     await expect(item.locator('.ct-conflicts__value--discarded')).toContainText('10:00 écartée');
@@ -135,8 +135,8 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
 
   // « Restaurer » sur le PC : valeur écartée remise, annoncée dans la ligne, annulable 5 s.
   const onPc = conflictItems(pc.page).first();
-  await onPc.getByRole('button', { name: `Restaurer la valeur écartée : ${TITLE}, heure` }).click();
-  await expect(onPc.getByRole('status')).toHaveText(`Valeur restaurée : ${TITLE}, heure`);
+  await onPc.getByRole('button', { name: `Restaurer la valeur écartée : ${TITLE}, heure prévue` }).click();
+  await expect(onPc.getByRole('status')).toHaveText(`Valeur restaurée : ${TITLE}, heure prévue`);
   await expect(onPc).toContainText(/Restaurée le \d{1,2} /);
   await expect(onPc).toBeFocused();
   await expect(pc.page.getByText('Valeur restaurée', { exact: true })).toBeVisible();

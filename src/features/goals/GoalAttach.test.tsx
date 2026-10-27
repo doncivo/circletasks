@@ -44,7 +44,7 @@ describe('Rattacher une tâche à un objectif : fiche détail PC (OB-03)', () =>
     const fiche = await openDetail('Relire le PRD');
     await waitFor(() => expect(within(fiche).getByText('Aucun objectif cette semaine')).toBeInTheDocument());
     expect(goalSwitch()).toBeDisabled();
-    expect(within(fiche).getByText('Non rattachée')).toBeInTheDocument();
+    expect(within(fiche).queryByText('Non rattachée')).toBeNull();
   });
 
   it('un seul objectif ouvert : rattachement direct, « Rattachée : titre », puis détachement (critères 1, 4 et 7)', async () => {
@@ -150,10 +150,11 @@ describe('Rattacher à la création : feuille « Nouvelle tâche » iPhone (OB-0
     fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Écrire le plan' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     await waitFor(() => expect(within(dialog).getByRole('switch', { name: 'Rattacher à mon objectif' })).toBeEnabled());
     fireEvent.click(within(dialog).getByRole('switch', { name: 'Rattacher à mon objectif' }));
     expect(await within(dialog).findByText('Rattachée : Finaliser le PRD CircleTasks')).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(async () => {
       const [created] = (await h.container.data.repos.tasks.listForDay(h.today, 'all')).filter((task) => task.title === 'Écrire le plan');
       expect(created?.goalId).toBe(goal.id);
@@ -164,8 +165,9 @@ describe('Rattacher à la création : feuille « Nouvelle tâche » iPhone (OB-0
     renderToday(h);
     fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     await waitFor(() => expect(within(dialog).getByText('Aucun objectif cette semaine')).toBeInTheDocument());
-    expect(within(dialog).getByRole('switch', { name: 'Rattacher à mon objectif' })).toBeDisabled();
+    expect(within(dialog).queryByRole('switch', { name: 'Rattacher à mon objectif' })).toBeNull();
   });
 
   it('deux objectifs : la liste s’ouvre dans la feuille ; fermer sans choisir ne rattache rien', async () => {
@@ -174,6 +176,7 @@ describe('Rattacher à la création : feuille « Nouvelle tâche » iPhone (OB-0
     renderToday(h);
     fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     await waitFor(() => expect(within(dialog).getByRole('switch', { name: 'Rattacher à mon objectif' })).toBeEnabled());
     fireEvent.click(within(dialog).getByRole('switch', { name: 'Rattacher à mon objectif' }));
     const choice = await screen.findByRole('alertdialog');

@@ -10,6 +10,7 @@
 }
 
 .ct-scan__backdrop[data-layout='mobile'] {
+  inset: var(--ct-safe-area-top) var(--ct-safe-area-right) var(--ct-safe-area-bottom) var(--ct-safe-area-left);
   background: var(--ct-color-bg);
 }
 
@@ -37,7 +38,7 @@
   width: 100%;
   height: 100%;
   /* Scan.html : 52 px sous le haut de l'écran, 28 px au-dessus du bas ; la zone de sécurité de l'iPhone l'emporte si elle est plus grande. */
-  padding: max(var(--ct-space-8), calc(var(--ct-safe-area-top) + var(--ct-space-4))) var(--ct-space-5) max(var(--ct-space-6), var(--ct-safe-area-bottom));
+  padding: max(var(--ct-space-4), calc(var(--ct-space-8) - var(--ct-safe-area-top))) var(--ct-space-5) var(--ct-space-6);
 }
 
 .ct-scan[data-layout='mobile'] > .ct-scan__step {

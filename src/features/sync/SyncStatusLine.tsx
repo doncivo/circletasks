@@ -4,7 +4,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncNowButton } from './SyncNowButton';
 import { syncStore } from './syncStore';
-import { folderLabel, isTroublePhase, statusLine } from './syncText';
+import { folderLabel, isTroublePhase, statusLine, syncStatusTone } from './syncText';
 import './SyncDetailsScreen.css';
 
 /**
@@ -25,14 +25,15 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
   // Texte annoncé : celui du dernier état stable, jamais recalculé pendant un cycle (« syncing » garde la valeur d'avant). Ajusté pendant
   // le rendu, sans effet.
   const [announced, setAnnounced] = useState('');
-  const next = status.phase === 'syncing' ? announced : status.phase === 'idle' && status.lastSyncAt && !isTroublePhase(status) ? t('sync.status.upToDateAnnounce') : '';
+  const tone = syncStatusTone(status);
+  const next = status.phase === 'syncing' ? announced : tone === 'success' ? t('sync.status.upToDateAnnounce') : '';
   if (next !== announced) setAnnounced(next);
   const now = container.clock.nowMs();
   return (
     <div className="ct-sync__line">
       <div className="ct-sync__lineText">
         <span className="ct-sync__folder">{status.folderLabel ? folderLabel({ label: status.folderLabel, kind: status.folderKind ?? 'unknown' }) : t('sync.status.folderFallback')}</span>
-        <span className="ct-sync__sub" data-testid="sync-status-text" data-trouble={isTroublePhase(status) ? 'true' : undefined}>
+        <span className="ct-sync__sub" data-testid="sync-status-text" data-tone={tone} data-trouble={isTroublePhase(status) ? 'true' : undefined}>
           {statusLine(status, now)}
         </span>
         {/* Région vivante séparée, sans âge relatif : annonce seulement la fin d'une synchro réussie. Les états en cours et les problèmes

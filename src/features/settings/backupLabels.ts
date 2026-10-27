@@ -31,10 +31,10 @@ export function hasBackupOrigin(version: Pick<BackupVersion, 'deviceId' | 'platf
 
 /**
  * Nom d'un appareil par identifiant : « Cet appareil » pour soi ; « PC 56d4 (oublié) » pour une identité oubliée (plateforme, 4 caractères,
- * mention) ; `deviceName` pour un appareil connu (« PC », « iPhone », « PC 56d4 » si jumeaux) ou jamais vu (« Appareil 56d4… ») ;
+ * mention) ; `deviceName` pour un appareil connu (« PC », « iPhone », « PC 1 » si jumeaux) ; nom neutre et identifiant court si jamais vu ;
  * « Appareil inconnu » sans identifiant. Jamais un identifiant brut seul.
  */
-export function backupDeviceLabel(deviceId: string | null | undefined, platform: string | null | undefined, context: BackupLabelContext): string {
+export function backupDeviceLabel(deviceId: string | null | undefined, _platform: string | null | undefined, context: BackupLabelContext): string {
   if (deviceId === null || deviceId === undefined || deviceId === '') return tBackupRestore('originUnknown');
   if (context.ownId !== null && deviceId === context.ownId) return tBackupRestore('originThisDevice');
   const known = context.devices.find((device) => device.deviceId === deviceId);
@@ -45,10 +45,10 @@ export function backupDeviceLabel(deviceId: string | null | undefined, platform:
     });
     return `${named} (${tBackupRestore('originForgotten')})`;
   }
-  if (known) return deviceName(known, context.devices);
-  // Jamais vu : nom neutre de `deviceName` (la plateforme de la sauvegarde n'est qu'un texte libre, jamais inventée en nom).
-  const unseen: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'seen'> = { deviceId: deviceId as SyncDeviceStatus['deviceId'], platform: platform === 'ios' ? 'ios' : 'windows', seen: false };
-  return deviceName(unseen, context.devices);
+  if (known && known.seen !== false) return deviceName(known, context.devices);
+  // Une sauvegarde d'origine inconnue doit garder son identifiant de secours ; elle n'a pas la sous-ligne d'identité d'APPAREILS.
+  // La plateforme enregistrée dans la sauvegarde est un texte libre : ne pas en déduire un nom de plateforme connu.
+  return t('sync.forget.unseenName', { short: deviceId.slice(0, 8) });
 }
 
 /** Même règle pour l'ouvreur d'une époque ; sa propre identité se lit « cet appareil » (dans la phrase, pas en tête). */

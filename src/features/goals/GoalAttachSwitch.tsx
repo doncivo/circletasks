@@ -24,6 +24,10 @@ export interface GoalAttachSwitchProps {
    * (PC-Aujourdhui.html : état à gauche, interrupteur à droite).
    */
   readonly variant: 'sheet' | 'detail';
+  /** Maquette Détail v2 : aucune commande inopérante ; lien vers les objectifs. */
+  readonly hideUnavailableSwitch?: boolean;
+  readonly defineGoalLabel?: string;
+  readonly onDefineGoal?: () => void;
 }
 
 /**
@@ -31,19 +35,22 @@ export interface GoalAttachSwitchProps {
  * la semaine de la tâche : rattachement direct ; plusieurs (tous espaces confondus) : liste à choisir, fermer sans choisir laisse
  * l'interrupteur désactivé (QB-13) ; aucun : interrupteur inactif avec l'aide « Aucun objectif cette semaine ».
  */
-export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }: GoalAttachSwitchProps) {
+export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant, hideUnavailableSwitch = false, defineGoalLabel, onDefineGoal }: GoalAttachSwitchProps) {
   const container = useAppContainer();
   const appDay = useAppStore((s) => s.day);
   const spaces = useAppStore((s) => s.spaces);
   const today = appDay ?? todayLocal(container.clock);
   const [available, setAvailable] = useState<readonly Goal[]>([]);
   const [attached, setAttached] = useState<Goal | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const context = `${weekStartOf(taskDate ?? today)}/${attachedGoalId ?? ''}`;
+  const [loadedContext, setLoadedContext] = useState<string | null>(null);
+  const loaded = loadedContext === context;
   const [choosing, setChoosing] = useState(false);
 
   useEffect(() => {
     let current = true;
     const run = (): void => {
+      setLoadedContext(null);
       Promise.all([
         container.data.repos.goals.listForWeek(weekStartOf(taskDate ?? today), 'all'),
         attachedGoalId ? container.data.repos.goals.getById(attachedGoalId) : Promise.resolve(null),
@@ -52,13 +59,13 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
           if (!current) return;
           setAvailable(goalsAvailableFor(taskDate, today, week));
           setAttached(goal);
-          setLoaded(true);
+          setLoadedContext(context);
         },
         () => {
           if (!current) return;
           setAvailable([]);
           setAttached(null);
-          setLoaded(true);
+          setLoadedContext(context);
         },
       );
     };
@@ -68,13 +75,14 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
       current = false;
       off();
     };
-  }, [container, taskDate, today, attachedGoalId]);
+  }, [container, taskDate, today, attachedGoalId, context]);
 
   const isOn = attachedGoalId !== null;
   const none = loaded && !isOn && available.length === 0;
   const disabled = !loaded || none;
 
   function toggle(next: boolean): void {
+    if (disabled) return;
     if (!next) {
       onChange(null);
       return;
@@ -83,14 +91,14 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
     else if (available.length > 1) setChoosing(true);
   }
 
-  const status = isOn ? (attached ? t('goals.attachedTo', { title: attached.title }) : t('goals.attachedLoading')) : t('detail.goalNone');
+  const status = none ? t('goals.noneThisWeek') : isOn ? (attached ? t('goals.attachedTo', { title: attached.title }) : t('goals.attachedLoading')) : t('detail.goalNone');
   // OB-03 critère 2 : aucun objectif cette semaine, l'interrupteur est inactif et l'aide le dit.
   const help = none ? t('goals.noneThisWeek') : null;
   const spaceName = (goal: Goal): string => spaces.find((space) => space.id === goal.spaceId)?.name ?? '';
 
   return (
     <div className="ct-goal-attach" data-variant={variant}>
-      {variant === 'sheet' && (
+      {variant === 'sheet' && !(hideUnavailableSwitch && none) && (
         <span className="ct-goal-attach__label">
           <Icon icon={Target} size={22} color="var(--ct-color-goal)" />
           {t('goals.attachSwitch')}
@@ -99,10 +107,10 @@ export function GoalAttachSwitch({ taskDate, attachedGoalId, onChange, variant }
       {variant === 'detail' && (
         <span className="ct-goal-attach__statusBlock">
           <span className="ct-goal-attach__status">{status}</span>
-          {help && <span className="ct-goal-attach__help">{help}</span>}
         </span>
       )}
-      <Switch checked={isOn} onChange={toggle} label={t('goals.attachSwitch')} disabled={disabled} />
+      {!(hideUnavailableSwitch && none) && <Switch checked={isOn} onChange={toggle} label={t('goals.attachSwitch')} disabled={disabled} />}
+      {hideUnavailableSwitch && none && defineGoalLabel && onDefineGoal && <button type="button" className="ct-goal-attach__define" onClick={onDefineGoal}>{defineGoalLabel}</button>}
       {variant === 'sheet' && (
         <span className="ct-goal-attach__help" data-visible={isOn || none}>
           {isOn ? status : (help ?? '')}

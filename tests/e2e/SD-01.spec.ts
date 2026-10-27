@@ -80,9 +80,11 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
     await openSomeday(page, testInfo);
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
-    await expect(dialog.getByRole('button', { name: 'Un jour' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.getByRole('button', { name: 'Date : Un jour' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Date : Un jour' }).click();
+    await expect(dialog.getByRole('button', { name: 'Un jour', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await dialog.getByLabel('Titre').fill('Sans date depuis la feuille');
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).toBeHidden();
     await expect(somedayList(page).getByRole('button', { name: 'Sans date depuis la feuille', exact: true })).toBeVisible();
   });

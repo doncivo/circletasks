@@ -1,4 +1,4 @@
-/* Réglages › Synchronisation (Y-01) : sous-ligne verte « Dossier choisi » (Reglages.html : 13 px, #2F6B4A). */
+/* Choisir un dossier ne prouve pas l'envoi : seul un cycle complet peut prendre le vert. */
 .ct-sync__ok {
-  color: var(--ct-color-achieved-text);
+  color: var(--ct-color-text-secondary);
 }

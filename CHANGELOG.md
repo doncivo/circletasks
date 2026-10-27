@@ -2,6 +2,18 @@
 
 ## Non publié
 
+## 1.0.2
+
+- Nouvelle tâche sur iPhone : titre prioritaire, date et heure compactes, espace visible, options repliées et action Ajouter la tâche au-dessus du clavier.
+- Détail : échéance et heures des rappels séparées, explication du décalage silencieux, projet distinct, actions courantes avant Focus et suppression. Les comportements PC restent conservés.
+- Aucun changement de schéma (19) ni du protocole de synchronisation. Vérifications automatiques et publication PC/iPhone validées ; quatre contrôles du rendu sur appareil restent à confirmer avec ce lot.
+
+## 1.0.1
+
+- Paquet A issu des essais sur iPhone 1.0.0 : attente de synchronisation distincte du succès, mention « Jamais lu », appareils alignés avec noms modifiables localement et identifiants secondaires, champs de conflit nommés explicitement.
+- Zones sûres des écrans et des feuilles : le défilement reste sous la barre d'état. Correction du texte de création, du rattachement sans objectif et de la commande circulaire ambiguë sur Détail ; l'icône reste modifiable via « Modifier ». Expiration SideStore remontée en tête de Réglages.
+- Aucun changement de schéma ni de protocole de synchronisation. Correctifs vérifiés automatiquement ; rendu natif à confirmer sur le lot iPhone. La refonte de Nouvelle tâche et Détail attend les maquettes d'Ali.
+
 ## 1.0.0
 
 - Lot candidat iPhone : les vérifications natives du guide `docs/essais-iphone.md` restent à exécuter ; la publication de l'IPA ne vaut pas validation de la recette 1.0.

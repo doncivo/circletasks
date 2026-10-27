@@ -20,7 +20,7 @@ html[data-privacy='on'] #ct-privacy-cover {
 
 .ct-lock {
   position: fixed;
-  inset: 0;
+  inset: var(--ct-safe-area-top) var(--ct-safe-area-right) var(--ct-safe-area-bottom) var(--ct-safe-area-left);
   z-index: 2147483000;
   box-sizing: border-box;
   display: flex;
@@ -28,8 +28,7 @@ html[data-privacy='on'] #ct-privacy-cover {
   align-items: center;
   justify-content: center;
   gap: var(--ct-space-3);
-  padding: calc(var(--ct-space-6) + var(--ct-safe-area-top)) calc(var(--ct-space-5) + var(--ct-safe-area-right))
-    calc(var(--ct-space-6) + var(--ct-safe-area-bottom)) calc(var(--ct-space-5) + var(--ct-safe-area-left));
+  padding: var(--ct-space-6) var(--ct-space-5);
   overflow-y: auto;
   background: var(--ct-color-bg);
   color: var(--ct-color-text);

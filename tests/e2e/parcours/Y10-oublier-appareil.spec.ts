@@ -77,7 +77,8 @@ test('Y-10 : oublier l’iPhone depuis le PC, suppression des fichiers en attent
   await iphoneRow.getByRole('button', { name: 'Oublier iPhone' }).click();
   await dialog.getByRole('button', { name: 'Continuer' }).click();
   await expect(iphoneRow.getByText('Oublié', { exact: true })).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
-  await expect(iphoneRow.getByRole('button')).toHaveCount(0);
+  await expect(iphoneRow.getByRole('button', { name: /^Oublier / })).toHaveCount(0);
+  await expect(iphoneRow.getByRole('button', { name: 'Renommer iPhone' })).toBeVisible();
   // Critère 13 : le second PC n'a pas encore accusé la déclaration : suppression en attente, et il est nommé.
   await expect(iphoneRow.getByRole('status')).toHaveText(/^Oublié · suppression des fichiers en attente de PC/);
 

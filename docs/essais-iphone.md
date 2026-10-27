@@ -1,20 +1,37 @@
 # Essais iPhone du lot 1.0
 
+**Retour du 26 octobre 2026 :** Ali confirme la réussite du paquet A et des autres essais natifs ci-dessous en 1.0.1. Ne pas les refaire pour la refonte. A9 reste non exécuté, risque accepté ; A6b reste une vérification future en usage après la 1.0.
+
+## Refonte Nouvelle tâche et Détail — candidat 1.0.2
+
+**PC et iPhone 1.0.2 publiés et vérifiés**, source f473e113, schéma toujours 19 : PC par sa bannière d'abord, puis iPhone SideStore sans désinstallation. [IPA 1.0.2](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.2/CircleTasks.ipa), 7363893 octets, SHA-256 `89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675`. [Build iPhone](https://github.com/doncivo/circletasks/actions/runs/40300455346) et [build PC](https://github.com/doncivo/circletasks/actions/runs/40300455500) verts ; signature PC, endpoint updater et source SideStore concordants. Références : Ajout-v2 et Detail-v2 de #84. Les contrôles automatiques des écritures et de navigation ne sont pas à rejouer ; seuls les points natifs suivants restent à observer. Pour tout écart : noter écran, orientation, version, geste, attendu/observé et capture, sans données sensibles.
+
+1. **Clavier à l'ouverture.** Toucher + → Nouvelle tâche s'ouvre avec le titre actif et le clavier visible ; titre en grand, date/heure et espace accessibles, bouton « Ajouter la tâche » au-dessus du clavier. Sinon noter ce qui est masqué ou n'a pas le focus.
+2. **Options et sélecteurs au doigt.** Toucher Date puis Heure et régler les roues ; ouvrir « Plus d'options », faire défiler puis replier → sélecteurs utilisables, choix conservés, titre inchangé et bouton d'ajout toujours accessible. Sinon noter la roue, le choix perdu ou le bouton caché. Créer uniquement une tâche d'essai.
+3. **Détail.** Ouvrir la tâche d'essai et une tâche avec rappel → titre et espace séparés, échéance et rappel sur deux lignes distinctes, motif visible si le rappel est décalé ; Reporter/Un jour/Dupliquer accessibles avant Focus et suppression, une seule commande Terminer. Faire défiler → en-tête et actions restent accessibles, note entièrement atteignable. Sinon noter libellé, zone coupée ou action masquée.
+4. **Clair, sombre et paysage.** Revoir ces deux écrans dans les deux thèmes et après rotation, clavier ouvert puis fermé → textes lisibles, aucun débordement sous l'encoche ou la barre basse, tous les champs et actions atteignables par défilement. Sinon noter thème, orientation et capture. Aucune nouvelle panne iCloud ni migration n'est à provoquer pour cette refonte.
+
+## Historique du lot 1.0.1 — déjà validé
+
+**Historique : paquet A UI-FIX-02, PC et iPhone 1.0.1 publiés le 24 octobre 2026**, même source `b8ddc85f`, sans changement de schéma (19). Essais natifs acceptés par Ali le 26 octobre ; ne pas réinstaller cette ancienne version ni rejouer ces essais pour la refonte. La procédure détaillée ci-dessous est conservée comme référence.
+
+[IPA 1.0.1](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.1/CircleTasks.ipa) : **7 356 612 octets**, SHA-256 `d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97`. [Build iPhone](https://github.com/doncivo/circletasks/actions/runs/40090523848) et [build PC](https://github.com/doncivo/circletasks/actions/runs/40090523636) verts. Version/build 1.0.1, identifiant `fr.circletasks.planner`, minimum iOS 18.0, contrat des cinq plugins et source SideStore contrôlés ; empreinte de l'asset et de l'artefact identiques. PC : signature Ed25519/version 1.0.1 et endpoint updater public vérifiés, aucune exécution manuelle de l'installeur. Les références 1.0.0 conservées ci-dessous sont historiques.
+
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.
 
 A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage personnel. Il redevient bloquant si et seulement si l'app sort de l'usage personnel d'Ali ; sa vérification est alors obligatoire avant toute distribution à des tiers ou utilisation multi-utilisateur. Ce statut est un trou assumé, pas une story reportée ni un essai réussi.
 
-Aucune IPA A9 à installer. Utiliser uniquement le candidat officiel 1.0.0. PC par bannière de mise à jour d'abord, puis iPhone par SideStore après S1 à S4. A6b : « vérifié en usage après la 1.0 », futur et non fait.
+Aucune IPA A9 à installer. Utiliser uniquement le candidat officiel du paquet A, version 1.0.1 sur les deux appareils. PC par bannière de mise à jour d'abord, puis iPhone par SideStore après S1 à S4. A6b : « vérifié en usage après la 1.0 », futur et non fait.
 
 Lot **publié : 1.0.0**, build **1.0.0**, source **dcde7edc** ; [compilation et publication vertes](https://github.com/doncivo/circletasks/actions/runs/39605174348). [IPA du lot](https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.0.0/CircleTasks.ipa), **7 356 430 octets**, SHA-256 `d993e7ed6f86c0ad0f7b8ec80cc8407b0ef0e31639aa66fb8a68ffed1de80057`. Identifiant `fr.circletasks.planner` et minimum iOS 18.0 vérifiés dans le Info.plist exporté de cette IPA ; taille et empreinte concordent avec l'asset et source.json. La mise à jour normale se fait depuis la source SideStore, sans désinstallation. Compilation réussie ne signifie pas essais physiques réussis.
 
 Chaque ligne donne une action et son résultat attendu. Noter pour chaque essai : version, heure, succès ou échec, capture et code affiché en cas d'échec. Les contrôles automatisés ne valent pas une vérification sur appareil. Ne jamais supprimer CircleTasks entre N et N+1 ; sur PC, utiliser seulement la bannière de mise à jour intégrée.
 
-Avant les parcours : conserver l'IPA déjà installée comme N ; vérifier la sauvegarde ci-dessous, puis suivre la séquence SideStore avant les régressions. N+1 est l'IPA 1.0.0 ci-dessus. Sur PC, attendre la publication du lot puis utiliser uniquement la bannière de mise à jour intégrée. Une ligne ne devient vérifiée qu'après son exécution ; la publication d'une IPA ne suffit pas. Le rappel à deux jours reste différé ; ne pas avancer l'horloge.
+Avant les parcours : conserver l'IPA déjà installée comme N (1.0.0 pour la séance du paquet A) ; vérifier la sauvegarde ci-dessous, puis suivre la séquence SideStore avant les régressions. N+1 est l'IPA 1.0.1, uniquement après confirmation de sa publication. Sur PC, utiliser d'abord la bannière de mise à jour intégrée et vérifier 1.0.1 dans À propos. Une ligne ne devient vérifiée qu'après son exécution ; la publication d'une IPA ne suffit pas. Le rappel à deux jours reste différé ; ne pas avancer l'horloge.
 
 ## Avant toute mise à jour qui change le schéma — confirmer la sauvegarde iCloud
 
-**Règle permanente :** avant d'installer une version qui change le schéma, vérifier une sauvegarde iCloud récente avec S1 à S4 ci-dessous. La mise à jour 0.3.3 → 1.0.0 passe du schéma 18 au 19 : cette vérification s'applique maintenant. Si la sauvegarde n'est pas confirmée, rester sur la version installée. Une synchronisation iCloud Drive ne remplace pas cette sauvegarde. Le contrôle ne prouve pas qu'une restauration a été essayée.
+**Règle permanente :** avant d'installer une version qui change le schéma, vérifier une sauvegarde iCloud récente avec S1 à S4 ci-dessous. La mise à jour 0.3.3 → 1.0.0 passe du schéma 18 au 19 ; la mise à jour 1.0.0 → 1.0.1 conserve le schéma 19. S1 à S4 restent la préparation prudente de cette séance. Si la sauvegarde n'est pas confirmée, rester sur la version installée. Une synchronisation iCloud Drive ne remplace pas cette sauvegarde. Le contrôle ne prouve pas qu'une restauration a été essayée.
 
 La sauvegarde de CircleTasks reste locale au conteneur de l'app. Le dossier de synchronisation iCloud Drive n'est pas une sauvegarde de cette base. Une date récente de sauvegarde iCloud ne prouve pas à elle seule l'inclusion de CircleTasks, ni qu'une restauration d'app signée par SideStore a été testée.
 
@@ -83,3 +100,18 @@ Les projets Playwright `pc` et `iphone` sont des navigateurs : ils prouvent les 
 
 
 À la fin, vérifier Détails des deux appareils → état cohérent avec les succès et erreurs réellement observés. Exporter le journal depuis l'app et fournir le fichier avec les résultats ; Codex ne lit pas directement les dossiers personnels iCloud ou AppData. Les preuves d'appareil ouvertes (B5, clavier, gardes, aperçus, `%`, I-06) ne sont closes qu'après ces retours.
+
+## Vérification du paquet A — UI-FIX-02
+
+Attendre la remise du lot 1.0.1, mettre le PC à jour par sa bannière, puis l'iPhone par SideStore sans désinstallation. Aucun changement de schéma entre 1.0.0 et 1.0.1 ; A9 reste le trou assumé, pas un essai à lancer. Pour chaque ligne : noter version, heure, résultat observé, capture et code exact si l'attendu n'est pas obtenu.
+
+1. **Couleurs.** En mode avion, ouvrir Synchronisation puis rétablir le réseau → attente neutre, erreurs distinctes et vert uniquement après une synchronisation complète ; sinon noter le libellé et la couleur affichés.
+2. **Zones sûres.** Parcourir et faire défiler chaque onglet, Réglages et ses sous-écrans ; ouvrir Détail, Nouvelle tâche et une confirmation → aucun contenu dans la barre d'état, titre Détail entier, boutons bas accessibles ; sinon noter écran, orientation et position de défilement.
+3. **Jamais lu.** Observer un appareil n'ayant encore aucune modification lue → « Jamais lu », aucune heure inventée ; sinon noter l'appareil et le texte. Ne pas remettre à zéro la synchronisation pour fabriquer ce cas : s'il n'existe pas, noter « non reproduit ».
+4. **Création.** Ouvrir une tâche créée aujourd'hui et une tâche plus ancienne → « Créée aujourd'hui… » ou « Créée le 21 oct.… », jamais « le le » ; sinon copier le texte.
+5. **Appareils.** Comparer les trois lignes d'appareils → même gabarit, statut en colonne, dernière lecture sous le bon nom ; sinon capturer le bloc entier.
+6. **Noms.** Toucher le nom d'un appareil, donner un nom reconnaissable, enregistrer puis fermer et rouvrir l'app → nom conservé et identifiant secondaire inchangé. Ces noms sont locaux à l'appareil qui les modifie ; sinon noter avant/après et toute erreur d'enregistrement.
+7. **Objectif.** Dans une semaine sans objectif, ouvrir Nouvelle tâche puis Détail → interrupteur inactif et une seule explication « Aucun objectif cette semaine », sans chevauchement ; sinon noter la semaine et l'écran. Conserver tout objectif réel existant : s'il manque un contexte sans objectif, noter « non reproduit ».
+8. **Fin de tâche.** Ouvrir une tâche d'essai → seul le bouton « Marquer comme terminée » permet de la terminer, aucun cercle ambigu près du titre ; l'icône se modifie toujours par « Modifier ». Terminer la tâche d'essai → état terminé conservé ; sinon noter les commandes et l'état obtenu.
+9. **Expiration.** Ouvrir Réglages depuis le haut → expiration de signature visible avant Général, sans aller au bas de l'écran ; sinon noter date et emplacement. Si un bandeau d'expiration existe, « Voir » doit mener à cette ligne ; ne pas avancer l'horloge pour le provoquer.
+10. **Conflits.** Ouvrir un conflit existant ou le conflit de la tâche d'essai de M10 → nom explicite du champ (« date prévue », « heure prévue », « état de la tâche »), valeurs et appareils compréhensibles. Le titre de tâche « TEST », s'il existe, reste son vrai titre ; sinon noter le libellé exact. Aucun conflit réel n'est à créer uniquement pour vérifier ce texte.

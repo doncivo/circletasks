@@ -70,7 +70,7 @@ describe('Graphique de complétion (H-02)', () => {
 
   it('critère 3 : « Mois : 79 % » à droite du titre, somme des barres égale au total du mois (34 sur 45 = 76 %)', async () => {
     render(<CompletionSection report={report(COUNTS)} />);
-    expect(screen.getByRole('heading', { level: 2, name: 'TAUX DE COMPLÉTION PAR SEMAINE' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'TAUX D’ACHÈVEMENT PAR SEMAINE' })).toBeInTheDocument();
     expect(screen.getByTestId('month-rate')).toHaveTextContent('Mois : 76 %');
     expect(await screen.findAllByRole('img', { name: /^S3\d/ })).toHaveLength(4);
   });
@@ -86,7 +86,7 @@ describe('Graphique de complétion (H-02)', () => {
 
   it('critère 8 : tableau équivalent lisible par lecteur d’écran', () => {
     render(<CompletionSection report={report(COUNTS)} />);
-    const table = screen.getByRole('table', { name: 'Taux de complétion par semaine, en tableau' });
+    const table = screen.getByRole('table', { name: 'Taux d’achèvement par semaine, en tableau' });
     expect(table).toHaveClass('ct-visually-hidden');
     const rows = within(table).getAllByRole('row').map((row) => row.textContent);
     expect(rows).toEqual(['Semaine 36 : 71 %, 5 tâches sur 7', 'Semaine 37 : 84 %, 21 tâches sur 25', 'Semaine 38 : aucune tâche', 'Semaine 39 : 62 %, 8 tâches sur 13']);

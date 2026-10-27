@@ -104,12 +104,12 @@ const IPHONE2 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' as DeviceId;
 const device = (deviceId: DeviceId, platform: 'windows' | 'ios', self = false): SyncStatus['devices'][number] => ({ deviceId, platform, self, lastReadAt: null, status: 'active' });
 
 describe('appareils et heures (critère 3)', () => {
-  it('« PC », « iPhone », suffixe de 4 caractères si deux semblables, « Autre appareil » si inconnu', () => {
+  it('« PC », « iPhone », numéro lisible si deux semblables, « Autre appareil » si inconnu', () => {
     const two = [device(PC, 'windows', true), device(IPHONE, 'ios')];
     expect(conflictDeviceName(PC, two)).toBe('PC');
     expect(conflictDeviceName(IPHONE, two)).toBe('iPhone');
     const three = [...two, device(IPHONE2, 'ios')];
-    expect(conflictDeviceName(IPHONE2, three)).toBe(translate('fr', 'sync.status.deviceNamed', { platform: 'iPhone', short: 'cccc' }));
+    expect(conflictDeviceName(IPHONE2, three)).toBe(translate('fr', 'sync.status.deviceNumbered', { platform: 'iPhone', number: 2 }));
     expect(conflictDeviceName('dddddddd-dddd-4ddd-8ddd-dddddddddddd' as DeviceId, two)).toBe('Autre appareil');
   });
 

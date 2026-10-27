@@ -60,14 +60,14 @@ describe('résumé (critère 17 a à c)', () => {
     const dialog = screen.getByRole('dialog', { name: 'Compte rendu du changement d’époque' });
     expect(within(dialog).getByText('Époque du 18 oct. 2026 à 14:05')).toBeTruthy();
     expect(within(dialog).getByText('Restauration « Appliquer partout »')).toBeTruthy();
-    expect(within(dialog).getByText('Ouverte par : PC 2222')).toBeTruthy();
+    expect(within(dialog).getByText('Ouverte par : PC 1')).toBeTruthy();
     expect(within(dialog).getByText('Reporté par : Cet appareil')).toBeTruthy();
     expect(within(dialog).getByText('Éléments rétablis : 1')).toBeTruthy();
     const writes = within(dialog).getByRole('list', { name: 'Écritures reportées : 4' });
     expect(within(writes).getByText('Écritures reportées par Cet appareil')).toBeTruthy();
-    expect(within(writes).getByText('Écritures reportées par PC 2222')).toBeTruthy();
+    expect(within(writes).getByText('Écritures reportées par PC 1')).toBeTruthy();
     expect(within(writes).getByText('Champs : 5 · Lignes : 2 · Traces : 1 · Tardives : 1')).toBeTruthy();
-    expect(within(writes).getByText('Écritures reportées par PC 3333 (oublié)')).toBeTruthy();
+    expect(within(writes).getByText('Écritures reportées par PC 2 (oublié)')).toBeTruthy();
     expect(within(writes).getByText('Écritures reportées par Appareil 44444444')).toBeTruthy();
   });
 
@@ -100,8 +100,8 @@ describe('listes nommées (critère 17 d à f)', () => {
     const [first, second] = within(restored).getAllByRole('listitem');
     expect(within(first as HTMLElement).getByText('Tâche')).toBeTruthy();
     expect(within(first as HTMLElement).getByText('À jeter')).toBeTruthy();
-    expect(within(first as HTMLElement).getByText('Rétabli par : PC 2222')).toBeTruthy();
-    expect(within(first as HTMLElement).getByText('Supprimé le 17 oct. 2026 à 09:30 par PC 3333 (oublié)')).toBeTruthy();
+    expect(within(first as HTMLElement).getByText('Rétabli par : PC 1')).toBeTruthy();
+    expect(within(first as HTMLElement).getByText('Supprimé le 17 oct. 2026 à 09:30 par PC 2 (oublié)')).toBeTruthy();
     expect(within(second as HTMLElement).getByText('Projet')).toBeTruthy();
     const recreated = screen.getByRole('list', { name: 'Recréés : 1' });
     expect(within(recreated).getByText('Test Pc')).toBeTruthy();

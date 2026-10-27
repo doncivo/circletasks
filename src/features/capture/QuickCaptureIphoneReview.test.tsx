@@ -38,7 +38,7 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Acheter du pain' } });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
       await Promise.resolve();
     });
     await act(async () => {
@@ -60,7 +60,7 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
     expect(screen.getByLabelText('Titre').closest('.ct-task-sheet__fields')).not.toHaveAttribute('inert');
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Acheter du pain complet' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
       await Promise.resolve();
     });
     expect(onCreate.mock.calls.map(([input]) => input.title)).toEqual(['Acheter du pain', 'Acheter du pain complet']);
@@ -81,7 +81,7 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Appeler le notaire' } });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
       await Promise.resolve();
     });
     await act(async () => {
@@ -163,7 +163,7 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Une seule fois' } });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
       await Promise.resolve();
     });
     await act(async () => {

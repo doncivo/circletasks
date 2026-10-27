@@ -35,7 +35,7 @@ test('parcours 7 : saisie en langage naturel, puis scan d’une liste, relecture
   const preview = page.getByRole('group', { name: 'Ce qui sera appliqué' });
   await expect(preview).toContainText('10:00');
   await expect(preview).toContainText('Perso');
-  if (phone) await page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByRole('button', { name: 'Enregistrer' }).click();
+  if (phone) await page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
   else await field.press('Enter');
   // Tâche créée avec le titre nettoyé (ni date, ni heure, ni marque), à 10:00 dans Perso.
   const captured = rowOf(page, title);

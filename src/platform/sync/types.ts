@@ -476,6 +476,8 @@ export { SYNC_PHASES, SYNC_WARNINGS, type SyncWarningCode } from '../../domain/s
 export type DeviceSyncStatus = 'active' | 'expired' | 'newer-major' | 'clock-ahead' | 'corrupt' | 'foreign' | 'rollback' | 'forgotten';
 
 export interface SyncDeviceStatus {
+  /** Nom d'affichage local ; jamais publié dans les journaux ou états de synchronisation. */
+  readonly displayName?: string;
   readonly deviceId: DeviceId;
   readonly platform: SyncDevicePlatform;
   readonly self: boolean;

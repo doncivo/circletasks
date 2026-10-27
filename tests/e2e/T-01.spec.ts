@@ -52,7 +52,7 @@ test.describe('T-01 — créer une tâche avec un titre seul', () => {
     if (testInfo.project.name === 'iphone') {
       const sheet = page.getByRole('dialog', { name: 'Nouvelle tâche' });
       await expect(sheet).toBeVisible();
-      const save = sheet.getByRole('button', { name: 'Enregistrer' });
+      const save = sheet.getByRole('button', { name: 'Ajouter la tâche' });
       await expect(save).toBeDisabled();
 
       const title = `Tâche feuille ${Date.now()}`;

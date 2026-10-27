@@ -1,5 +1,37 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — UI-FIX-03, Rapport du mois
+
+Demande 11/12/14 reproduite avant correctif e01b756e : quatre échecs DOM sur les phrases absentes et le titre du ratio ; navigateur iPhone confirme le retour à droite. Correction en QA : phrases adaptées à l'absence ou au filtre, retour à gauche sur mobile, titre Taux d'achèvement. Exports alignés sur l'écran avec phrases sur plusieurs lignes. Aucun calcul métier ni schéma modifié. Les résultats verts, revue et CI restent à consigner.
+
+QA locale terminée : 59 ciblés, 13 e2e initiaux et cinq complémentaires verts ; lint/typage et 62 gardes bundle verts. Oracles corrigés : ancien nom du tableau accessible, sélection des textes d'export limitée aux tuiles, position du retour comparée au bord gauche de son en-tête plutôt qu'à une borne absolue ignorant la marge. Pas de test instable ni de délai ajouté. Revue approuvée dans UI-FIX-03 ; CI et fusion encore attendues.
+
+## Refonte 1.0.2 — publication vérifiée
+
+UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
+
+Builds réels **40300455346 (iPhone) / 40300455500 (PC)** verts. IPA **7363893 octets**, SHA-256 **89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675**, concordants avec l'asset et source SideStore ; version/build 1.0.2, fr.circletasks.planner, iOS minimum 18.0, contrat cinq plugins contrôlés. EXE **6406556 octets**, SHA-256 **aa231a03b9c5cb13e944ed7fec0ece26ac7dd0b99d01ff5bee239ed2e84a18d7**, signature Ed25519 et endpoint updater 1.0.2 vérifiés sans exécution. PC uniquement par bannière ; iPhone par SideStore sans désinstallation.
+
+**Rendu natif de la refonte encore ouvert** : quatre contrôles seulement dans docs/essais-iphone.md. Les essais 1.0.1 sont acceptés par Ali, sans les réattribuer à 1.0.2. A9 reste le trou assumé ; A6b reste une vérification future en usage après la 1.0. Suivi documentaire sur rel-03-refonte-1-0-2 ; aucune recompilation pour ces textes.
+
+## UI-REFONTE-01 — correction des premiers retours CI
+
+Tête a70393fe, runs 40293615923 / 40293695880 : anciens accès aux options et libellés de création dans les parcours Projet/Espace/Un jour et les gardes de largeur ; adaptations ciblées, assertions de données conservées. Le test SD-03 a aussi révélé une régression réelle du nouveau rendu : les avances inactives étaient cachées derrière le seul texte Inactif. Leur affichage grisé est rétabli, sans changer les lignes de base ; test d'origine conservé.
+
+Le contraste d'espace était une variable CSS non résolue par la garde. La vue calcule désormais noir ou blanc sur la couleur réelle (≥ 4,5:1), vérification des huit couleurs et quatre cas limites plus liaison au bouton rendu ; aucune exception CSS ajoutée. Le banc de feuille complète ouvre explicitement les options et la date pour conserver les icônes visibles et trois roues : budget 700 ms à CPU ×4 et cinq mesures inchangés, essai vert. Le choix de date se termine par Terminé, distinct de Fermer la feuille. Hors ligne dans le navigateur : assets préchargés comme ceux embarqués localement dans Tauri, puis coupure HTTP réelle maintenue ; la création locale reste testée. Résultats du complément : 144 ciblés, six e2e et performance verts ; lint/typage verts, bundle avant push en cours. Aucun délai, retry automatique, seuil ou test instable écarté.
+
+## 26 octobre 2026 — recette 1.0.1 reçue, refonte autorisée
+
+Ali confirme dans la conversation la réussite des dix contrôles du paquet A et des autres essais natifs du guide. Attestation utilisateur, sans inventer de captures ni d'heures individuelles. Le paquet A et la recette du candidat 1.0.1 sont acceptés ; A9 reste le trou assumé, A6b reste une vérification future en usage après la 1.0. Les preuves automatiques et les artefacts déjà vérifiés restent ceux de #83 / #85.
+
+Nouvelle demande : refonte de Nouvelle tâche et Détail, story UI-REFONTE-01, branche du même nom dans n-ios-apercus. Références Ajout-v2 / Detail-v2 de la PR #84, autres écrans exclus. Candidat 1.0.2 sans migration, schéma 19. Nouveau rendu non encore validé sur appareil ; ne pas lui attribuer la recette de 1.0.1. Estimation 6 à 8 h actives, alerte 12 h. Tests ciblés, revue, CI, bundle et publication à terminer avant remise.
+
+## Paquet A — publication vérifiée du 24 octobre 2026
+
+PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.
+
+Bundle main après #83 : **58/58, 339 198 normalisés, 339 190 bruts, marge 19 202 octets**, plafond et liste de modules inchangés ; +722 octets pour le paquet. CI applicative 48/48, lint, typage et revue approuvée. **Vérification native du paquet et clôture REL-01 à REL-03 encore ouvertes** ; ne pas écrire « fait ». A9 reste le trou assumé décidé par Ali, A6b « vérifié en usage après la 1.0 » est futur, pas exécuté. Suivi documentaire sur rel-03-paquet-a-1-0-1 ; aucune recompilation pour ces textes.
+
 ## 2026-10-21 — préparation N-IOS-CHK-01 et guide du lot
 
 Branche de protocole séparée depuis N-IOS-FIX-01, préparée pendant sa CI, publication après sa fusion. Fiche des pourcentages : titres littéraux et corps via renommage temporaire d'un espace existant (ES-01), restauration du nom et des aperçus ; aucun code corrigé sans preuve native. Guide conservant les cinq régressions en tête, puis annexes, douze parcours et I-06 A1–A10 ; attentes réelles sur plusieurs jours et limites de simulation explicites. Relecture QA et revue distincte approuvées pour le protocole, pas pour le résultat physique. 1 h prévue, alerte 1,5 h. Aucun nouveau build iPhone, données réelles jamais consultées par Codex.
@@ -383,3 +415,27 @@ A9 n'est plus bloquant avant un changement de schéma ni pour la 1.0 en usage pe
 Rappel dans l'app estimé à 3–4 h avec validation et nouveau build : la mise à jour SideStore est extérieure à l'app et une version déjà installée ne peut recevoir ce rappel rétroactivement. Plafond 2 h dépassé : rappel dans le guide seulement, moins d'une heure d'intégration estimée. Aucun code ni nouveau build ; candidats officiels conservés. Ancien ZIP déjà retiré, brouillon de séance et les deux artefacts IPA GitHub supprimés ; copies locales du paquet à supprimer uniquement dans le répertoire temporaire A9 vérifié.
 
 Passe product-owner : risque accepté sans faux statut fait ; QA documentaire : cohérence des règles, procédure S1–S4 et séparation iCloud Drive/sauvegarde relues. Passe code-reviewer distincte : diff documentaire relu, pas de modification PRD ni d'application ; revue approuvée sous réserve des contrôles CI obligatoires. Recette physique REL-01/02/03 en attente d'Ali.
+
+## 2026-10-24 — UI-FIX-02, paquet A en cours
+
+Point 1 : rouge 32d3b748 (18 assertions de couleur/annonce en échec, 14 tests existants verts), correctif b2ca3887 ; 47 tests ciblés verts avec couverture coupée. Vert réservé aux cycles complets ; attente et publication incomplète neutres, erreurs en danger, annonce vocale cohérente. Lancement initial forks : aucun test exécuté, timeout de démarrage de worker, donc jamais compté comme preuve rouge. Diagnostic : IPC Node et import/construction jsdom natifs réussis ; exécution threads complète sans changer délai, timeout ni test. Ce changement de pool est une condition d'exécution locale, pas une relance automatique ni une preuve de résolution du démarrage forks. CI garde sa configuration habituelle.
+
+Point 2 : preuve de géométrie des conteneurs communs préparée, marges sûres simulées 59/34 px. Nouvelle tâche et Détail : aucune refonte autorisée avant les maquettes.
+
+UI-FIX-02, points 2 à 6 : zones sûres, rouge eb1461b3 puis extension rouge 321dca2f (six boîtes communes supplémentaires), correction 4d783a88 ; 11 contrôles Playwright verts. Banc de géométrie corrigé pour inclure le même viewport mobile que l'app, sans changement de seuil : sa première version omettait la balise viewport et mesurait une page mobile de 980 px. Lecture HLC zéro et préposition de création : 4 tests rouges dans 321dca2f, 6 tests du module verts après 4d783a88. Appareils : rouge f5178fa7, correction add83332, 52 tests verts ; gabarit identique avec lecture sous chaque nom, statut aligné. Noms : rouge 635e0df6, 19 tests verts après correction locale ; surnoms persistés dans sync_meta.ui.deviceNames, non synchronisés, identifiant complet secondaire et échec d'écriture visible. Validation CI et appareil encore dues.
+
+UI-FIX-02, fin de préparation locale : revue à froid approuvée, lint et typage verts (clé common.retry ajoutée aux deux langues, propriété displayName absente au lieu de undefined sous exactOptionalPropertyTypes). Complément de zones sûres : rouge b69c131a pour le bas et les côtés en paysage, 14 contrôles de géométrie/couleurs verts après correction ; la coquille porte les quatre marges, sans double ajout aux contenus. Noms : 4 tests verts, dont préférence illisible, maintien du contenu et reprise explicite. Minuit réel et libellé « Jamais lu » : 20 tests verts. Contrat release : 19 tests verts ; version 1.0.1 préparée dans les cinq sources, sans changement de dépendance, schéma ou protocole.
+
+Un appel d'exécution a retenu la main environ 22 minutes entre 12:26 et 12:48 : attente d'outil, pas un délai ajouté ni une relance automatique. Ne pas confondre ces minutes avec du travail de code ou une preuve de performance. CI, mesure finale du bundle et vérification des artefacts restent requises avant remise du paquet ; les résultats natifs restent ouverts.
+
+UI-FIX-02, première CI de #83 (5064a048), runs 40088084837 / 40088088787 : le changement du nom partagé affectait aussi les sauvegardes inconnues. Leur identifiant de secours était remplacé par un nom trop générique ; restauration du libellé neutre avec identifiant dans backupLabels, en conservant les nouveaux noms numérotés des appareils connus. Tests de conflits/sauvegardes et parcours J10/Y10 adaptés aux noms lisibles, au champ « heure prévue » (confirmation de restauration comprise) et au maintien du bouton Renommer sur un appareil oublié ; Oublier reste absent. 37 tests ciblés verts, deux scénarios d'oubli verts, J10 composé vert. Aucun test instable ignoré ; aucune relance automatique ni modification de délai. L'ancien attendu de confirmation J10 avait déjà été chargé au moment de son édition locale : le passage suivant porte bien sur le test corrigé.
+
+Bundle avant le premier push : 58/58, 339 198 normalisés, 339 199 bruts, marge 19 202, +722 octets. Aucune entrée ajoutée à la liste des modules de départ. Mesure répétée avant le push correctif, couverture complète attendue en CI sur la nouvelle tête.
+
+## 2026-10-24 — REL-03, préparation de la remise du paquet A
+
+#83 fusionnée dans b8ddc85f après 48 contrôles verts de 80970c6c, runs 40089223693 / 40089225629. Lint, typage et revue consignés. Les trois lignes de périmètre d'AGENTS ajoutées sur main par cfa2c8f0 sont conservées ; les fichiers applicatifs et dépendances ne diffèrent pas de la tête approuvée. Mesure du bundle sur main avant les tags de livraison. Version 1.0.1 sans changement de schéma ni de protocole ; build iPhone unique et build PC à effectuer sur le même commit. Pas de validation native revendiquée ; A9 reste le risque accepté, pas un banc à reprendre.
+
+### UI-REFONTE-01 — diagnostic du banc de fuseaux
+
+La passe ciblée locale en threads compte 871 verts et cinq échecs : quatre anciens accès aux options repliées/chargées à la demande, adaptés puis 63/63 verts ; un test floatingTime modifie process.env.TZ. Sous worker thread Windows, cette mutation ne change pas le fuseau de Date comme dans un processus indépendant. Même fichier inchangé exécuté avec le pool forks habituel : 3/3 verts. Aucun test sauté, aucun délai augmenté, aucune relance automatique ni changement du pool CI. La passe threads n'est pas revendiquée comme suite complète verte.

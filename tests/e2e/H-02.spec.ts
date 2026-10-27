@@ -32,7 +32,7 @@ test.describe('H-02 — taux de complétion par semaine', () => {
 
   test('critères 1 à 3 : quatre barres S36 à S39, taux et « — », semaine courante repérée, « Mois : 67 % » = tuile « 6 sur 9 »', async ({ page }) => {
     await openReport(page, 'septembre');
-    await expect(page.getByRole('heading', { level: 2, name: 'TAUX DE COMPLÉTION PAR SEMAINE' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'TAUX D’ACHÈVEMENT PAR SEMAINE' })).toBeVisible();
     const bars = page.locator('.ct-stats__bar');
     await expect(bars).toHaveCount(4);
     await expect(bar(page, '2026-08-31')).toContainText('75 %');
@@ -97,7 +97,7 @@ test.describe('H-02 — taux de complétion par semaine', () => {
 
   test('critère 8 : tableau équivalent masqué visuellement mais lisible', async ({ page }) => {
     await openReport(page, 'septembre');
-    const table = page.getByRole('table', { name: 'Taux de complétion par semaine, en tableau' });
+    const table = page.getByRole('table', { name: 'Taux d’achèvement par semaine, en tableau' });
     await expect(table).toHaveCount(1);
     await expect(table.getByRole('row')).toHaveText([
       'Semaine 36 : 75 %, 3 tâches sur 4',

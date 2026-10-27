@@ -54,8 +54,8 @@ test.describe('H-01 — rapport du mois', () => {
     await filterPill(page, 'Perso').click();
     await expect(tileOf(page, 'Tâches faites : 1 sur 2')).toBeVisible();
     await expect(tileOf(page, 'Focus : 0 min')).toBeVisible();
-    await expect(tileOf(page, 'Objectifs : aucun objectif')).toContainText('—');
-    await expect(tileOf(page, 'Routines : aucune occurrence prévue')).toContainText('—');
+    await expect(tileOf(page, 'Aucun objectif')).toContainText('Aucun objectif');
+    await expect(tileOf(page, 'Aucune routine ce mois-ci')).toContainText('Aucune routine ce mois-ci');
     await filterPill(page, 'Tout').click();
     await expect(tileOf(page, 'Tâches faites : 4 sur 6')).toBeVisible();
   });

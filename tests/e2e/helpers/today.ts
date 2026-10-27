@@ -19,7 +19,7 @@ export async function createTask(
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(input.title);
     await setWheels(page, dialog, { ...(input.date ? { date: input.date } : {}), ...(input.time ? { time: input.time } : {}) });
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: 'Ajouter la tâche' }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }

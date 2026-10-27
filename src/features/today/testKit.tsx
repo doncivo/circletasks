@@ -17,6 +17,7 @@ import type { Haptics } from '../../platform/haptics';
 import { TodayScreen } from './TodayScreen';
 import { LazyEventForm } from '../events/lazyEventForm';
 import { LazyRoutineForm } from '../routines/lazyRoutineForm';
+import { LazyTaskCreateOptions } from '../tasks/TaskCreateSheet';
 
 /** Aides des tests d'écran d'Aujourd'hui (A-01 à A-09) : base en mémoire, conteneur, rendu, jeu de tâches. */
 export interface TodayHarness {
@@ -35,6 +36,7 @@ export function mockViewport(width: number): void {
 }
 
 export async function setupToday(deviceSuffix: string, startAt = '2026-10-02T10:00:00.000Z', haptics?: Haptics): Promise<TodayHarness> {
+  await LazyTaskCreateOptions.preload();
   const device = asEntityId<DeviceId>(`60000000-0000-4000-8000-0000000${deviceSuffix.padStart(5, '0')}`);
   const db = await openTestDb(device, startAt);
   const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: device }), data: db.data, ...(haptics ? { haptics } : {}) });

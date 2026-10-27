@@ -136,6 +136,7 @@ describe('Projet à la création et dans la fiche (ES-04 critères 4, 5, 7)', ()
     renderToday(h.container);
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     expect(within(dialog).getByText('Projet : aucun')).toBeInTheDocument();
     expect(optionTexts(sheetProject(dialog))).toEqual(['Aucun', 'Mission client']);
     fireEvent.change(sheetProject(dialog), { target: { value: mission.id } });
@@ -146,7 +147,7 @@ describe('Projet à la création et dans la fiche (ES-04 critères 4, 5, 7)', ()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Pro' }));
     fireEvent.change(sheetProject(dialog), { target: { value: mission.id } });
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Préparer la réunion' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const [task] = await h.container.data.repos.tasks.listForDay(h.today, 'all');
     expect(task).toMatchObject({ title: 'Préparer la réunion', spaceId: SPACE_PRO_ID, projectId: mission.id });
@@ -158,8 +159,9 @@ describe('Projet à la création et dans la fiche (ES-04 critères 4, 5, 7)', ()
     renderToday(h.container);
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Sans projet' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await h.container.data.repos.tasks.listForDay(h.today, 'all'))[0]?.projectId).toBeNull();
   });

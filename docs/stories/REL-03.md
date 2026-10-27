@@ -1,5 +1,29 @@
 # REL-03 — Préparation et publication du lot 1.0
 
+## Refonte 1.0.2 — publication vérifiée
+
+UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
+
+Builds réels **40300455346 (iPhone) / 40300455500 (PC)** verts. IPA **7363893 octets**, SHA-256 **89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675**, concordants avec l'asset et source SideStore ; version/build 1.0.2, fr.circletasks.planner, iOS minimum 18.0, contrat cinq plugins contrôlés. EXE **6406556 octets**, SHA-256 **aa231a03b9c5cb13e944ed7fec0ece26ac7dd0b99d01ff5bee239ed2e84a18d7**, signature Ed25519 et endpoint updater 1.0.2 vérifiés sans exécution. PC uniquement par bannière ; iPhone par SideStore sans désinstallation.
+
+**Rendu natif de la refonte encore ouvert** : quatre contrôles seulement dans docs/essais-iphone.md. Les essais 1.0.1 sont acceptés par Ali, sans les réattribuer à 1.0.2. A9 reste le trou assumé ; A6b reste une vérification future en usage après la 1.0. Suivi documentaire sur rel-03-refonte-1-0-2 ; aucune recompilation pour ces textes.
+
+### Revue distincte de la remise 1.0.2
+
+Passe documentaire approuvée après confrontation du diff avec les deux runs réussis et les artefacts téléchargés : version, identifiant, contrat des cinq plugins, tailles et empreintes correspondent à la publication. Signature Ed25519 et endpoint PC vérifiés ; aucun EXE exécuté. Aucun code applicatif modifié par cette remise, aucune nouvelle compilation. Bundle avant push documentaire : 62/62 verts ; lint, typage et couverture de la source applicative verte, nouvelle CI complète obligatoire pour cette PR. Quatre observations natives demeurent explicitement ouvertes, sans attribuer la recette 1.0.1 à 1.0.2.
+
+## Verdict du candidat 1.0.1 — 26 octobre 2026
+
+Recette native acceptée par Ali dans la conversation : dix contrôles du paquet A et autres essais natifs du guide réussis. Les vérifications automatiques, audit et publication de 1.0.1 sont consignés dans les sections ci-dessous et UI-FIX-02 ; ce retour clôt le volet physique attendu de cette livraison. A9 : non exécuté, risque accepté ; A6b : vérification future en usage après la 1.0, non exécutée et non bloquante. Aucun détail individuel de séance inventé. La refonte 1.0.2 relève d'UI-REFONTE-01 et reste à vérifier séparément.
+
+## Paquet A — 1.0.1, suivi du 24 octobre 2026
+
+UI-FIX-02 est intégré par #83 dans b8ddc85f, tête 80970c6c, 48 CI verts (40089223693 / 40089225629), revue approuvée. Nouvelle tâche et Détail attendent toujours les maquettes hors corrections explicitement demandées. Version 1.0.1, schéma 19 et protocole inchangés. Bundle main après fusion : 58/58, 339 198 octets normalisés, 339 190 bruts, marge 19 202 ; coût du paquet 722 octets. Une seule compilation iPhone, run 40090523848 vert, et PC 40090523636 vert, tags ios-v1.0.1 / v1.0.1 sur cette même source. Les paragraphes 1.0.0 ci-dessous sont historiques, pas une preuve native de la 1.0.1.
+
+Vérification des artefacts : IPA téléchargée, 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97 identique à l'asset et source.json ; version/build 1.0.1, identifiant fr.circletasks.planner, minimum iOS 18.0, contrat cinq plugins et source SideStore valides (deux avertissements historiques 0.1.0 conservés). EXE téléchargé sans exécution, 6 402 709 octets, SHA-256 0de27f4640af6e4d130f8925526111b70a266018642989237fb5d365564e787d ; signature Ed25519, version signée et endpoint latest.json 1.0.1 concordants. PC uniquement par bannière. Guide actualisé, pas de deuxième compilation pour la documentation.
+
+Revue distincte du suivi documentaire : liens, empreintes et versions confrontés aux artefacts réels et aux runs ; aucun code applicatif modifié. Passe de revue approuvée. Bundle avant push documentaire 58/58 ; lint et typage applicatifs verts sur la source inchangée, nouvelle CI complète exigée sur la PR documentaire. REL-01 à REL-03 restent ouverts jusqu'aux résultats physiques ; A9 reste le trou assumé et A6b une vérification future en usage après la 1.0.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.

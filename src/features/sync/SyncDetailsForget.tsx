@@ -231,7 +231,6 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
           {t('sync.forget.revivedLine')}
         </span>
       )}
-      <span className="ct-sync__deviceRead">{t('sync.forget.shortId', { id: String(device.deviceId).slice(0, 8) })}</span>
       <Button variant="secondary" ariaLabel={t('sync.forget.actionLabel', { device: name })} onClick={() => setOpen(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
         {t('sync.forget.action')}
       </Button>

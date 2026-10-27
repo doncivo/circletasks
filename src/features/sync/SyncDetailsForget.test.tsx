@@ -78,13 +78,14 @@ describe('ligne APPAREILS (critère 1)', () => {
     });
     renderIn(<SyncDetailsScreen />);
     const iphone = devicesList()[1] as HTMLElement;
-    expect(within(iphone).queryByRole('button')).toBeNull();
+    expect(within(iphone).queryByRole('button', { name: /^Oublier / })).toBeNull();
+    expect(within(iphone).getByRole('button', { name: 'Renommer iPhone' })).toBeInTheDocument();
     expect(within(iphone).getByText('Oublié')).toBeTruthy();
-    expect(within(iphone).getByRole('status').textContent).toBe('Oublié · suppression des fichiers en attente de PC cccc');
+    expect(within(iphone).getByRole('status').textContent).toBe('Oublié · suppression des fichiers en attente de PC 2');
     act(() => sync.setStatus({ forget: { failure: null, deletions: [{ deviceId: IPHONE, state: 'deleting', waitingFor: null }] } }));
     expect(within(devicesList()[1] as HTMLElement).getByRole('status').textContent).toBe('Oublié · suppression des fichiers en cours');
     act(() => sync.setStatus({ forget: { failure: null, deletions: [{ deviceId: IPHONE, state: 'finalizing', waitingFor: PC2 }] } }));
-    expect(within(devicesList()[1] as HTMLElement).getByRole('status').textContent).toBe('Oublié · finalisation en attente de PC cccc');
+    expect(within(devicesList()[1] as HTMLElement).getByRole('status').textContent).toBe('Oublié · finalisation en attente de PC 2');
     act(() => sync.setStatus({ forget: null }));
     expect(within(devicesList()[1] as HTMLElement).queryByRole('status')).toBeNull();
   });
@@ -99,17 +100,17 @@ describe('ligne APPAREILS (critère 1)', () => {
 describe('audit Y-10 (ADR 0011 §18 point 8) : identifiant, appareils jamais vus', () => {
   it('chaque autre appareil affiche les 8 premiers caractères de son identifiant (les mêmes que la boîte native)', () => {
     renderIn(<SyncDetailsScreen />);
-    expect(within(devicesList()[1] as HTMLElement).getByText('Identifiant bbbbbbbb…')).toBeTruthy();
+    expect(within(devicesList()[1] as HTMLElement).getByText(IPHONE)).toBeTruthy();
   });
 
   it('appareil jamais vu : nom neutre « Appareil » et 8 caractères, état « Jamais vu », « Oublier » ; jamais « PC » inventé', () => {
     sync.setStatus({ devices: [self, other(IPHONE, 'ios'), { ...other(PC2, 'windows'), seen: false }] });
     renderIn(<SyncDetailsScreen />);
     const ghost = devicesList()[2] as HTMLElement;
-    expect(ghost.textContent).toContain('Appareil cccccccc');
+    expect(ghost.textContent).toContain('Appareil non identifié');
     expect(ghost.textContent).toContain('Jamais vu');
     expect(ghost.textContent).not.toMatch(/\bPC\b/);
-    expect(within(ghost).getByRole('button', { name: 'Oublier Appareil cccccccc' })).toBeTruthy();
+    expect(within(ghost).getByRole('button', { name: 'Oublier Appareil non identifié' })).toBeTruthy();
     // L'iPhone n'est pas renommé « iPhone bbbb » à cause du fantôme.
     expect((devicesList()[1] as HTMLElement).textContent).toMatch(/^iPhone/);
   });

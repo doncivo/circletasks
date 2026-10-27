@@ -33,9 +33,10 @@ async function createMonthly(page: Page, info: Info, title: string): Promise<voi
   if (isIphone(info)) {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await dialog.getByRole('button', { name: /Plus d.options/ }).click();
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('radio', { name: 'Mensuel' }).click();
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await dialog.getByRole('button', { name: /^(Ajouter la tâche|Enregistrer)$/ }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }

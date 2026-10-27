@@ -1,5 +1,45 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## 27 octobre — cinq défauts puis huit écrans autorisés
+
+Ali a fourni les points 11 à 15 et levé la pause des huit refontes. Ordre : Rapport (11/12/14, UI-FIX-03), Objectif (12/15), Concentration (13), puis Aujourd'hui iPhone clair/sombre, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. Une story par écran, preuves avant/après, revue distincte, CI et bundle après chaque fusion. Référence docs/maquettes-refonte sur design-maquettes-refonte, PR #84, bd3a80bf : reprendre hiérarchie, espacements et formulations, pas copier le HTML. Aucun nouveau résultat physique 1.0.2 reçu.
+
+Main a33c2dbf (#87 fusionnée, 48 contrôles verts ; bundle après fusion 62/62, 333 973 octets). Actif : UI-FIX-03, worktree n-ios-apercus. Preuve rouge e01b756e : quatre assertions DOM et retour navigateur à droite. Correctif en QA, pas encore poussé. Estimation trois écrans de correctifs : 4 à 6 h actives ; premier écran 1 h 30 à 2 h, alerte 3 h. Racine sur design-maquettes-refonte conservée. Pas de deuxième compilation 1.0.2 ; un seul futur lot après le travail autorisé.
+
+## Refonte 1.0.2 — publication vérifiée
+
+UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.
+
+Builds réels **40300455346 (iPhone) / 40300455500 (PC)** verts. IPA **7363893 octets**, SHA-256 **89fda9b6cde29106e442e6553742debfbef323dc6000f9e5afac601e938e3675**, concordants avec l'asset et source SideStore ; version/build 1.0.2, fr.circletasks.planner, iOS minimum 18.0, contrat cinq plugins contrôlés. EXE **6406556 octets**, SHA-256 **aa231a03b9c5cb13e944ed7fec0ece26ac7dd0b99d01ff5bee239ed2e84a18d7**, signature Ed25519 et endpoint updater 1.0.2 vérifiés sans exécution. PC uniquement par bannière ; iPhone par SideStore sans désinstallation.
+
+**Rendu natif de la refonte encore ouvert** : quatre contrôles seulement dans docs/essais-iphone.md. Les essais 1.0.1 sont acceptés par Ali, sans les réattribuer à 1.0.2. A9 reste le trou assumé ; A6b reste une vérification future en usage après la 1.0. Suivi documentaire sur rel-03-refonte-1-0-2 ; aucune recompilation pour ces textes.
+
+Suite autorisée : terminer la PR documentaire de rel-03-refonte-1-0-2, attendre sa CI, fusionner et remesurer main. Ensuite seuls les quatre contrôles physiques du guide demandent Ali. Les préparations ci-dessous sont historiques ; les deux builds sont déjà publiés et ne doivent pas être relancés.
+
+## Historique de préparation — remise après fusion #86
+
+Main f473e113, #86 fusionnée après **48 CI verts de 5a97e8c6**, runs 40297597829 / 40297604155 ; arbre intégré identique à la tête revue. Bundle main **62/62, 333 973 normalisés, 333 984 bruts, marge 24 427**, plafond inchangé. Branche active de preuve documentaire **rel-03-refonte-1-0-2**, même worktree n-ios-apercus. Un seul push des tags v1.0.2 et ios-v1.0.2 sur f473e113 a lancé **iOS 40300455346 / Windows 40300455500**, en cours au dernier relevé. **Ne jamais relancer ni dispatcher un second build.** Attendre les sorties, télécharger dans .codex-tmp/node_modules/runtime/release-1.0.2, puis vérifier IPA/Info.plist/source et signature EXE/endpoint sans exécution. Scripts temporaires verify-refonte-release.mjs et document-refonte-release.mjs prêts dans le même runtime ; ce dernier exige les vrais source/run IDs et proof.json. Actualiser les sept documents, bundle avant push, secrets, PR documentaire/CI/fusion et mesure main ; aucune recompilation pour les textes. Guide de quatre contrôles montré avant compilation et déjà sur main. Attendre les deux candidats vérifiés avant de remettre la main à Ali pour le rendu natif ; ne pas rouvrir les essais 1.0.1 acceptés, A9 ni A6b.
+
+## Historique de développement — UI-REFONTE-01, 26 octobre 2026
+
+Ali demande la refonte de Nouvelle tâche et Détail uniquement, selon Ajout-v2 et Detail-v2 de #84 (bd3a80bf). Branche UI-REFONTE-01, worktree n-ios-apercus, PR #86 ouverte, base main 9ddb7781. La tête initiale a70393fe avait échoué en CI (40293615923 / 40293695880) : anciens accès aux options repliées, contraste dynamique, charge du banc perf et affichage des rappels inactifs. Complément corrigé et relu : **144 ciblés, six e2e, perf 700 ms CPU ×4, lint/typage, bundle 62/62 verts**. Mesure finale **333 973 normalisés, 333 984 bruts, marge 24 427**, dix autorisations retirées et une attribution CSS existante justifiée. Prochain : commiter/pousser le complément s'il reste local (sans force), attendre les deux CI complètes sur la tête réelle de #86, fusion --merge et mesure main ; un seul build iPhone 1.0.2 et un PC, contrôler/remettre les artefacts, puis intégrer leurs preuves documentaires sans recompilation. Aucun build 1.0.2 ni tag encore lancé. Schéma toujours 19. PR #84 intacte, autres écrans hors périmètre. Guide : quatre contrôles natifs nouveaux seulement ; essais 1.0.1 acceptés par Ali. A9 trou assumé, A6b futur. Racine personnelle sale conservée.
+
+## 26 octobre 2026 — recette 1.0.1 reçue, refonte autorisée
+
+Ali confirme dans la conversation la réussite des dix contrôles du paquet A et des autres essais natifs du guide. Attestation utilisateur, sans inventer de captures ni d'heures individuelles. Le paquet A et la recette du candidat 1.0.1 sont acceptés ; A9 reste le trou assumé, A6b reste une vérification future en usage après la 1.0. Les preuves automatiques et les artefacts déjà vérifiés restent ceux de #83 / #85.
+
+Nouvelle demande : refonte de Nouvelle tâche et Détail, story UI-REFONTE-01, branche du même nom dans n-ios-apercus. Références Ajout-v2 / Detail-v2 de la PR #84, autres écrans exclus. Candidat 1.0.2 sans migration, schéma 19. Nouveau rendu non encore validé sur appareil ; ne pas lui attribuer la recette de 1.0.1. Estimation 6 à 8 h actives, alerte 12 h. Tests ciblés, revue, CI, bundle et publication à terminer avant remise.
+
+## Paquet A — publication vérifiée du 24 octobre 2026
+
+PC et iPhone **1.0.1** publiés depuis **b8ddc85f**, tags v1.0.1 / ios-v1.0.1 ; runs **40090523636 / 40090523848** verts. IPA : 7 356 612 octets, SHA-256 d1ba316c179036369a656ef718591ed3f8e2ba4dc5c332710d2bd80988244e97, asset/artefact/source SideStore concordants, Info.plist et contrat cinq plugins valides. Signature PC Ed25519 et endpoint updater 1.0.1 vérifiés sans exécuter l'EXE. Mise à jour PC exclusivement par bannière, puis iPhone SideStore sans désinstallation. Guide : docs/essais-iphone.md.
+
+Bundle main après #83 : **58/58, 339 198 normalisés, 339 190 bruts, marge 19 202 octets**, plafond et liste de modules inchangés ; +722 octets pour le paquet. CI applicative 48/48, lint, typage et revue approuvée. **Vérification native du paquet et clôture REL-01 à REL-03 encore ouvertes** ; ne pas écrire « fait ». A9 reste le trou assumé décidé par Ali, A6b « vérifié en usage après la 1.0 » est futur, pas exécuté. Suivi documentaire sur rel-03-paquet-a-1-0-1 ; aucune recompilation pour ces textes.
+
+## Priorité — paquet A UI-FIX-02 du 24 octobre 2026
+
+Ali a testé l'iPhone 1.0.0 et demande dix correctifs dans l'ordre de `docs/stories/UI-FIX-02.md`. #83 fusionnée dans b8ddc85f après 48 CI verts de 80970c6c, runs 40089223693 / 40089225629 ; lint, typage et revue consignés, aucune validation native présumée. La première CI avait accusé des références de noms partagées : origine inconnue des sauvegardes conservée avec identifiant de secours, attentes des conflits et parcours adaptées sans suppression de test ni changement de délai. Branche de remise `rel-03-paquet-a-1-0-1`, worktree `n-ios-apercus`. Version 1.0.1 sans migration ; mesure main après fusion puis un seul build iPhone et un build PC sur ce commit, vérification des artefacts avant annonce. Ne pas modifier la mise en page de Nouvelle tâche/Détail avant les maquettes, hors corrections explicitement listées. Racine personnelle sale `passation-codex` conservée ; la consigne de périmètre ajoutée par cfa2c8f0 est conservée dans main, seuls les trois ajouts d'AGENTS diffèrent de la tête revue, pas le code applicatif. A9 reste un trou assumé, pas une tâche à relancer ; les paragraphes de préparation A9 ci-dessous sont historiques et annulés.
+
 ## Décision applicable — 21 octobre 2026
 
 A9 — récupération après migration interrompue, non vérifiée sur appareil réel. Décision d'Ali du 21 octobre 2026 : risque accepté pour l'usage mono-utilisateur. À reprendre obligatoirement si l'app devient multi-utilisateur ou distribuée à des tiers.

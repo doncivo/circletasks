@@ -12,6 +12,7 @@ import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import { TodayScreen } from './TodayScreen';
+import { LazyTaskCreateOptions } from '../tasks/TaskCreateSheet';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000001');
 
@@ -38,6 +39,7 @@ describe('TodayScreen (T-01)', () => {
   let container: AppContainer;
 
   beforeEach(async () => {
+    await LazyTaskCreateOptions.preload();
     db = await openTestDb(DEVICE, '2026-10-02T08:00:00.000Z');
     container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data });
     // Comme App.tsx (ADR 0004) : les espaces sont déjà dans useAppStore avant le
@@ -129,7 +131,7 @@ describe('TodayScreen (T-01)', () => {
     renderToday(container);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    const save = screen.getByRole('button', { name: 'Enregistrer' });
+    const save = screen.getByRole('button', { name: 'Ajouter la tâche' });
     expect(save).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Envoyer la facture' } });
@@ -145,7 +147,7 @@ describe('TodayScreen (T-01)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Faire les courses' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
 
     expect(await screen.findByText('Faire les courses')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -209,11 +211,13 @@ describe('TodayScreen (T-01)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Faire les courses' } });
     // Roue des jours : « Aujourd'hui » (ven. 2 oct.) + 6 = jeu. 8 oct. ; heures : « — » + 10 = 09 ; minutes 00.
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Date :/ }));
     const dayWheel = within(dialog).getByRole('spinbutton', { name: 'Jour' });
     for (let i = 0; i < 6; i += 1) fireEvent.keyDown(dayWheel, { key: 'ArrowUp' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Heure :/ }));
     const hourWheel = within(dialog).getByRole('spinbutton', { name: 'Heures' });
     for (let i = 0; i < 10; i += 1) fireEvent.keyDown(hourWheel, { key: 'ArrowUp' });
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter la tâche' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const thursday = await container.data.repos.tasks.listForDay('2026-10-08' as never, 'all');
@@ -227,8 +231,9 @@ describe('TodayScreen (T-01)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Appeler le notaire' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Icône téléphone' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
 
     const row = (await screen.findByText('Appeler le notaire')).closest('.ct-list-row') as HTMLElement;
     const icon = row.querySelector('svg');
@@ -245,10 +250,11 @@ describe('TodayScreen (T-01)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Boire de l’eau' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Plus d.options/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Icône téléphone' }));
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Emoji' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Emoji goutte d’eau' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
 
     await screen.findByText('Boire de l’eau');
     const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');

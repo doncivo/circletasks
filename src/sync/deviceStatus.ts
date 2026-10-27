@@ -5,6 +5,7 @@ import { SYNC_FORMAT_MAJOR } from '../domain/sync/format';
 import { hlcIso } from '../domain/sync/parse';
 import { parseStoredSegmentGaps, type StoredStateLog } from '../domain/sync/stored';
 import type { DeviceId, IsoDateTime } from '../domain/types';
+import { parseHlc } from '../domain/hlc';
 import type { SyncDeviceStatus } from '../platform/sync/types';
 import { defaultSyncLogger } from './log';
 import { META } from './meta';
@@ -34,11 +35,11 @@ export function storedDeviceStatuses(
         deviceId: row.deviceId as DeviceId,
         platform: row.platform === 'ios' ? ('ios' as const) : ('windows' as const),
         self: isSelf,
-        lastReadAt: isSelf ? row.lastSyncAt : row.ackHlc ? hlcIso(row.ackHlc) : null,
+        lastReadAt: isSelf ? row.lastSyncAt : row.ackHlc && parseHlc(row.ackHlc).ms > 0 ? hlcIso(row.ackHlc) : null,
         status,
         // N-07 (ADR 0012 avenant N1.6) : dernière synchro PUBLIÉE par l'autre appareil (`lastSyncHlc` du dernier état accepté, rafraîchi toutes les
         // 30 minutes au plus). `lastReadAt` n'en tient pas lieu : pour un autre appareil c'est l'heure de sa dernière ÉCRITURE lue.
-        ...(isSelf ? {} : { publishedSyncAt: row.lastSeenHlc ? hlcIso(row.lastSeenHlc) : null }),
+        ...(isSelf ? {} : { publishedSyncAt: row.lastSeenHlc && parseHlc(row.lastSeenHlc).ms > 0 ? hlcIso(row.lastSeenHlc) : null }),
       };
       if (isSelf || localSv === undefined) return base;
       const relation = compareVersions({ sm: SYNC_FORMAT_MAJOR, sv: localSv }, { sm: row.formatMajor, sv: row.schemaVersion });

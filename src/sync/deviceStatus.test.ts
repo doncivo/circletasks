@@ -37,6 +37,16 @@ const row = (over: Partial<SyncStateRow>): SyncStateRow => ({
 
 /** N-07 (ADR 0012 avenant N1.6) : la dernière synchro PUBLIÉE d'un autre appareil n'est pas `lastReadAt`. */
 describe('storedDeviceStatuses : publishedSyncAt', () => {
+  it('UI-FIX-02 : un accusé HLC nul signifie jamais lu, pas minuit en 1970', () => {
+    const [device] = storedDeviceStatuses([row({ deviceId: OTHER, ackHlc: hlcAt(0), lastSeenHlc: hlcAt(0) })], {});
+    expect(device?.lastReadAt).toBeNull();
+    expect(device?.publishedSyncAt).toBeNull();
+  });
+  it('UI-FIX-02 : une vraie modification à minuit reste une lecture datée', () => {
+    const midnight = '2026-10-24T00:00:00.000Z';
+    const [device] = storedDeviceStatuses([row({ deviceId: OTHER, ackHlc: hlcAt(Date.parse(midnight)) })], {});
+    expect(device?.lastReadAt).toBe(midnight);
+  });
   it('autre appareil : lastSyncHlc du dernier état accepté (last_seen_hlc), distinct de lastReadAt (accusé de sa dernière écriture lue)', () => {
     const published = Date.parse('2026-10-08T07:30:00.000Z');
     const acked = Date.parse('2026-10-08T05:00:00.000Z');

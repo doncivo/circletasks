@@ -93,9 +93,9 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       expect(within(fiche).getByTestId('recurrence-detail')).toHaveTextContent('Une fois');
       expect(within(fiche).getByText('Pro')).toBeInTheDocument();
       expect(within(fiche).getByText('Projet')).toBeInTheDocument();
-      expect(within(fiche).getByText('Non rattachée')).toBeInTheDocument();
+      expect(within(fiche).getByText('Aucun objectif cette semaine')).toBeInTheDocument();
       expect(within(fiche).getByLabelText('Note')).toHaveValue('Joindre le relevé');
-      expect(fiche).toHaveTextContent(/Créée le aujourd’hui à \d\d:\d\d · modifiée aujourd’hui à \d\d:\d\d/);
+      expect(fiche).toHaveTextContent(/Créée aujourd’hui à \d\d:\d\d · modifiée aujourd’hui à \d\d:\d\d/);
       // Aucun champ de saisie tant qu'on n'a pas cliqué une valeur (PC-Aujourdhui.html : lignes en texte).
       expect(within(fiche).queryByLabelText('Heure')).toBeNull();
       expect(within(fiche).queryByRole('combobox')).toBeNull();
@@ -261,6 +261,12 @@ describe('Fiche détail d’une tâche (A-08)', () => {
   });
 
   describe('iPhone : feuille plein écran et « Modifier » (Q15)', () => {
+    it('UI-FIX-02 : aucune commande circulaire ambiguë près du titre, une seule commande Terminer', async () => {
+      await open();
+      const sheet = screen.getByRole('dialog', { name: 'Détail de la tâche' });
+      expect(sheet.querySelectorAll('.ct-task-detail__header button')).toHaveLength(0);
+      expect(within(sheet).getAllByRole('button', { name: 'Marquer comme terminée' })).toHaveLength(1);
+    });
     beforeEach(() => mockViewport(440));
 
     it('en-tête ✕ / DÉTAIL / crayon, lignes en lecture seule (date sans l’année courante), note modifiable (critères 2, 5, 9, 11)', async () => {
@@ -268,12 +274,13 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       const sheet = screen.getByRole('dialog', { name: 'Détail de la tâche' });
       expect(sheet).toHaveAttribute('aria-modal', 'true');
       expect(within(sheet).getByRole('button', { name: 'Fermer' })).toBeInTheDocument();
-      expect(within(sheet).getByText('DÉTAIL')).toBeInTheDocument();
+      expect(within(sheet).queryByText('DÉTAIL')).toBeNull();
       expect(within(sheet).getByRole('button', { name: 'Modifier' })).toBeInTheDocument();
-      expect(within(sheet).getByText('Date')).toBeInTheDocument();
+      expect(within(sheet).getByText('Prévue')).toBeInTheDocument();
       expect(within(sheet).getByText('Mer. 23 sept. · 09:00')).toBeInTheDocument();
       expect(within(sheet).queryByLabelText('Date de la tâche')).toBeNull();
-      expect(within(sheet).getByText('Espace · projet')).toBeInTheDocument();
+      expect(within(sheet).getByText('Projet')).toBeInTheDocument();
+      expect(within(sheet).getByText('Pro')).toBeInTheDocument();
       expect(within(sheet).getByLabelText('Note')).toBeEnabled();
       // Q15 : la répétition est en lecture seule sur iPhone (modification par « Modifier »).
       expect(within(sheet).queryByRole('button', { name: 'Répéter…' })).toBeNull();
