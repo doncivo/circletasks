@@ -26,6 +26,8 @@ export interface StatusReport {
   readonly scheduled: number;
   readonly cancelled: number;
   readonly kept: number;
+  /** N-FIX-03 : rappels conservés à l'ancienne heure parce que la pose du nouveau a échoué ; absent si aucun. */
+  readonly stale?: number;
 }
 
 /** Pannes des actions de notification (N-03, avenant N3.8). */

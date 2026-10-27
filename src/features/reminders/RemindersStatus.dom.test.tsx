@@ -162,6 +162,20 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     expect(screen.queryByText(/Notification absente après l’envoi/)).toBeNull();
   });
 
+  it('N-FIX-03 : pose du nouveau échouée, ancien conservé : Réglages dit combien de rappels sonneront encore à l’ancienne heure', async () => {
+    await open({}, async (harness) => {
+      harness.fake.failNextReplace(new NotificationSchedulerError('schedule-failed', ['routine:r1:2026-10-09'], { scheduled: 0, cancelled: 0, kept: 3, stale: 1 }));
+      await replanNotifications(harness.container, 'edit');
+    });
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Les rappels n’ont pas pu être planifiés');
+    expect(screen.getByText(/1 rappel conservé à l’ancienne heure/)).toBeInTheDocument();
+    // Résolu au passage suivant réussi.
+    await act(async () => {
+      await replanNotifications(h?.container as never, 'open');
+    });
+    expect(screen.queryByText(/conservé à l’ancienne heure/)).toBeNull();
+  });
+
   it('plusieurs états : le plus important avec « (+N) » dans le bandeau', async () => {
     await open({}, async (harness) => {
       harness.fake.setPermission('granted');
