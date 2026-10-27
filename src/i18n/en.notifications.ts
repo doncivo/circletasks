@@ -35,6 +35,8 @@ export const remindersStatusEn: Messages['reminders']['status'] = {
   planFailed: 'Reminders could not be scheduled',
   planFailedAt: 'Last attempt at {time} · {code}',
   planFailedPartial: '{scheduled} scheduled, {cancelled} cancelled, {kept} kept',
+  planFailedStale: '{n} reminder kept at its previous time: the new notification could not be scheduled',
+  planFailedStalePlural: '{n} reminders kept at their previous time: the new notifications could not be scheduled',
   focusEndFailed: 'The end-of-session notification could not be scheduled',
   zoneUnknown: 'Device time zone unreadable: reminders computed with the current offset',
   zoneChanged: 'Time zone changed: reminders recomputed at {time}',

@@ -72,8 +72,10 @@ describe('N-05 : les rappels survivent au redémarrage', () => {
     const ids = [...h.bridge.pendingMap.keys()].sort();
     await h.db.data.repos.settings.set('notifications.ledger', null);
     const relaunched = reopenReminders(h, { mode: 'real' });
-    expect(planned(await replanNotifications(relaunched, 'open')).report).toEqual({ scheduled: 64, cancelled: 0, kept: 0 });
-    expect([...h.bridge.pendingMap.keys()].sort()).toEqual(ids);
+    // N-FIX-03 : registre perdu = numéros en attente inconnus, annulés ; le plan est reposé sous des numéros libres, 64 en attente, sans doublon.
+    expect(planned(await replanNotifications(relaunched, 'open')).report).toEqual({ scheduled: 64, cancelled: 64, kept: 0 });
+    expect(h.bridge.pendingMap.size).toBe(64);
+    expect([...h.bridge.pendingMap.keys()].filter((id) => ids.includes(id))).toEqual([]);
     expect(planned(await replanNotifications(relaunched, 'resume')).report.kept).toBe(64);
   });
 
@@ -155,7 +157,10 @@ describe('N-06 : mes rappels suivent mon changement de fuseau (option 3)', () =>
     h.zone.name = 'America/New_York';
     const outcome = planned(await replanNotifications(h.container, 'resume'));
     // L'heure locale de référence recule de 6 h : le récapitulatif du matin d'aujourd'hui (07:30 à New York) entre dans le plan, le dernier en sort.
-    expect(outcome.report).toEqual({ scheduled: 64, cancelled: 1, kept: 0 });
+    // N-FIX-03 : 64 instants changés = 64 numéros neufs posés sous le plafond (les plus lointains déplacés pour faire place) ; annulés : les 63
+    // anciens des éléments qui restent (l'entrant n'en a pas) plus le sortant, soit 64.
+    expect(outcome.report).toEqual({ scheduled: 64, cancelled: 64, kept: 0 });
+    expect(h.bridge.pendingMap.size).toBe(64);
     const instantNewYork = Number(h.bridge.shown.findLast((payload) => payload.title === 'Réunion')?.extra['at']);
     expect(instantNewYork - instantParis).toBe(6 * 3_600_000);
     expect(taskDate()).toBe('2026-10-12T09:00:00.000Z');

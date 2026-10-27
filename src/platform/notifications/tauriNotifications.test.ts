@@ -71,15 +71,19 @@ describe('adaptateur iOS : envoi (N-01 critère 4)', () => {
     expect(bridge.shown).toHaveLength(sentBefore);
   });
 
-  it('même identifiant stable, échéance ou texte changé : remplacé (même identifiant numérique, compté une fois)', async () => {
+  // Ancienne règle (N1.2) : « remplacé sous le même identifiant numérique ». Remplacée par N-FIX-03 (2026-10-27) : un élément changé
+  // reçoit un nouveau numéro et l'ancien est annulé après la pose, pour que la vérification par présence reste une preuve.
+  it('même identifiant stable, échéance ou texte changé : nouveau numéro à chaque changement, l’ancien annulé, un seul en attente', async () => {
     const { bridge, scheduler } = rig();
     await scheduler.replace([req('task:a', '2026-10-09T09:00')]);
-    const id = bridge.shown[0]?.id;
-    expect(await scheduler.replace([req('task:a', '2026-10-09T10:00')])).toEqual({ scheduled: 1, cancelled: 0, kept: 0 });
-    expect(await scheduler.replace([req('task:a', '2026-10-09T10:00', { title: 'Autre titre' })])).toEqual({ scheduled: 1, cancelled: 0, kept: 0 });
-    expect(bridge.shown.map((payload) => payload.id)).toEqual([id, id, id]);
+    expect(await scheduler.replace([req('task:a', '2026-10-09T10:00')])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
+    expect(await scheduler.replace([req('task:a', '2026-10-09T10:00', { title: 'Autre titre' })])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
+    const ids = bridge.shown.map((payload) => payload.id);
+    // Chaque changement prend un numéro différent de celui encore en attente (un numéro libéré peut resservir au tour suivant).
+    expect(ids[1]).not.toBe(ids[0]);
+    expect(ids[2]).not.toBe(ids[1]);
     expect(bridge.pendingMap.size).toBe(1);
-    expect(bridge.pendingMap.get(id as number)?.date).toBe('2026-10-09T10:00:00.000Z');
+    expect(bridge.pendingMap.get(ids[2] as number)?.date).toBe('2026-10-09T10:00:00.000Z');
   });
 
   it('absent du nouveau plan : annulé par cancel avec la liste des identifiants numériques (jamais sans liste, jamais vide)', async () => {
@@ -190,6 +194,61 @@ describe('adaptateur iOS : vérification et échecs (N-01 critère 4)', () => {
     });
   });
 
+  // N-FIX-03 (décision d'Ali du 2026-10-27) : un élément changé reçoit un NOUVEAU numéro, l'ancien n'est annulé qu'après la pose
+  // vérifiée du nouveau. Raison : si l'annulation précède la pose et que la pose échoue, plus aucun rappel, sans le savoir ; dans
+  // l'ordre inverse, le pire cas est un doublon ou un rappel à l'ancienne heure, visible donc corrigeable.
+  const routineReq = (fireAt: string): NotificationRequest => req('routine:r1:2026-10-09', fireAt, { kind: 'routine', category: 'routine' });
+  const OLD_AT = fireAtInstant('2026-10-09T07:00' as LocalDateTime, 'Europe/Paris');
+  const NEW_AT = fireAtInstant('2026-10-09T08:30' as LocalDateTime, 'Europe/Paris');
+
+  it('N-FIX-03 : la pose du nouveau est rejetée par iOS : l’ancien survit, jamais annulé, échec visible avec le nombre de rappels conservés à l’ancienne heure', async () => {
+    // Routine dont l'heure passe de 07:00 à 08:30 : le rappel garde son identifiant, donc le plan garde son identifiant stable.
+    const { bridge, ledger, scheduler } = rig();
+    await scheduler.replace([routineReq('2026-10-09T07:00')]);
+    const oldN = bridge.shown[0]?.id as number;
+    bridge.failShow = (payload) => payload.extra['sid'] === 'routine:r1:2026-10-09' && payload.extra['at'] === String(NEW_AT);
+    await expect(scheduler.replace([routineReq('2026-10-09T08:30')])).rejects.toMatchObject({
+      reason: 'schedule-failed',
+      ids: ['routine:r1:2026-10-09'],
+      partial: { scheduled: 0, cancelled: 0, kept: 0, stale: 1 },
+    });
+    // L'ancien numéro n'a été passé à aucun cancel ; iOS porte toujours la demande à 07:00.
+    expect(bridge.cancels.flat()).not.toContain(oldN);
+    expect([...bridge.pendingMap.values()].map((item) => item.date)).toEqual(['2026-10-09T07:00:00.000Z']);
+    // Le registre dit la vérité : l'ancien instant, pas le nouveau.
+    const entries = (ledger.read.state === 'valid' ? ledger.read.ledger : EMPTY_LEDGER).entries;
+    expect(entries).toEqual([expect.objectContaining({ n: oldN, sid: 'routine:r1:2026-10-09', at: OLD_AT })]);
+  });
+
+  it('N-FIX-03 : la pose du nouveau « réussit » mais iOS ne garde rien (constat 8) : verify-failed, l’ancien survit, registre sans le nouvel instant', async () => {
+    const { bridge, ledger, scheduler } = rig();
+    await scheduler.replace([routineReq('2026-10-09T07:00')]);
+    const oldN = bridge.shown[0]?.id as number;
+    bridge.dropOnShow = (payload) => payload.extra['at'] === String(NEW_AT);
+    await expect(scheduler.replace([routineReq('2026-10-09T08:30')])).rejects.toMatchObject({ reason: 'verify-failed', ids: ['routine:r1:2026-10-09'], partial: { stale: 1 } });
+    expect(bridge.cancels.flat()).not.toContain(oldN);
+    expect([...bridge.pendingMap.values()].map((item) => item.date)).toEqual(['2026-10-09T07:00:00.000Z']);
+    const entries = (ledger.read.state === 'valid' ? ledger.read.ledger : EMPTY_LEDGER).entries;
+    expect(entries.map((entry) => entry.at)).toEqual([OLD_AT]);
+  });
+
+  it('N-FIX-03 : cas nominal : nouveau numéro, pose avant annulation, un seul élément en attente à la nouvelle heure, registre au nouvel instant', async () => {
+    const { bridge, ledger, scheduler } = rig();
+    await scheduler.replace([routineReq('2026-10-09T07:00')]);
+    const oldN = bridge.shown[0]?.id as number;
+    bridge.calls.length = 0;
+    expect(await scheduler.replace([routineReq('2026-10-09T08:30')])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
+    const newN = bridge.shown[1]?.id as number;
+    expect(newN).not.toBe(oldN);
+    expect(bridge.calls.indexOf('show')).toBeLessThan(bridge.calls.indexOf('cancel'));
+    expect(bridge.cancels.flat()).toEqual([oldN]);
+    expect([...bridge.pendingMap.entries()].map(([n, item]) => [n, item.date])).toEqual([[newN, '2026-10-09T08:30:00.000Z']]);
+    const entries = (ledger.read.state === 'valid' ? ledger.read.ledger : EMPTY_LEDGER).entries;
+    expect(entries).toEqual([expect.objectContaining({ n: newN, at: NEW_AT })]);
+    // Troisième passage identique : rien ne bouge.
+    expect(await scheduler.replace([routineReq('2026-10-09T08:30')])).toEqual({ scheduled: 0, cancelled: 0, kept: 1 });
+  });
+
   it('un rejet de cancel : schedule-failed, les envois sont quand même tentés', async () => {
     const { bridge, scheduler } = rig();
     await scheduler.replace([req('task:a', '2026-10-09T09:00')]);
@@ -248,22 +307,28 @@ describe('adaptateur iOS : fin de Focus et plage réservée (N-01 critère 5)', 
 describe('adaptateur iOS : registre local (N-01 critère 6)', () => {
   const plan = [req('task:a', '2026-10-09T09:00'), req('task:b', '2026-10-10T09:00')];
 
+  // Ancienne attente (N1.2) : mêmes numéros réutilisés, rien d'annulé. Depuis N-FIX-03 (2026-10-27), un élément sans registre est
+  // « changé » : posé sous un numéro neuf, vérifié, puis l'ancien numéro inconnu est annulé. Une fois, sans doublon ni silence.
   it('registre perdu (réinstallation) avec un plan encore en attente : tout est replanifié une fois, sans doublon', async () => {
     const { bridge, ledger, scheduler } = rig();
     await scheduler.replace(plan);
     const ids = [...bridge.pendingMap.keys()].sort();
     ledger.read = { state: 'missing' };
-    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 0, kept: 0 });
-    expect([...bridge.pendingMap.keys()].sort()).toEqual(ids);
+    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 2, kept: 0 });
+    const after = [...bridge.pendingMap.keys()].sort();
+    expect(after).toHaveLength(2);
+    expect(after.filter((id) => ids.includes(id))).toEqual([]);
     expect(await scheduler.replace(plan)).toEqual({ scheduled: 0, cancelled: 0, kept: 2 });
   });
 
+  // N-FIX-03 : sans registre, chaque numéro en attente est inconnu ; les deux sont annulés, le seul élément du plan est posé sous un numéro libre.
   it('registre illisible : même résultat juste, et les notifications d’un plan disparu du nouveau plan sont annulées (get_pending fait foi)', async () => {
     const { bridge, ledger, scheduler } = rig();
     await scheduler.replace(plan);
     ledger.read = { state: 'unreadable' };
-    expect(await scheduler.replace([plan[1] as NotificationRequest])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
-    expect([...bridge.pendingMap.keys()]).toEqual([notificationNumericId('task:b')]);
+    expect(await scheduler.replace([plan[1] as NotificationRequest])).toEqual({ scheduled: 1, cancelled: 2, kept: 0 });
+    expect(bridge.pendingMap.size).toBe(1);
+    expect([...bridge.pendingMap.values()][0]?.title).toBe('Titre task:b');
   });
 
   it('registre présent mais plan vidé par iOS : ce qui manque est replanifié', async () => {
@@ -281,8 +346,10 @@ describe('adaptateur iOS : registre local (N-01 critère 6)', () => {
     const ids = [...bridge.pendingMap.keys()].sort();
     expect(ids).toHaveLength(2);
     ledger.failSave = false;
-    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 0, kept: 0 });
-    expect([...bridge.pendingMap.keys()].sort()).toEqual(ids);
+    // N-FIX-03 : registre jamais écrit, numéros en attente inconnus : annulés, le plan est reposé sous des numéros libres, sans doublon.
+    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 2, kept: 0 });
+    expect(bridge.pendingMap.size).toBe(2);
+    expect([...bridge.pendingMap.keys()].filter((id) => ids.includes(id))).toEqual([]);
     expect(await scheduler.replace(plan)).toEqual({ scheduled: 0, cancelled: 0, kept: 2 });
   });
 
@@ -320,7 +387,9 @@ describe('adaptateur iOS : fuseau (N-06 critère 1)', () => {
     await scheduler.replace(plan);
     expect(await scheduler.replace(plan)).toEqual({ scheduled: 0, cancelled: 0, kept: 2 });
     clock.zoneName = 'America/New_York';
-    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 0, kept: 0 });
+    // N-FIX-03 : instants changés = numéros neufs posés, puis les deux anciens annulés.
+    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 2, kept: 0 });
+    expect(bridge.pendingMap.size).toBe(2);
     // L'heure murale reste 09:00 dans le nouveau fuseau ; l'instant est 6 h plus tard.
     expect(bridge.shown.at(-1)?.schedule.at.date).toBe('2026-12-02T09:00:00.000Z');
     expect(Number(bridge.shown.at(-1)?.extra['at']) - Number(bridge.shown[1]?.extra['at'])).toBe(6 * 3_600_000);

@@ -9,6 +9,7 @@ import type { LocalDateTime } from '../../domain/types';
 import type { LedgerStore } from './notificationLedger';
 import type { NotificationClock } from './notificationClock';
 import {
+  NOTIFICATION_LIMIT,
   NotificationSchedulerError,
   type NotificationAvailability,
   type NotificationCategory,
@@ -124,17 +125,21 @@ export function requestFingerprint(request: Pick<NotificationRequest, 'title' | 
 }
 
 /**
- * Identifiants numériques d'un plan : celui du registre s'il est libre, sinon la valeur déterministe de l'identifiant stable ;
- * collision : valeur libre suivante de la plage (parcours des identifiants stables dans l'ordre croissant, bouclage).
+ * Identifiants numériques d'un plan : celui du registre s'il est libre (éléments inchangés), sinon la valeur déterministe de
+ * l'identifiant stable ; collision : valeur libre suivante de la plage (parcours des identifiants stables dans l'ordre croissant,
+ * bouclage). `blocked` (N-FIX-03) : numéros encore en attente chez iOS, jamais donnés à un élément sans numéro préféré, pour qu'un
+ * élément changé reçoive un numéro NEUF et que sa pose soit vérifiable par présence.
  */
-export function assignPlanIds(stableIds: readonly string[], preferred: ReadonlyMap<string, number>): Map<string, number> {
+export function assignPlanIds(stableIds: readonly string[], preferred: ReadonlyMap<string, number>, blocked: ReadonlySet<number> = new Set()): Map<string, number> {
   const out = new Map<string, number>();
-  const taken = new Set<number>();
+  const taken = new Set<number>(blocked);
   const sorted = [...new Set(stableIds)].sort(compareCodeUnits);
+  const claimed = new Set<number>();
   for (const sid of sorted) {
     const wanted = preferred.get(sid);
-    if (wanted !== undefined && isPlanId(wanted) && !taken.has(wanted)) {
+    if (wanted !== undefined && isPlanId(wanted) && !claimed.has(wanted)) {
       out.set(sid, wanted);
+      claimed.add(wanted);
       taken.add(wanted);
     }
   }
@@ -214,7 +219,8 @@ export function createTauriNotificationScheduler(deps: TauriSchedulerDeps): Noti
     async replace(requests) {
       // 1. La vérité : ce qu'iOS a en attente. Les réservés (fin de Focus) réduisent la place.
       const pending1 = await readPending();
-      validateRequests(requests, pending1.filter((item) => isReservedId(item.id)).length);
+      const reservedPending = pending1.filter((item) => isReservedId(item.id)).length;
+      validateRequests(requests, reservedPending);
       // 2. État du système, avant tout effet.
       if ((await permission()) !== 'granted') throw new NotificationSchedulerError('permission-denied');
 
@@ -228,9 +234,32 @@ export function createTauriNotificationScheduler(deps: TauriSchedulerDeps): Noti
       // 3. Instants calculés avec le fuseau courant ; une échéance trop proche n'est pas transmise (sans erreur).
       const all = requests.map((request) => ({ request, instant: instantOf(request.fireAt, zone), hash: requestFingerprint(request) }));
       const live: PlannedSend[] = all.filter((item) => item.instant > nowMs + SEND_MARGIN_MS).map((item) => ({ ...item, n: 0 }));
-      const ids = assignPlanIds(live.map((item) => item.request.id), new Map([...entryBySid].map(([sid, entry]) => [sid, entry.n])));
+
+      // 4. Inchangé = même instant, même texte, et le numéro du registre encore en attente chez iOS : il garde son numéro. Tout autre
+      //    élément est « changé » (N-FIX-03, décision d'Ali du 2026-10-27) : il reçoit un numéro NEUF, jamais un numéro en attente, pour
+      //    que sa pose soit vérifiable par présence (get_pending ne rend pas l'échéance, constat 3) ; son ancien numéro n'est annulé
+      //    qu'APRÈS la pose vérifiée. Si l'annulation précédait la pose et que la pose échouait, il ne resterait aucun rappel, sans le
+      //    savoir ; dans l'ordre inverse, le pire cas est un doublon ou un rappel à l'ancienne heure, visible donc corrigeable.
+      const matching = (item: PlannedSend): LedgerEntry | undefined => {
+        const entry = entryBySid.get(item.request.id);
+        return entry !== undefined && entry.at === item.instant && entry.h === item.hash && pendingPlanIds.has(entry.n) ? entry : undefined;
+      };
+      const kept = live.filter((item) => matching(item) !== undefined);
+      const changed = live.filter((item) => matching(item) === undefined);
+      const preferred = new Map(kept.flatMap((item) => {
+        const entry = matching(item);
+        return entry === undefined ? [] : [[item.request.id, entry.n] as const];
+      }));
+      const ids = assignPlanIds(live.map((item) => item.request.id), preferred, pendingPlanIds);
       for (const item of live) item.n = ids.get(item.request.id) ?? notificationNumericId(item.request.id);
       const newIds = new Set(live.map((item) => item.n));
+      /** Ancien numéro encore en attente d'un élément changé : annulé après la pose réussie du nouveau, conservé sinon. */
+      const oldOf = new Map<string, LedgerEntry>();
+      for (const item of changed) {
+        const entry = entryBySid.get(item.request.id);
+        if (entry !== undefined && pendingPlanIds.has(entry.n) && !newIds.has(entry.n)) oldOf.set(item.request.id, entry);
+      }
+      const oldIds = new Set([...oldOf.values()].map((entry) => entry.n));
 
       // Une notification sur le point de sonner (échéance dans la marge) et déjà planifiée n'est jamais annulée.
       const protectedEntries = all
@@ -240,34 +269,45 @@ export function createTauriNotificationScheduler(deps: TauriSchedulerDeps): Noti
           return entry !== undefined && pendingPlanIds.has(entry.n) && !newIds.has(entry.n) ? [entry] : [];
         });
       const protectedIds = new Set(protectedEntries.map((entry) => entry.n));
-
-      // 4. Différence par identifiant : instant, empreinte et présence chez iOS.
-      const unchanged = (item: PlannedSend): boolean => {
-        const entry = entryBySid.get(item.request.id);
-        return entry !== undefined && entry.n === item.n && entry.at === item.instant && entry.h === item.hash && pendingPlanIds.has(item.n);
-      };
-      const kept = live.filter(unchanged);
-      const changed = live.filter((item) => !unchanged(item));
       // Constat 9 : au premier passage d'un processus, les inchangés sont renvoyés (même identifiant : iOS remplace) mais comptés `kept`.
       const reaffirmed = kept.filter((item) => !sentThisProcess.has(item.n));
-      const cancelIds = [...pendingPlanIds].filter((id) => !newIds.has(id) && !protectedIds.has(id)).sort((a, b) => a - b);
 
-      const failed: string[] = [];
+      // État courant chez iOS pendant le passage (optimiste : chaque appel réussi le met à jour) et appels d'annulation.
+      const pendingSet = new Set(pendingPlanIds);
       let cancelOk = true;
-      if (cancelIds.length > 0) {
+      let cancelledCount = 0;
+      const cancel = async (list: readonly number[]): Promise<boolean> => {
+        if (list.length === 0) return true;
         try {
-          await bridge.cancel(cancelIds);
+          await bridge.cancel(list);
+          for (const id of list) {
+            pendingSet.delete(id);
+            sentThisProcess.delete(id);
+          }
+          return true;
         } catch (error) {
           if (error instanceof NotificationSchedulerError && error.reason === 'unavailable') throw error;
           cancelOk = false;
-          log('cancel-failed', { count: cancelIds.length });
+          log('cancel-failed', { count: list.length });
+          return false;
         }
-      }
+      };
+      const room = (): number => NOTIFICATION_LIMIT - reservedPending - pendingSet.size;
 
-      // 5. Envoi élément par élément, dans l'ordre chronologique : une coupure laisse les plus proches planifiés.
-      const sends = [...changed, ...reaffirmed].sort((a, b) => a.instant - b.instant || compareCodeUnits(a.request.id, b.request.id));
+      // 5. Numéros sortis du plan (ni nouveaux, ni protégés, ni anciens d'un élément changé) : annulés d'abord, ils ne reviendront pas.
+      //    Registre perdu : tout numéro en attente est inconnu, donc sorti ; le plan entier est reposé une fois (critère 6 de N-01).
+      const leftovers = [...pendingPlanIds].filter((id) => !newIds.has(id) && !protectedIds.has(id) && !oldIds.has(id)).sort((a, b) => a - b);
+      if (await cancel(leftovers)) cancelledCount += leftovers.length;
+
+      // 6. Pose élément par élément, dans l'ordre chronologique, AVANT l'annulation de l'ancien : une coupure laisse les plus proches
+      //    planifiés et ne retire jamais un rappel dont le remplaçant n'est pas posé. Plafond iOS (64) : quand aucune place n'est libre,
+      //    la notification la plus LOINTAINE encore en attente est déplacée pour faire place (ancien d'un élément changé non encore posé,
+      //    ou élément inchangé reposé à la fin du passage) : en cas de coupure, le manque est lointain et réparé au passage suivant.
+      const failed: string[] = [];
       const sent = new Set<number>();
-      for (const item of sends) {
+      const displaced: PlannedSend[] = [];
+      const sacrificed = new Set<string>();
+      const show = async (item: PlannedSend): Promise<void> => {
         const category = item.request.category;
         const payload: ShowPayload = {
           id: item.n,
@@ -282,27 +322,104 @@ export function createTauriNotificationScheduler(deps: TauriSchedulerDeps): Noti
           await bridge.show(payload);
           sent.add(item.n);
           sentThisProcess.add(item.n);
+          pendingSet.add(item.n);
         } catch (error) {
           if (error instanceof NotificationSchedulerError && error.reason === 'unavailable') throw error;
           failed.push(item.request.id);
           log('show-failed', { n: item.n });
         }
+      };
+      const sends = [...changed, ...reaffirmed].sort((a, b) => a.instant - b.instant || compareCodeUnits(a.request.id, b.request.id));
+      /** Éléments changés posés dont l'ancien numéro attend la vérification avant d'être annulé. */
+      let unreleased: PlannedSend[] = [];
+      /** Vérification intermédiaire : les anciens des remplaçants confirmés par get_pending sont annulés, ce qui libère des places. */
+      const verifyAndRelease = async (): Promise<void> => {
+        const now = new Set((await readPending()).map((item) => item.id));
+        const release = unreleased
+          .filter((item) => now.has(item.n))
+          .map((item) => (oldOf.get(item.request.id) as LedgerEntry).n)
+          .filter((n) => pendingSet.has(n))
+          .sort((a, b) => a - b);
+        unreleased = [];
+        if (await cancel(release)) cancelledCount += release.length;
+      };
+      // Déplacements par lot : un à la fois pour une modification ordinaire (règle stricte : un seul lointain déplacé, puis chaque
+      // ancien libéré après vérification), huit à la fois quand tout le plan change (fuseau), pour borner les relectures de get_pending.
+      const batch = changed.length <= 8 ? 1 : 8;
+      for (const item of sends) {
+        if (!pendingSet.has(item.n) && room() <= 0 && unreleased.length > 0) await verifyAndRelease();
+        if (!pendingSet.has(item.n) && room() <= 0) {
+          // Candidats au déplacement : l'ancien d'un élément changé pas encore posé, ou un inchangé encore en attente ; le plus lointain d'abord.
+          const olds = changed
+            .filter((other) => other !== item && !sent.has(other.n) && !failed.includes(other.request.id) && oldOf.has(other.request.id) && !sacrificed.has(other.request.id))
+            .map((other) => ({ n: (oldOf.get(other.request.id) as LedgerEntry).n, at: (oldOf.get(other.request.id) as LedgerEntry).at, kind: 'old' as const, item: other }));
+          const own = oldOf.get(item.request.id);
+          if (own !== undefined && !sacrificed.has(item.request.id)) olds.push({ n: own.n, at: own.at, kind: 'old', item });
+          const unchanged = kept.filter((other) => pendingSet.has(other.n) && !displaced.includes(other)).map((other) => ({ n: other.n, at: other.instant, kind: 'kept' as const, item: other }));
+          const victims = [...olds, ...unchanged].filter((candidate) => !protectedIds.has(candidate.n)).sort((a, b) => b.at - a.at || a.n - b.n).slice(0, batch);
+          if (victims.length === 0) {
+            failed.push(item.request.id);
+            log('show-no-room', { n: item.n });
+            continue;
+          }
+          if (!(await cancel(victims.map((victim) => victim.n)))) {
+            failed.push(item.request.id);
+            continue;
+          }
+          for (const victim of victims) {
+            if (victim.kind === 'old') {
+              sacrificed.add(victim.item.request.id);
+              cancelledCount += 1;
+            } else {
+              displaced.push(victim.item);
+            }
+          }
+        }
+        await show(item);
+        if (sent.has(item.n) && oldOf.has(item.request.id) && !sacrificed.has(item.request.id)) unreleased.push(item);
       }
 
-      // 6. Vérification : get_pending relu ; un identifiant attendu absent est un échec.
-      const pending2 = await readPending();
-      const pendingNow = new Set(pending2.map((item) => item.id));
-      const readAt = clock.nowMs();
-      const missing = live.filter((item) => !pendingNow.has(item.n) && item.instant > readAt + VERIFY_GRACE_MS && !failed.includes(item.request.id)).map((item) => item.request.id);
+      // 7. Vérification : get_pending relu ; un identifiant attendu absent est un échec.
+      let pendingNow = new Set((await readPending()).map((item) => item.id));
+      let readAt = clock.nowMs();
+      const isMissing = (item: PlannedSend): boolean => !pendingNow.has(item.n) && item.instant > readAt + VERIFY_GRACE_MS && !failed.includes(item.request.id);
+      const posed = (item: PlannedSend): boolean => !failed.includes(item.request.id) && !isMissing(item);
+
+      // 8. Annulation des anciens numéros des éléments changés POSÉS. L'ancien d'un remplaçant non posé est CONSERVÉ (il sonnera à
+      //    l'ancienne heure) et compté `stale` : l'état visible le dit.
+      const stale = changed.filter((item) => oldOf.has(item.request.id) && !sacrificed.has(item.request.id) && !posed(item));
+      const staleEntries = stale.flatMap((item) => {
+        const entry = oldOf.get(item.request.id);
+        return entry === undefined ? [] : [entry];
+      });
+      const released = changed
+        .filter((item) => oldOf.has(item.request.id) && !sacrificed.has(item.request.id) && posed(item))
+        .map((item) => (oldOf.get(item.request.id) as LedgerEntry).n)
+        .filter((n) => pendingSet.has(n))
+        .sort((a, b) => a - b);
+      if (await cancel(released)) cancelledCount += released.length;
+
+      // 9. Les inchangés déplacés pour faire place sont reposés (même numéro, libre à présent), puis vérifiés à leur tour.
+      if (displaced.length > 0) {
+        for (const item of displaced.sort((a, b) => a.instant - b.instant)) await show(item);
+        pendingNow = new Set((await readPending()).map((item) => item.id));
+        readAt = clock.nowMs();
+      }
+      const missing = live.filter(isMissing).map((item) => item.request.id);
+      if (stale.length > 0) log('replace-stale', { count: stale.length });
+
       const report: ReplaceReport = {
         scheduled: changed.filter((item) => sent.has(item.n)).length,
-        cancelled: cancelOk ? cancelIds.length : 0,
+        cancelled: cancelOk ? cancelledCount : 0,
         kept: kept.length + protectedEntries.filter((entry) => pendingNow.has(entry.n)).length,
+        ...(stale.length > 0 ? { stale: stale.length } : {}),
       };
 
-      // 7. Registre : ce que get_pending confirme (même en échec partiel), fuseau mis à jour après une réussite seulement.
+      // 10. Registre : ce que get_pending confirme (même en échec partiel), anciens conservés compris ; fuseau mis à jour après une
+      //     réussite seulement. Un ancien numéro qu'un `cancel` en échec a laissé n'y figure pas : le passage suivant l'annule à nouveau.
       const confirmed: LedgerEntry[] = [
         ...live.filter((item) => pendingNow.has(item.n)).map((item): LedgerEntry => ({ n: item.n, sid: item.request.id, at: item.instant, h: item.hash, kind: item.request.kind })),
+        ...staleEntries.filter((entry) => pendingNow.has(entry.n)),
         ...protectedEntries.filter((entry) => pendingNow.has(entry.n)),
       ];
       const succeeded = failed.length === 0 && cancelOk && missing.length === 0;

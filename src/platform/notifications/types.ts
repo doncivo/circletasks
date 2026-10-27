@@ -31,6 +31,11 @@ export interface ReplaceReport {
   readonly scheduled: number;
   readonly cancelled: number;
   readonly kept: number;
+  /**
+   * N-FIX-03 : éléments changés dont la pose du nouveau a échoué et dont l'ancienne notification a été conservée (elle sonnera à
+   * l'ancienne heure ou avec l'ancien texte). Présent seulement s'il y en a : l'état visible doit le dire.
+   */
+  readonly stale?: number;
 }
 
 export type NotificationAvailability = 'available' | 'unavailable';

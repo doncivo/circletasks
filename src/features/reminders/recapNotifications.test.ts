@@ -76,8 +76,12 @@ describe('récapitulatifs sur l’iPhone : mise à jour sans doublon (N-04 crit�
     h.db.clock.advance(4 * 3_600_000); // 14:00
     await seedReminderTask(h.container, { title: 'Ajoutée à 14 h', date: '2026-10-08', time: null, offsets: [] });
     const outcome = await replanNotifications(h.container, 'edit');
-    expect(outcome).toMatchObject({ status: 'planned', report: { scheduled: 1, cancelled: 0 } });
-    expect(h.bridge.pendingMap.get(eveningId)).toMatchObject({ title: '1 élément non fait', body: 'Ajoutée à 14 h' });
+    // N-FIX-03 : texte changé = numéro neuf posé puis ancien annulé ; une seule notification du soir d'aujourd'hui en attente.
+    expect(outcome).toMatchObject({ status: 'planned', report: { scheduled: 1, cancelled: 1 } });
+    const evenings = [...h.bridge.pendingMap.values()].filter((item) => item.date === '2026-10-08T21:00:00.000Z');
+    expect(evenings).toHaveLength(1);
+    expect(evenings[0]).toMatchObject({ title: '1 élément non fait', body: 'Ajoutée à 14 h' });
+    expect(h.bridge.pendingMap.get(eveningId)).toBeUndefined();
     expect(h.bridge.pendingMap.size).toBe(64);
   });
 
@@ -88,7 +92,9 @@ describe('récapitulatifs sur l’iPhone : mise à jour sans doublon (N-04 crit�
     await h.container.data.repos.settings.set('reminders.eveningRecap', { enabled: true, time: '22:30' as never });
     const outcome = await replanNotifications(h.container, 'edit');
     expect(outcome.status).toBe('planned');
-    expect(h.bridge.pendingMap.get(eveningId)?.date).toBe('2026-10-08T22:30:00.000Z');
+    // N-FIX-03 : l'échéance changée vit sous un numéro neuf ; l'ancien numéro n'est plus en attente.
+    expect(h.bridge.pendingMap.get(eveningId)).toBeUndefined();
+    expect(dates()).toContain('2026-10-08T22:30:00.000Z');
     expect([...h.bridge.pendingMap.values()].filter((item) => item.date.endsWith('T21:00:00.000Z') && item.title.includes('soir'))).toEqual([]);
     expect(h.bridge.pendingMap.size).toBeLessThanOrEqual(64);
   });
