@@ -39,6 +39,8 @@ Trois annulations à 20 min 17 s le 27 octobre ont chacune coûté une relance m
 | 40565118802 (fad12ce9, correctif) | froid (`Cache not found`, clé `apt-webkit-ubuntu24-20261023.334.3-7f73b4c40481ca81`) | téléchargement 117 Mo en 1 min 25 s (1,37 Mo/s), installation **107 s**, 187 `.deb` conservés, **cache sauvegardé en 3 s** | job `e2e iphone-webkit` vert (46 s de tests). Le run est rouge ailleurs : `e2e iphone (3/4)`, Q-05 critère 9, sans lien avec cette branche (voir ci-dessous). |
 | run suivant (cache chaud) | à consigner | | |
 
+Run 40565118802, job `e2e iphone (3/4)` rouge : `Q-05.spec.ts:16` (thème sombre), Entrée ignorée parce que le bouton de soumission est désactivé tant que le bloc à la demande des options n'est pas chargé (UI-REFONTE-01) ; sans lien avec cette branche, cause au journal du 2026-10-27 et story Q-05-FIX-01 au backlog ; run remplacé par celui de 0ebfdfc5 (fiche poussée), donc pas de relance.
+
 Puis premier run de `main` après fusion (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant.
 
 ## Passes
