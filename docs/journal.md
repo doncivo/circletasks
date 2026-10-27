@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — point de pause demandé par Ali
+
+PR #88 ouverte et poussée, ef10846f, preuves rouges e01b756e ; QA/revue locales achevées, bundle 334 025 normalisés, marge 24 375. CI 40490948417 / 40490975874 encore en cours au relevé de pause. Aucune fusion. UI-FIX-04 créée sans modification puis renommée pause-refonte-20261027 pour sauvegarder la pause ; Objectif, Concentration et les huit refontes ne sont pas commencés. Consignes, périmètre 11 à 15, ordre et manipulations de reprise consignés en tête de reprise-codex. Sauvegarde documentaire committée localement, sans nouveau push ni compilation ; arrêt du travail et de la surveillance à la demande d'Ali.
+
 ## 2026-10-27 — UI-FIX-03, Rapport du mois
 
 Demande 11/12/14 reproduite avant correctif e01b756e : quatre échecs DOM sur les phrases absentes et le titre du ratio ; navigateur iPhone confirme le retour à droite. Correction en QA : phrases adaptées à l'absence ou au filtre, retour à gauche sur mobile, titre Taux d'achèvement. Exports alignés sur l'écran avec phrases sur plusieurs lignes. Aucun calcul métier ni schéma modifié. Les résultats verts, revue et CI restent à consigner.

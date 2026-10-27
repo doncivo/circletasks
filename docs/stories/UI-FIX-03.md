@@ -1,6 +1,6 @@
 # UI-FIX-03 — Rapport du mois : états vides et retour
 
-Statut : correctif vérifié localement et relu ; CI et fusion encore requises. Demande du 27 octobre 2026, défauts 11, 12 (Rapport) et 14. Estimation : 1 h 30 à 2 h actives ; alerte à 3 h.
+Statut : en pause à la demande d'Ali le 27 octobre 2026. Correctif ef10846f poussé en PR #88, vérifié localement et relu ; CI 40490948417 / 40490975874 en cours au relevé de pause, fusion encore requise. Demande du 27 octobre 2026, défauts 11, 12 (Rapport) et 14. Estimation : 1 h 30 à 2 h actives ; alerte à 3 h.
 
 ## Passe product-owner
 

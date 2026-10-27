@@ -1,10 +1,28 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## PAUSE demandée par Ali le 27 octobre 2026
+
+Instruction prioritaire : « tout consigné et mettre en pause ». Ne reprendre aucun développement, fusion ni compilation avant une nouvelle demande d'Ali. Les CI déjà lancées peuvent finir ; aucun résultat futur présumé, aucune surveillance active pendant la pause.
+
+État sauvegardé : UI-FIX-03, correctif Rapport du mois, poussé dans la PR #88 ouverte, tête ef10846f59bb30babf9e435022f9dd7bce43895d. Preuve rouge e01b756e. QA locale : 59 ciblés, 13 e2e initiaux puis cinq complémentaires, lint/typage et 62 gardes bundle verts ; revue approuvée dans docs/stories/UI-FIX-03.md. Bundle 334 025 normalisés, 333 960 bruts, marge 24 375. CI 40490948417 / 40490975874 en cours au relevé de pause : 1 contrôle vert, 20 en cours, 23 en attente. Pas fusionné, pas livré. À la reprise, lire le résultat réel de #88 avant toute fusion et remesurer main après fusion.
+
+Une branche UI-FIX-04 avait seulement été créée depuis ef10846f ; aucun test ni code Objectif écrit. Elle est renommée pause-refonte-20261027 pour ce point de sauvegarde documentaire, dans le worktree n-ios-apercus. Commit documentaire local, sans push ni nouveau lancement CI à la pause. Les modifications applicatives et leurs preuves sont déjà sur GitHub via #88. Main reste a33c2dbf, candidats PC/iPhone 1.0.2 déjà publiés, schéma 19 ; aucun nouvel artefact construit.
+
+### Demande complète restant à exécuter
+
+- 11 : Rapport, phrases « Aucune routine ce mois-ci », « Aucun objectif » au lieu d'un tiret. Inclus dans #88, avec distinction des données exclues par projet et des routines sans occurrence prévue.
+- 12 : retour iOS à gauche partout. Rapport inclus dans #88 ; Objectif reste à corriger, puis vérifier les autres retours.
+- 13 : Focus Time devient un titre français sans capitales ; Pause domine visuellement Terminer la tâche ; le total du jour ne reste plus à zéro pendant une première minute active (secondes ou minute entamée). Non commencé.
+- 14 : Rapport, remplacer « complétion » par « achèvement » en conservant le ratio. Inclus dans #88, pas encore fusionné.
+- 15 : Objectif, un seul moyen d'ajouter quand le champ de saisie est déjà présent. Non commencé ; piste lue : masquer le bouton d'ajout tant qu'un brouillon est ouvert, conserver l'ajout après création d'un objectif. Préserver saisie, focus et persistance.
+
+Ensuite, une story par écran : Aujourd'hui iPhone clair/sombre, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. Références dans docs/maquettes-refonte de #84, bd3a80bf : reprendre hiérarchie, espacements, formulations et règles, sans copier le HTML. Les huit écrans ne sont pas commencés. Preuve avant/après, revue consignée, CI verte, bundle après chaque fusion ; plafond inchangé. Les quatre seuls motifs d'arrêt restent ceux convenus, en plus de cette pause explicitement demandée. A9 reste accepté pour usage personnel, A6b futur ; aucun résultat natif 1.0.2 inventé.
+
 ## 27 octobre — cinq défauts puis huit écrans autorisés
 
 Ali a fourni les points 11 à 15 et levé la pause des huit refontes. Ordre : Rapport (11/12/14, UI-FIX-03), Objectif (12/15), Concentration (13), puis Aujourd'hui iPhone clair/sombre, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. Une story par écran, preuves avant/après, revue distincte, CI et bundle après chaque fusion. Référence docs/maquettes-refonte sur design-maquettes-refonte, PR #84, bd3a80bf : reprendre hiérarchie, espacements et formulations, pas copier le HTML. Aucun nouveau résultat physique 1.0.2 reçu.
 
-Main a33c2dbf (#87 fusionnée, 48 contrôles verts ; bundle après fusion 62/62, 333 973 octets). Actif : UI-FIX-03, worktree n-ios-apercus. Preuve rouge e01b756e : quatre assertions DOM et retour navigateur à droite. Correctif en QA, pas encore poussé. Estimation trois écrans de correctifs : 4 à 6 h actives ; premier écran 1 h 30 à 2 h, alerte 3 h. Racine sur design-maquettes-refonte conservée. Pas de deuxième compilation 1.0.2 ; un seul futur lot après le travail autorisé.
+Main a33c2dbf (#87 fusionnée, 48 contrôles verts ; bundle après fusion 62/62, 333 973 octets). UI-FIX-03 est désormais poussée en #88, état exact dans la section de pause ci-dessus. Estimation trois écrans de correctifs : 4 à 6 h actives ; premier écran 1 h 30 à 2 h, alerte 3 h. Racine sur design-maquettes-refonte conservée. Pas de deuxième compilation 1.0.2 ; un seul futur lot après le travail autorisé.
 
 ## Refonte 1.0.2 — publication vérifiée
 
