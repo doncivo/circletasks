@@ -2,7 +2,7 @@
 
 Module : M10 Focus Time · Palier : après la 1.0 par la règle de tri (défaut visible), avancé par Ali dans l'ordre du 27 octobre 2026 après UI-FIX-05 · Agent : focus-time · Ouverte le 2026-10-27 par Claude Code.
 
-Statut : **code sur la branche `ui-fix-06-concentration`, tests du module, lint et typage verts ; e2e, bundle, CI complète et fusion requises**. Estimation : 2 h actives ; alerte à 3 h.
+Statut : **fait** — PR #95 fusionnée le 2026-10-27 (runs 40559452660 et 40559466317, 48 contrôles verts), `main` 64e6a400, bundle de `main` mesuré à 335 397 normalisés, marge 23 003 ; observation sur l'iPhone au prochain lot. Estimation : 2 h actives ; alerte à 3 h.
 
 ## Demande d'Ali (liste du 27 octobre 2026, défaut 13)
 
