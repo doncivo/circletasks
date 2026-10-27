@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — UI-FIX-05, défaut 15 : un seul moyen d'ajouter un objectif
+
+Constat : « + Ajouter un objectif » restait affiché sous un brouillon (champ vide ouvert par ce bouton, ou implicite sans objectif), où il ne faisait rien : deux commandes pour une décision. Preuve rouge `88d4c1b2` : trois échecs (bouton présent sous le brouillon et sous le champ implicite). Correctif dans `GoalsScreen.tsx` seulement : le bouton n'est rendu sous le dernier objectif que sans brouillon affiché, les brouillons ne portent plus d'action ; création, focus et conservation du brouillon inchangés. Suites Objectif 123 tests / 10 fichiers verts, le test historique du critère 6 passe sans adaptation ; lint, typage verts ; e2e OB-01 à OB-06 sur `pc` et `iphone` 52 verts et 2 ignorés volontaires ; garde du bundle 62/62, 335 256 normalisés, marge 23 144, inchangé face à UI-FIX-04. Branche `ui-fix-05-objectif-ajout`, empilée sur UI-FIX-04.
+
 ## 2026-10-27 — UI-FIX-04, défaut 12 : retour iPhone à gauche sur treize écrans
 
 Inventaire : douze écrans iPhone plaçaient encore le retour en haut à droite avec l'icône « annuler » (Objectif, Un jour, Terminées, Corbeille, Espaces, Plages silencieuses, Synchronisation › Détails, Récapitulatifs, Apparence, Import, Calendriers, Jours fériés) ; seul le Rapport était conforme depuis UI-FIX-03. Preuve rouge `967a786c` : contrat statique sur les treize écrans (icône `ArrowLeft`, rangée alignée au début), 24 échecs sur 26, plus la géométrie e2e sur Objectif et Un jour. Correctif : icône et alignement sur les douze écrans, rien d'autre. Contrat 26/26, e2e iPhone 8 verts (UI-FIX-04, UI-FIX-03, OB-01), suites DOM des écrans touchés 1 555 tests / 158 fichiers verts, lint, typage, garde du bundle 62/62, 335 256 normalisés, marge 23 144. Revue à froid approuvée dans la fiche. Branche `ui-fix-04-retours`, empilée sur N-FIX-04 et le point d'état ; PR après leur fusion.

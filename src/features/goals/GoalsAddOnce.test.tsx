@@ -18,7 +18,7 @@ describe('Objectif : un seul moyen d’ajouter (UI-FIX-05)', () => {
 
   it('sans objectif : le champ vide est là, aucun bouton d’ajout', async () => {
     renderGoals(h.container);
-    await screen.findByRole('textbox', { name: 'Objectif de la semaine (1)' });
+    await screen.findByRole('textbox', { name: 'Objectif de la semaine' });
     expect(addButton()).toBeNull();
   });
 
