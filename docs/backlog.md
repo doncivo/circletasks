@@ -1,5 +1,13 @@
 # Backlog CircleTasks
 
+## Reprise du 27 octobre 2026 (Claude Code)
+
+Pause levée par Ali. UI-FIX-03 (défauts 11, 12 Rapport, 14) fusionnée par #88 dans `e9ba7e26`, bundle main 62/62, 334 039 normalisés, marge 24 361. Restent : 12 (Objectif), 15, 13, puis les huit refontes, une story par écran, test rouge avant le code. Référence visuelle : `docs/maquettes-refonte/` (PR #84) pour les écrans couverts. UI-REFONTE-01 n'est pas « fait » (preuve rouge préalable absente, rendu natif ouvert). Nouveau défaut 1.0.2 signalé par Ali : routines modifiées sans notification, diagnostic en cours. État courant : `docs/reprise-codex.md`.
+
+## Pause du 27 octobre 2026
+
+Travail suspendu à la demande d'Ali. UI-FIX-03 (11/12 Rapport/14) : correctif et preuves poussés en PR #88, ef10846f, QA/revue locales vertes ; CI en cours au dernier relevé, aucune fusion ni livraison présumée. Objectif (12/15), Concentration (13) et les huit refontes suivantes restent non commencés. Périmètre exact et ordre sauvegardés en tête de docs/reprise-codex.md ; reprise seulement sur demande explicite.
+
 ## 27 octobre — défauts 11 à 15 puis refonte complète
 
 UI-FIX-03 (Rapport, 11/12/14) en QA : phrases vides, retour iPhone à gauche, taux d'achèvement. Preuve rouge e01b756e, vert/revue/CI/fusion à vérifier. Suivent Objectif (12/15) et Concentration (13), puis une story par écran dans l'ordre autorisé : Aujourd'hui iPhone, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. La pause des huit écrans est levée par Ali ; aucune de ces corrections n'est encore livrée.

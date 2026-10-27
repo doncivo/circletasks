@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Événements</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.pill{height:30px;padding:0 13px;border-radius:15px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.mo{font-size:13px;font-weight:700;color:#8C85A3;padding:17px 0 5px 0}
+.ev{display:flex;gap:14px;align-items:flex-start;padding:11px 0;border-bottom:1px solid #EFECF5}
+.dt{width:42px;flex-shrink:0;text-align:center}
+.dt .n{font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:700;line-height:1}
+.dt .w{font-size:11px;font-weight:600;color:#8C85A3;margin-top:1px}
+.nm{font-size:17px;font-weight:700;line-height:1.25}
+.sb{font-size:13px;font-weight:500;color:#8C85A3;margin-top:2px}
+/* un jour férié est un fait du calendrier, pas un de vos événements : il recule */
+.hol .n,.hol .nm{color:#B5AEC6;font-weight:600}
+.hol .w,.hol .sb{color:#C8C2D8}
+.cd{font-size:12px;font-weight:700;padding:4px 9px;border-radius:7px;background:#2E2150;color:#FFFFFF;flex-shrink:0;white-space:nowrap}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Jour.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine-v2.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines-v2.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements-v2.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Événements</span></a>
+<a class="tab" href="Checklists-v2.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages-v3.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; box-sizing: border-box;">
+  <div style="height: 56px; flex-shrink: 0;"></div>
+  <div style="padding: 0 20px; flex-shrink: 0;">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between;">
+      <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 42px; line-height: 1; font-weight: 700;">Événements</h1>
+      <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 3px;">
+        <button style="width: 34px; height: 34px; border: 0; background: transparent; color: #2E2150; cursor: pointer;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+        <span style="font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums;">2026</span>
+        <button style="width: 34px; height: 34px; border: 0; background: transparent; color: #2E2150; cursor: pointer;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></button>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 7px; padding: 14px 0 6px 0; align-items: center;">
+      <button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+      <button class="pill" style="border: 1.5px solid #CFC9DD; color: #2F6B7A;">Pro</button>
+      <button class="pill" style="border: 1.5px solid #CFC9DD; color: #B5483B;">Perso</button>
+      <button class="pill" style="margin-left: auto; border: 1.5px solid #CFC9DD; color: #6F6790;">Masquer les fériés</button>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; overflow: hidden; padding: 0 20px;">
+
+    <div class="mo">Octobre</div>
+    <div class="ev hol">
+      <div class="dt"><div class="n">15</div><div class="w">jeu.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Fête de l'Évacuation</div><div class="sb">Jour férié en Tunisie</div></div>
+    </div>
+
+    <div class="mo">Novembre</div>
+    <div class="ev hol">
+      <div class="dt"><div class="n">1</div><div class="w">dim.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Toussaint</div><div class="sb">Jour férié en France</div></div>
+    </div>
+    <div class="ev hol">
+      <div class="dt"><div class="n">11</div><div class="w">mer.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Armistice</div><div class="sb">Jour férié en France</div></div>
+    </div>
+
+    <div class="mo">Décembre</div>
+
+    <!-- Vos événements gardent toute l'encre -->
+    <div class="ev">
+      <div class="dt"><div class="n">3</div><div class="w">jeu.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Vol vers Tunis</div><div class="sb">Journée entière · <span style="color:#B5483B;font-weight:600;">Perso</span> · rappel la veille</div></div>
+      <span class="cd">dans 40 j</span>
+    </div>
+
+    <div class="ev hol">
+      <div class="dt"><div class="n">17</div><div class="w">jeu.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Fête de la Révolution</div><div class="sb">Jour férié en Tunisie</div></div>
+    </div>
+    <div class="ev hol">
+      <div class="dt"><div class="n">25</div><div class="w">ven.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Noël</div><div class="sb">Jour férié en France</div></div>
+    </div>
+
+    <div class="mo">Mars 2027</div>
+    <div class="ev hol" style="border-bottom: 0;">
+      <div class="dt"><div class="n">25</div><div class="w">jeu.</div></div>
+      <div style="flex-grow: 1;"><div class="nm">Mouled</div><div class="sb">Jour férié en Tunisie · date estimée</div></div>
+    </div>
+
+  </div>
+
+  <div style="padding: 14px 20px 20px 20px; border-top: 1px solid #E8E4F0; flex-shrink: 0; display: flex; align-items: center; gap: 10px;">
+    <a href="PC-Evenements.html" style="flex-grow: 1; height: 48px; border: 1.5px solid #D9D4E4; border-radius: 24px; display: flex; align-items: center; justify-content: center; text-decoration: none; font: 600 15px 'DM Sans', sans-serif;">Vue calendrier</a>
+    <button style="height: 48px; padding: 0 20px; border: 0; border-radius: 24px; background: #2E2150; color: #FFFFFF; font: 700 15px 'DM Sans', sans-serif; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Événement
+    </button>
+  </div>
+</main>
+</div>
+</body>
+</html>

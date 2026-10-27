@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Synchronisation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+h2.s{margin:26px 0 10px 0;font-family:Fraunces,Georgia,serif;font-size:21px;font-weight:700;line-height:1}
+.dev{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #EFECF5}
+.dev .nm{font-size:16px;font-weight:700;flex-grow:1;min-width:0}
+.dev .sub{font-size:13px;font-weight:500;color:#8C85A3;margin-top:2px}
+.st{font-size:12px;font-weight:700;padding:4px 10px;border-radius:7px;flex-shrink:0;white-space:nowrap}
+.cf{border:1.5px solid #E8E4F0;border-radius:16px;padding:14px;margin-bottom:11px}
+.kept{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border-radius:10px;background:#F4F2F8;margin-top:9px}
+.drop{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;margin-top:5px}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Jour.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine-v2.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines-v2.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements-v2.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists-v2.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages-v3.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Réglages</span></a>
+</nav>
+
+<main style="flex-grow: 1; height: 956px; overflow: hidden; box-sizing: border-box;">
+  <div style="height: 56px;"></div>
+  <div style="padding: 0 20px;">
+
+  <a href="Reglages-v3.html" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 15px; font-weight: 600; color: #6F6790; margin-bottom: 8px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>Réglages
+  </a>
+
+  <h1 style="margin: 0 0 16px 0; font-family: Fraunces, Georgia, serif; font-size: 36px; line-height: 1; font-weight: 700;">Synchronisation</h1>
+
+  <!-- L'état, en une phrase vraie. Vert seulement quand tout est effectivement parti. -->
+  <div style="border: 2px solid #2F6B4A; border-radius: 18px; padding: 15px 16px; display: flex; align-items: center; gap: 13px;">
+    <span style="width: 32px; height: 32px; border-radius: 16px; background: #E7EFE9; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2F6B4A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+    </span>
+    <div style="flex-grow: 1;">
+      <div style="font-size: 16px; font-weight: 700;">Tout est parti vers iCloud</div>
+      <div style="font-size: 13px; font-weight: 500; color: #6F6790; margin-top: 2px;">Dernier envoi il y a 2 minutes</div>
+    </div>
+    <button style="height: 38px; padding: 0 16px; border: 1.5px solid #D9D4E4; border-radius: 19px; background: #FFFFFF; font: 600 14px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer; flex-shrink: 0;">Vérifier</button>
+  </div>
+
+  <h2 class="s">Appareils</h2>
+
+  <!-- Un gabarit unique pour les trois, statut aligné en colonne -->
+  <div class="dev">
+    <div class="nm">iPhone 16 Pro Max<div class="sub">Cet appareil · lu il y a 2 min</div></div>
+    <span class="st" style="background: #E7EFE9; color: #2F6B4A;">Actif</span>
+  </div>
+
+  <div class="dev">
+    <div class="nm">PC du bureau<div class="sub">Lu aujourd'hui à 11:28</div></div>
+    <span class="st" style="background: #E7EFE9; color: #2F6B4A;">Actif</span>
+  </div>
+
+  <div class="dev" style="border-bottom: 0;">
+    <div class="nm" style="color: #8C85A3;">Ancien PC<div class="sub">Dernière lecture le 16 oct. à 03:27</div></div>
+    <span class="st" style="background: #F1EEF7; color: #8C85A3;">Oublié</span>
+  </div>
+
+  <h2 class="s">Conflits de cette semaine</h2>
+  <div style="font-size: 14px; font-weight: 500; color: #6F6790; margin: -4px 0 12px 0;">Deux appareils ont modifié la même chose. La version la plus récente est appliquée.</div>
+
+  <!-- On nomme ce qui a changé, en français -->
+  <div class="cf">
+    <div style="font-size: 16px; font-weight: 700;">Date de « Test Pc »</div>
+    <div class="kept">
+      <span style="font-size: 15px; font-weight: 700;">24 oct.</span>
+      <span style="font-size: 13px; font-weight: 600; color: #2F6B4A;">Appliquée · iPhone, 00:11</span>
+    </div>
+    <div class="drop">
+      <span style="font-size: 15px; font-weight: 500; color: #8C85A3;">23 oct. <span style="font-size: 13px;">· PC du bureau, hier 03:21</span></span>
+      <button style="height: 34px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 17px; background: #FFFFFF; font: 600 14px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer;">Rétablir</button>
+    </div>
+  </div>
+
+  <div class="cf">
+    <div style="font-size: 16px; font-weight: 700;">Report de « Clôture mensuelle »</div>
+    <div class="kept">
+      <span style="font-size: 15px; font-weight: 700;">Reportée</span>
+      <span style="font-size: 13px; font-weight: 600; color: #2F6B4A;">Appliquée · PC du bureau, 9 oct.</span>
+    </div>
+    <div class="drop">
+      <span style="font-size: 15px; font-weight: 500; color: #8C85A3;">Non reportée <span style="font-size: 13px;">· PC du bureau, 8 oct. 20:32</span></span>
+      <button style="height: 34px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 17px; background: #FFFFFF; font: 600 14px 'DM Sans', sans-serif; color: #2E2150; cursor: pointer;">Rétablir</button>
+    </div>
+  </div>
+
+  <!-- L'action destructrice, séparée et pesée -->
+  <h2 class="s" style="color: #B5483B;">Repartir de zéro</h2>
+  <div style="border: 1.5px solid #E3C6C2; background: #FDF7F6; border-radius: 16px; padding: 15px 16px;">
+    <div style="font-size: 15px; font-weight: 500; color: #2E2150; line-height: 1.45;">Une nouvelle clé est créée. <strong>Vos deux appareils devront être réappairés par QR code</strong>, et l'historique partagé repart à zéro. Vos tâches ne sont pas supprimées.</div>
+    <button style="margin-top: 13px; height: 44px; width: 100%; border: 1.5px solid #B5483B; border-radius: 22px; background: #FFFFFF; font: 700 15px 'DM Sans', sans-serif; color: #B5483B; cursor: pointer;">Réinitialiser la synchronisation</button>
+  </div>
+
+  <div style="height: 30px;"></div>
+  </div>
+</main>
+</div>
+</body>
+</html>

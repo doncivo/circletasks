@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+## Pause du 27 octobre 2026
+
+Défauts 11/12 Rapport/14 : correctif ef10846f en PR #88, rouge e01b756e, QA et revue locales vertes, CI en cours ; non fusionné et non livré. Défauts 12 Objectif/13/15 et huit refontes non commencés. Pause explicite d'Ali, aucune clôture supplémentaire ; détails et reprise dans docs/reprise-codex.md.
+
 ## 27 octobre — défauts de contenu 11 à 15
 
 Constats d'Ali : rapport vide présenté par des tirets, retours à droite, titre Focus anglais et hiérarchie des commandes inversée, total à zéro pendant la première minute, anglicisme complétion, double commande d'ajout d'objectif. Correction autorisée avant la refonte des huit autres écrans. UI-FIX-03 couvre Rapport (11/12/14), preuve rouge e01b756e ; non clos tant que QA, revue et CI ne sont pas validées. Pas de nouveau résultat natif 1.0.2 présumé.
