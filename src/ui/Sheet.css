@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  z-index: 100;
+  /* Au-dessus du message « Annuler » (UndoToast, 300) : une feuille modale ouverte reste entièrement atteignable (UI-REFONTE-02, menu « Plus d’options »). */
+  z-index: 350;
   padding-top: max(40px, calc(var(--ct-safe-area-top) + 12px));
   box-sizing: border-box;
 }

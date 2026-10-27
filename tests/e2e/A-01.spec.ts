@@ -42,8 +42,14 @@ test.describe('A-01 — liste du jour', () => {
     const title = `Facture ${testInfo.project.name}`;
     await createTask(page, testInfo, { title, time: '09:00' });
     const row = rowOf(page, title);
-    await expect(row).toContainText('09:00');
-    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
+    if (test.info().project.name === 'iphone') {
+      // UI-REFONTE-02 : l'heure est dans la colonne de l'agenda ; la sous-ligne porte l'espace (précédé du retard si l'heure est passée).
+      await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('09:00');
+      await expect(row.locator('.ct-list-row__subtitle')).toHaveText(/Pro$/);
+    } else {
+      await expect(row).toContainText('09:00');
+      await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
+    }
     await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toHaveCount(0);
   });
 

@@ -2,7 +2,11 @@
 
 Module : M2 Aujourd'hui (avec M17 pour la ligne d'objectif, M7 et M8 pour les événements) · Palier : refontes après la 1.0.2, première des huit dans l'ordre d'Ali du 2026-10-27 · Agent : tasks-planning avec ui-design-system · Ouverte le 2026-10-27 par Claude Code.
 
-Statut : **ouverte, passe product-owner écrite ; aucun code.** Estimation : 10 à 14 h actives ; alerte à 15 h (Ali prévenu si l'estimation dérape de plus de 50 %).
+Statut : **code sur la branche `ui-refonte-02-aujourdhui-iphone`, rouge 8fa29992, module, contraste, bundle, lint, typage et e2e locaux verts, revue approuvée ; CI complète, fusion et mesure de `main` requises.** Estimation : 10 à 14 h actives ; alerte à 15 h ; réalisé en environ 6 h actives le 2026-10-27.
+
+## Mesure du bundle de départ (avant push)
+
+Garde `startBundle` **64/64** (deux modules justifiés dans `ajouts`, menu et catalogue hors du départ). Mesure hors test (`VITE_CT_E2E_HOOKS= npm run build … --manifest` puis `measureStart.ts`) : **337 550 normalisés** (337 571 bruts), **marge 20 850** sur le plafond de 358 400 ; `main` 64e6a400 / d79f2185 : 335 397 (marge 23 003), soit **+2 153** : domaine de l'agenda, formateurs, bouton et état du menu, styles et jetons ; les cartes et bandeaux retirés de l'iPhone servent encore au PC et restent dans le départ. Mesure de `main` après fusion : à consigner.
 
 Références : `docs/maquettes-refonte/Jour.html` (clair) et `Jour-Sombre.html` (sombre), PR #84 fusionnée dans `main` (962893b1), et les huit règles transversales du README du même dossier. Écran réel de départ : `src/features/today/` (carte relevée le 2026-10-27 au soir : `TodayScreen.tsx`, `TodayHeader.tsx`, `TodayParts.tsx`, `TodayListView.tsx`, `TodayRows.tsx`, `TodayCreate.tsx`, `TodayScreen.css`, domaine `src/domain/todayList.ts`).
 
@@ -72,8 +76,19 @@ Preuve rouge **8fa29992** (tests seuls, exécutés avant tout code) : `src/domai
 
 ## Passe QA
 
-À écrire.
+- **Rouge** : commit 8fa29992 (tests seuls) exécuté avant tout code : domaine rouge (module absent), écran 10 échecs / 2 verts.
+- **Vert** (code 83f2c695 et correctifs suivants) : nouveaux tests **22 verts** (domaine 10, écran 12) ; suites `src/features/today`, `domain/todayList`, `domain/todayAgenda`, `goals/GoalsPinned` **225 tests / 22 fichiers verts** après adaptations tracées ; `contrast`, `contrastCss`, `i18n` (parité fr/en) **159 verts** ; garde du bundle `startBundle` **64/64** ; lint et typage verts.
+- **E2E locaux**, projets `iphone` et `pc`, fichiers touchés (UI-REFONTE-02, A-01, A-04, A-05, A-06, A-07, A-08, A-09, ES-05, ES-08, OB-01, OB-02, Q-05, UI-FIX-04) : premier passage 91 verts / 13 échecs / 34 ignorés ; causes : adaptations incomplètes (badge dans A-04, bascule dans A-06, OB-01, `helpers/stats`, `helpers/someday`), deux assertions trop larges de la nouvelle spec, **deux défauts réels corrigés** : (1) lignes compactes à 67 px dans l'agenda (sélecteur de remplissage trop général, corrigé par `:not([data-compact])`) ; (2) le message « Annuler » (`UndoToast`, z-index 300) recouvrait le bas de la feuille du menu (z-index 100), la frappe sur « Mode édition » attendait sa disparition et le délai d'annulation passait : la feuille modale passe à 350 (`Sheet.css`), au-dessus du message. Second passage **65 verts / 3 échecs / 12 ignorés** : titre du dû à 17 px au lieu de 27 (spécificité CSS, corrigé) et deux sélecteurs non stricts de la spec (corrigés) ; troisième passage de `UI-REFONTE-02.spec.ts` sur `iphone` : **5 verts**. Q-05 thème sombre a échoué une fois au premier passage : c'est la régression connue Q-05-FIX-01 (bouton désactivé avant l'arrivée du bloc d'options), hors de cette story.
+- **Bundle de départ** : mesure de la branche hors test, voir « Mesure » ci-dessous ; CI complète et mesure de `main` après fusion requises.
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff final, appuyée sur les tests : **approuvée**, avec les réserves consignées.
+
+- Domaine pur, sans écriture : `buildTodayAgenda` compose à partir de `buildTodayList` (filtres, doublons, routines masquées inchangés) ; le « dû » ne concerne que les tâches, jamais les routines ni les événements ; à l'heure exacte rien n'est passé ni dû ; les faits restent à leur heure sauf sans heure (fin de groupe).
+- L'écran ne change rien pour PC (`agendaMode` = `mobile` seulement ; TodayList PC, badge, encadré, bandeaux, bascules conservés et testés). Les gestes A-07, le mode édition, le réordonnancement, le détail, les raccourcis D-04 passent par les mêmes `ListRow` et `role="listitem"` ; la ligne « maintenant » est un `listitem` nommé, ignoré par les tests qui comptent les titres.
+- Horloge : `setInterval` d'une minute, arrêté hors mode agenda ; dépend de `appDay` pour suivre le passage de minuit (T-06). Risque résiduel : un onglet laissé ouvert voit la ligne bouger à la minute, pas à la seconde (voulu).
+- Menu à la demande : `lazyScreen` `onDemand`, catalogue à part ; la garde `startBundle` prouve `ct-today-menu__item` et `Monthly report` hors du départ. Les commandes du menu referment la feuille ; les deux interrupteurs portent `aria-checked`.
+- `Sheet` au-dessus du message « Annuler » : décision prise pour toutes les feuilles modales (Nouvelle tâche, Détail, menus) ; le message reste visible autour de la feuille sur PC et réapparaît dessous sur iPhone ; aucun test existant ne cliquait « Annuler » une feuille ouverte. À confirmer par Ali sur l'appareil.
+- Écarts assumés avec la maquette, documentés : gris du recul et bleu du rond relevés pour les seuils de contraste ; fréquence des routines absente de la sous-ligne (formateur et catalogue hors du départ) ; PRD A-05, A-06, OB-01, OB-02, SD-01 à faire évoluer par Ali (PRD-02 proposée).
+- Hausse du bundle de départ (environ +2,1 Ko normalisés face à `main`) : domaine de l'agenda, formateurs, styles, jetons ; les cartes et bandeaux retirés de l'iPhone servent encore au PC et restent dans le départ. Marge conservée au-dessus de 20 Ko ; aucun module non justifié.

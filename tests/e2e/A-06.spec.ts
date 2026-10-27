@@ -49,7 +49,7 @@ test.describe('A-06 — vue compacte', () => {
 
     await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();
     await expect(page.getByRole('checkbox', { name: `Rouvrir : ${title}` })).toBeVisible();
-    await page.getByRole('button', { name: 'Mode édition' }).click();
+    await toggleTodayView(page, 'Mode édition');
     await expect(page.getByRole('button', { name: `Sélectionner : ${title}` })).toBeVisible();
   });
 });

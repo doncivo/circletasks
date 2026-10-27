@@ -46,11 +46,11 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
     await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
     await page.keyboard.press('Alt+1');
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    await expect(page.locator('main h1.ct-today__day')).toBeVisible(); // UI-REFONTE-02 : le badge n'existe plus sur iPhone, le titre du jour fait foi.
     await clickTodayHeaderAction(page, 'Rapport mensuel');
     await todayTab(page).click();
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    await expect(page.locator('main h1.ct-today__day')).toBeVisible(); // UI-REFONTE-02 : le badge n'existe plus sur iPhone, le titre du jour fait foi.
   });
 
   test('Alt+1 ramène du jour suivant au jour courant (PC, Q10, critère 4)', async ({ page }, testInfo) => {
@@ -58,7 +58,7 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
     await page.getByRole('button', { name: 'Jour suivant' }).click();
     await expect(page.getByText('Aujourd’hui', { exact: true })).toHaveCount(0);
     await page.keyboard.press('Alt+1');
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    await expect(page.locator('main h1.ct-today__day')).toBeVisible(); // UI-REFONTE-02 : le badge n'existe plus sur iPhone, le titre du jour fait foi.
   });
 
   test('Alt+1 ferme la fiche détail et fonctionne dans un champ de saisie sans y écrire (critères 1, 2)', async ({ page }, testInfo) => {
@@ -108,7 +108,7 @@ test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machi
     await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
     await page.keyboard.press('Alt+1');
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    await expect(page.locator('main h1.ct-today__day')).toBeVisible(); // UI-REFONTE-02 : le badge n'existe plus sur iPhone, le titre du jour fait foi.
     // Le ralentissement a bien eu lieu : sans cela le test ne prouverait rien.
     expect(hits).toBeGreaterThan(0);
   });

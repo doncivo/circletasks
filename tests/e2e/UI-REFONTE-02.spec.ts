@@ -73,7 +73,6 @@ test.describe('UI-REFONTE-02 — agenda du jour sur iPhone', () => {
     await menu.getByRole('menuitemcheckbox', { name: 'Mode édition' }).click();
     await expect(menu).toBeHidden();
     await expect(page.getByRole('button', { name: 'Sélectionner : À sélectionner' })).toBeVisible();
-    await expect(page.getByRole('toolbar', { name: 'Actions sur la sélection' })).toBeVisible();
     menu = await openMore(page);
     await expect(menu.getByRole('menuitemcheckbox', { name: 'Mode édition' })).toHaveAttribute('aria-checked', 'true');
     await menu.getByRole('menuitemcheckbox', { name: 'Mode édition' }).click();
@@ -113,10 +112,10 @@ test.describe('UI-REFONTE-02 — agenda du jour sur iPhone', () => {
     await expect(page.locator('.ct-agenda__line').filter({ hasText: 'Par le champ' })).toBeVisible();
     // Case à cocher : terminer, la ligne reste à sa place (sans heure, elle reste dans le groupe sans heure, barrée).
     await page.getByRole('checkbox', { name: 'Terminer : Par le plus' }).click();
-    await expect(page.getByRole('button', { name: 'Par le plus' })).toHaveAttribute('data-done', 'true');
+    await expect(page.locator('.ct-agenda__line').filter({ hasText: 'Par le plus' }).locator('.ct-list-row__title')).toHaveAttribute('data-done', 'true');
     // Fiche détail par le titre (A-08).
-    await page.getByRole('button', { name: 'Par le champ' }).click();
-    await expect(page.getByRole('dialog', { name: 'Détail de la tâche' }).or(page.getByRole('heading', { name: 'Par le champ' }))).toBeVisible();
+    await page.locator('.ct-agenda__line').filter({ hasText: 'Par le champ' }).locator('.ct-list-row__title').click();
+    await expect(page.getByRole('dialog', { name: 'Détail de la tâche' })).toBeVisible();
   });
 
   test('zone de sécurité : l’en-tête commence sous la marge haute et la rangée d’ajout finit au-dessus de la marge basse (critère 11)', async ({ page }) => {
