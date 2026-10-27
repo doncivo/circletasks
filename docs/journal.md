@@ -1,5 +1,13 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — enquête close : rappels Pro décalés par la plage silencieuse ; N-FIX-04 ouverte
+
+Journal iPhone du jour (`circletasks-logs-20261027-1605.txt`, désigné par Ali, lu seul) : aucune entrée `notifications`, donc aucun échec de planification ; app ouverte chaque jour du 24 au 27, fenêtre de sept jours non épuisée ; synchro sans erreur de lecture. Réponse d'Ali : deux routines Pro à 20:00 tous les jours, plage Pro 19:00–08:00 et week-end. Conclusion : l'app fait ce qu'elle doit, chaque rappel est décalé au prochain matin de semaine à 08:00 (`effectiveFireAt`). Le défaut réel : l'app a accepté le choix de 20:00 sans le dire. Story **N-FIX-04** ouverte (avertissement immédiat sur les trois formulaires, création et modification, formulation de N-FIX-02 ; ligne « Rappels décalés » sur l'écran Routines), bloquante par la règle de tri, estimée 7 à 9 h, place proposée avant les huit refontes. N-FIX-03 reste fondée : angle mort du code, corrigé par #90, indépendant de cette cause.
+
+`sync-rust ignored-entry` depuis le 24 octobre 10:43 : listing des noms du dossier iCloud `devices` sans ouvrir de fichier : `7d0b4a0a-…/state 2.ctx`, 5 656 octets, daté du 24 octobre 11:20, copie de conflit créée par iCloud à côté de `state.ctx` (même taille, nom avec « 2 » typique de Finder/iCloud). Rust l'ignore à chaque cycle (`list_device_top` : ni `state.ctx`, ni `state.next.ctx`, ni une époque) ; aucune lecture faussée. Suppression à faire par Ali, jamais par un agent.
+
+CI de #90 : un des deux runs a été annulé par le délai de 20 minutes du job `e2e iphone-webkit` pendant `playwright install-deps webkit` (miroir Ubuntu lent), avant tout test ; relance des jobs annulés, 48 contrôles verts, fusion dans d6238ecb, bundle main 62/62, 334 135 normalisés, marge 24 265. Aucun délai ni test modifié.
+
 ## 2026-10-27 — N-FIX-03, remplacement vérifiable des notifications iOS
 
 Défaut signalé par Ali en 1.0.2 : deux routines modifiées, aucune notification. Diagnostic sur le code avant tout correctif (`observeWrites`, `replanNotifications`, `tauriNotifications`, `notificationPlan`, `quietHours`) : la modification déclenche bien une replanification complète ; la plage silencieuse décale sans jamais supprimer ; mais une routine modifiée garde ses identifiants de rappel, donc son numéro iOS, et `replace` renvoyait l'élément sous le même numéro en ne vérifiant que la présence du numéro dans `get_pending`, qui ne rend pas l'échéance (ADR 0012, constats 3 et 8). Un remplacement qu'iOS n'appliquait pas passait pour un succès : état faux muet, story ouverte, Ali informé. La cause de l'observation d'Ali reste à établir avec les faits de l'appareil.
