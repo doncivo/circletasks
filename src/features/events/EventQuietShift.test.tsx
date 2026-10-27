@@ -22,10 +22,10 @@ describe('formulaire Événement : rappel dans la plage silencieuse (N-FIX-04)',
     await teardownEvents(h);
   });
 
-  function open(event: Parameters<typeof EventForm>[0]['event'], initialOffsets: readonly (0 | 1440 | 10080)[]) {
+  function open(event: Parameters<typeof EventForm>[0]['event'], initialOffsets: readonly (0 | 1440 | 10080)[], initialDate?: ReturnType<typeof asLocalDate>) {
     render(
       <AppContainerProvider container={h.container}>
-        <EventForm event={event} spaces={useAppStore.getState().spaces} initialSpaceId={SPACE_PRO_ID} today={asLocalDate('2026-10-02')} initialOffsets={initialOffsets} onSubmit={vi.fn(() => Promise.resolve(true))} onClose={vi.fn()} errorMessage={null} />
+        <EventForm event={event} spaces={useAppStore.getState().spaces} initialSpaceId={SPACE_PRO_ID} today={asLocalDate('2026-10-02')} initialOffsets={initialOffsets} {...(initialDate ? { initialDate } : {})} onSubmit={vi.fn(() => Promise.resolve(true))} onClose={vi.fn()} errorMessage={null} />
       </AppContainerProvider>,
     );
   }
@@ -39,12 +39,12 @@ describe('formulaire Événement : rappel dans la plage silencieuse (N-FIX-04)',
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
   });
 
-  it('création : journée entière un samedi avec « La veille » : le rappel vendredi 09:00 n’est pas couvert, rien ; « À l’heure » samedi 09:00 est décalé au lundi 08:00 par le week-end', async () => {
-    open(null, []);
+  it('création : journée entière un samedi avec « La veille » : le rappel vendredi 09:00 n’est pas couvert, rien ; « Le jour même » samedi 09:00 est décalé au lundi 08:00 par le week-end', async () => {
+    open(null, [], asLocalDate('2026-10-03'));
     fireEvent.change(screen.getByLabelText(/Titre/), { target: { value: 'Brocante' } });
     fireEvent.click(screen.getByRole('checkbox', { name: 'La veille' }));
     expect(screen.queryByRole('status')).toBeNull();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Le jour même' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(/aucun rappel Pro/);
+    expect(await screen.findByRole('status')).toHaveTextContent('Rappel décalé au lundi 08:00 — aucun rappel Pro le week-end');
   });
 });

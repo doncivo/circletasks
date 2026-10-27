@@ -4,11 +4,13 @@ import type { DateChoice } from '../../domain/dateInput';
 import { scheduleCountdown, nextCountdown } from '../../domain/eventCountdown';
 import { ANNUAL_DEFAULT_REMINDERS, annualStartDate, applyKind, checkBirthYear, defaultCountdown, isAnnualKind, MIN_BIRTH_YEAR, nextAnnualDate } from '../../domain/eventKinds';
 import { defaultEventEnd, endAfterStartChange, EVENT_TITLE_MAX, eventDurationMin, validateEvent, validateEventTitle } from '../../domain/eventRules';
-import { EVENT_REMINDER_CHOICES, toggleEventReminderOffset } from '../../domain/eventReminders';
-import { clampedDay } from '../../domain/eventOccurrences';
-import { parseLocalDate } from '../../domain/localDate';
+import { EVENT_REMINDER_CHOICES, eventReminderTime, toggleEventReminderOffset } from '../../domain/eventReminders';
+import { clampedDay, occurrenceStarts } from '../../domain/eventOccurrences';
+import { addDays, parseLocalDate } from '../../domain/localDate';
+import { reminderFireAt } from '../../domain/recurrenceNext';
+import { QuietShiftNotice } from '../reminders/QuietShiftNotice';
 import type { CalendarEvent, EventFields, EventKind, EventRepeat, IconRef, ReminderOffsetMin, Space } from '../../domain/model';
-import type { LocalDate, LocalTime, SpaceId } from '../../domain/types';
+import type { LocalDate, LocalDateTime, LocalTime, SpaceId } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import { AddSegments, Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, TextField, useLayout, type AddSegment } from '../../ui';
 import { countdownTag } from './countdownText';
@@ -81,6 +83,15 @@ function Choice({ type, name, checked, disabled, onChange, children }: { type: '
  * date importante est annuel (imposé), sur une journée entière, avec une année de naissance facultative (« Sans année » en tête de la
  * roue) ; la création les propose avec « La veille » et « Le jour même » cochés. Une modification s'applique à toute la série.
  */
+/** Échéances d'origine des rappels de la prochaine occurrence à partir d'aujourd'hui (même règle que le planificateur) ; vide sans occurrence. */
+function nextReminderFireAts(current: EventFields, today: LocalDate, offsets: readonly ReminderOffsetMin[]): LocalDateTime[] {
+  const horizon = addDays(today, 400);
+  const [next] = occurrenceStarts(current, today, horizon).filter((date) => date >= today);
+  if (next === undefined) return [];
+  const time = eventReminderTime(current);
+  return offsets.map((offset) => reminderFireAt(next, time, offset));
+}
+
 export function EventForm({ event, spaces, initialSpaceId, today, initialDate, initialTitle = '', initialOffsets = [], onSubmit, onClose, onDelete, onSegmentChange, errorMessage, autoFocus }: EventFormProps) {
   const headingId = useId();
   const layout = useLayout();
@@ -360,6 +371,8 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
             </Choice>
           ))}
         </div>
+        {/* N-FIX-04 : rappels de la prochaine occurrence couverts par une plage silencieuse de l'espace, annoncés dès le choix. */}
+        <QuietShiftNotice spaceId={spaceId} fireAts={nextReminderFireAts(fields(), today, offsets)} />
       </div>
 
       <div className="ct-event-form__switchRow">

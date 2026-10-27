@@ -124,6 +124,32 @@ export function effectiveFireAt(fireAt: LocalDateTime, quietHours: readonly Quie
   return fireAt;
 }
 
+/** Une plage qui couvre une échéance : la plage, et si elle a commencé la veille (partie du matin d'une plage qui traverse minuit). */
+export interface CoveringRange {
+  readonly range: QuietHours;
+  readonly startedPreviousDay: boolean;
+}
+
+/**
+ * Plages valides qui couvrent l'échéance `fireAt` elle-même (début inclus, fin exclue), sans suivre la chaîne des plages suivantes :
+ * sert à nommer la cause d'un décalage (N-FIX-04, « une phrase, une cause »).
+ */
+export function coveringRanges(fireAt: LocalDateTime, quietHours: readonly QuietHours[]): CoveringRange[] {
+  const [date, time] = fireAt.split('T') as [LocalDate, LocalTime];
+  const moment = dayIndex(date) * 1440 + minutesOf(time);
+  const today = Math.floor(moment / 1440);
+  const out: CoveringRange[] = [];
+  for (const startDay of [today - 1, today]) {
+    const weekday = weekdayOf(dateOfIndex(startDay));
+    for (const raw of quietHours) {
+      if (!validateQuietRange(raw).ok || !raw.weekdays.includes(weekday)) continue;
+      const start = startDay * 1440 + minutesOf(raw.from);
+      if (start <= moment && moment < start + durationOf(raw)) out.push({ range: raw, startedPreviousDay: startDay !== today });
+    }
+  }
+  return out;
+}
+
 /** Élément du résumé d'une ligne « Silence Pro » (ES-07 critère 2) : le texte est composé par l'interface (i18n). */
 export type QuietSummaryPart =
   | { readonly kind: 'every-day'; readonly from: LocalTime; readonly to: LocalTime }

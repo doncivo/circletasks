@@ -2,7 +2,7 @@
 
 Module : M5 Rappels, avec M13 Espaces (ES-07) · Palier : **avant la 1.0 d'office** (règle de tri d'AGENTS.md : état faux affiché sans le dire) · Agent : notifications + ui-design-system · Ouverte le 2026-10-27 par Claude Code à la demande d'Ali.
 
-Statut : **ouverte, à chiffrer et à placer par Ali** (voir « Estimation et place »). Aucun code.
+Statut : **code sur la branche `n-fix-04-plage-silencieuse`, tests du module, lint et typage verts ; CI complète, fusion et observation iPhone requises**. Ordre validé par Ali le 2026-10-27 : N-FIX-04 d'abord, puis 12, 15, 13, puis les huit refontes. Estimation 7 à 9 h actives, alerte 12 h.
 
 ## Origine
 
@@ -34,12 +34,20 @@ Estimation : **7 à 9 h actives**, alerte à 12 h. Détail : domaine et textes 1
 
 Place proposée : **avant les huit refontes, juste après l'ouverture**, parce que la règle de tri la met avant la 1.0 d'office et qu'elle touche trois formulaires que les refontes Routines et Événements vont redessiner : livrer la ligne d'abord, puis la refonte la garde (règle 4 des maquettes de refonte : aucune valeur interne, et une décision visible). Les défauts 12, 15 et 13 sont des défauts visibles ; ils passent après cette story si Ali le confirme.
 
+## Décisions d'Ali après la passe product-owner (2026-10-27)
+
+- **Trois états pour la ligne Routines, jamais silencieux par défaut** : tous décalés « Rappels décalés à 08:00 » ; partiellement décalés, une ligne qui nomme ce qui est touché, « Rappels du week-end décalés au lundi 08:00 » ; aucun décalage, rien. Raison d'Ali : « une routine Pro à 10:00 tous les jours sonne bien en semaine, mais ses occurrences du week-end partent au lundi 08:00 sans que rien ne le dise. Je le découvrirai un samedi. » Le critère 6 ci-dessus est remplacé par ces trois états.
+- **Une phrase, une cause** : quand deux plages couvrent l'heure choisie (un samedi 20:00 est dans le week-end et après 19:00), la cause nommée est celle qui explique ce décalage-là. Règle retenue : une plage « toute la journée » l'emporte sur une plage horaire (le week-end explique le samedi) ; entre plages horaires, celle commencée le jour même (« après 19:00 ») l'emporte sur celle commencée la veille (« avant 08:00 »). La cause est celle de l'heure choisie, pas des plages traversées ensuite : un vendredi 20:00 décalé au lundi 08:00 dit « après 19:00 ».
+- Formulation « toute la journée » : « aucun rappel Pro le week-end » ; sur d'autres jours « le mercredi ».
+
 ## Preuves
 
-- Rouge : à écrire avant le code, identifiants dans cette section.
-- Vert : à consigner avec le commit et le run CI.
+- **Rouge** (commit `ce96c7a8`, avant tout code) : `src/domain/quietShift.test.ts` (cause unique, trois états), `src/i18n/quietShiftText.test.ts` (formulations fr et en), `src/features/routines/RoutineQuietShift.test.tsx` (ligne de la carte et formulaire, création et modification), `src/features/reminders/QuietShiftNotice.test.tsx` (bloc Rappel des feuilles de tâche, fiche PC), `src/features/events/EventQuietShift.test.tsx` (formulaire Événement), `tests/e2e/N-FIX-04.spec.ts` (pc et iphone). Deux modules absents et huit assertions en échec : « Unable to find role=\"status\" », « Unable to find an element with the text: Rappels décalés à 08:00 ». Deux attentes de ces tests corrigées au vert, sans toucher à leur sens : la pause doit couvrir la fenêtre de quatre semaines, et l'événement de création est bien posé un samedi.
+- **Vert** (commit du correctif, identifiant dans le journal) : domaine, routines, rappels, événements et tâches **795 tests / 74 fichiers verts**, couverture coupée ; lint sans avertissement ; typage strict vert ; e2e `N-FIX-04.spec.ts` 5 verts et 1 ignoré volontaire sur `pc` et `iphone` ; garde du bundle **62/62, 335 216 octets normalisés, marge 23 184** (+1 081 face à main : ensemble des 537 modules du départ identique, 82 octets bruts et renommage des identifiants minifiés, détail au journal). CI complète avec couverture requise avant fusion.
 
 ## Passes
 
-- Product-owner : critères ci-dessus à confirmer par Ali (règle « tous les rappels » pour la ligne Routines, formulation exacte, place).
-- Agent du module, QA, code-reviewer : après l'accord.
+- **Product-owner** : critères 1 à 9 et décisions d'Ali ci-dessus ; périmètre : domaine pur, catalogue à la demande, un composant d'avertissement partagé, trois formulaires et la fiche PC, la ligne de la carte Routines ; ni planification, ni plages, ni schéma modifiés.
+- **Agent du module** : `domain/quietHours.ts` (`coveringRanges`), `domain/quietShift.ts` (`quietShift`, `routineQuietSummary`, fenêtre de 28 jours, 7 occurrences), `i18n/quietShiftText.ts` (fr source, en), `features/reminders/QuietShiftNotice.tsx` (une ligne par rappel décalé, dédoublonnée, `role=\"status\"`), `ReminderBlock.tsx` (feuilles Nouvelle tâche et Modifier), `RoutineForm.tsx` (prochaine occurrence de la règle en cours de saisie), `EventForm.tsx` (prochaine occurrence de l'événement saisi), `TaskDetailFields.tsx` (fiche PC), `routineReminderOffsets.ts` (avances vivantes par routine, chargées par l'écran à la demande et non par le store du départ : un premier essai dans `routineStore.ts` alourdissait un module du départ, retiré), `RoutinesScreen.tsx` et `RoutineCard.tsx` (ligne `role=\"note\"`).
+- **QA** : tests ciblés ci-dessus ; e2e sur `pc` et `iphone` ; suite complète en CI.
+- **Code-reviewer** (relecture à froid du diff) : approuvée. Vérifié : l'échéance effective reste celle de `effectiveFireAt`, aucune replanification ; la cause est choisie parmi les plages couvrant l'heure choisie seulement ; le formulaire Routine calcule sur la règle en cours de saisie (jours, intervalle, date de départ), pas sur la routine enregistrée ; l'événement sur sa prochaine occurrence et l'heure de rappel d'une journée entière ; la fiche PC ne double pas la ligne iPhone de Détail (`TaskReminderSchedule`) ; la carte Routines lit les avances vivantes rechargées à chaque écriture de routine ; aucun texte en dur, catalogues chargés avec les écrans. Réserve : rendu natif à observer au prochain lot.

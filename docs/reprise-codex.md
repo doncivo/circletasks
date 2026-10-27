@@ -13,7 +13,7 @@ Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et
 
 ## Ordre de travail convenu
 
-1. N-FIX-04 (avertissement de plage silencieuse sur les trois formulaires et ligne Routines), bloquante, 7 à 9 h, dès l'accord d'Ali sur les critères et la place ; test rouge d'abord.
+1. N-FIX-04 : code prêt sur sa branche (PR à ouvrir après la garde du bundle), CI complète, fusion, mesure de main.
 2. Défauts 12 (Objectif) et 15, puis 13 ; une story par écran.
 3. Les huit refontes, dans l'ordre ci-dessus, un build iPhone par lot terminé.
 4. Attendent Ali : les quatre contrôles natifs 1.0.2 ; la portée exacte de la recette du 26 octobre ; la validation de l'inventaire des worktrees avant toute suppression supplémentaire.

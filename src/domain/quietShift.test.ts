@@ -88,7 +88,7 @@ describe('routineQuietSummary : trois états pour la ligne de l’écran Routine
     expect(routineQuietSummary(routine({ time: '19:15' as LocalTime }), [0, 30], PRO, from)).toEqual({ state: 'partial', weekdays: [1, 2, 3, 4, 5, 6, 7], target: { weekday: null, time: '08:00' } });
   });
 
-  it('routine en pause sur toute la période : aucune occurrence, rien', () => {
-    expect(routineQuietSummary(routine({}), [0], PRO, from, [{ from: asLocalDate('2026-10-05'), to: asLocalDate('2026-10-20') }])).toEqual({ state: 'none' });
+  it('routine en pause sur toute la fenêtre de quatre semaines : aucune occurrence, rien', () => {
+    expect(routineQuietSummary(routine({}), [0], PRO, from, [{ from: asLocalDate('2026-10-05'), to: asLocalDate('2026-11-30') }])).toEqual({ state: 'none' });
   });
 });

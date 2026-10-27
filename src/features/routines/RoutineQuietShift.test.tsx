@@ -57,7 +57,7 @@ describe('Routines : rappel dans la plage silencieuse (N-FIX-04)', () => {
 
   it('formulaire de création : choisir Pro et 20:00 avec « À l’heure » cochée affiche la ligne tout de suite ; Perso la retire', async () => {
     renderRoutines(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter une routine' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
     const form = await screen.findByRole('form', { name: 'Nouvelle routine' });
     fireEvent.change(within(form).getByLabelText('Nom de la routine'), { target: { value: 'Yoga du soir' } });
     fireEvent.click(within(form).getByRole('button', { name: /^Heure de la routine/ }));
