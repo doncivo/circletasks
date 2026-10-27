@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { t } from '../../i18n';
 import { Icon, useLayout } from '../../ui';
@@ -37,7 +37,7 @@ export function SpacesScreen() {
       <div className="ct-spaces">
         <div className="ct-spaces__topRow">
           <button type="button" className="ct-spaces__back" aria-label={t('spaces.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-spaces__title">{t('spaces.title')}</h1>

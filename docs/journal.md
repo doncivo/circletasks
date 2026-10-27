@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — UI-FIX-04, défaut 12 : retour iPhone à gauche sur treize écrans
+
+Inventaire : douze écrans iPhone plaçaient encore le retour en haut à droite avec l'icône « annuler » (Objectif, Un jour, Terminées, Corbeille, Espaces, Plages silencieuses, Synchronisation › Détails, Récapitulatifs, Apparence, Import, Calendriers, Jours fériés) ; seul le Rapport était conforme depuis UI-FIX-03. Preuve rouge `967a786c` : contrat statique sur les treize écrans (icône `ArrowLeft`, rangée alignée au début), 24 échecs sur 26, plus la géométrie e2e sur Objectif et Un jour. Correctif : icône et alignement sur les douze écrans, rien d'autre. Contrat 26/26, e2e iPhone 8 verts (UI-FIX-04, UI-FIX-03, OB-01), suites DOM des écrans touchés 1 555 tests / 158 fichiers verts, lint, typage, garde du bundle 62/62, 335 256 normalisés, marge 23 144. Revue à froid approuvée dans la fiche. Branche `ui-fix-04-retours`, empilée sur N-FIX-04 et le point d'état ; PR après leur fusion.
+
 ## 2026-10-27 — N-FIX-04 livrée sur sa branche : l'app dit qu'un rappel sera décalé
 
 Ordre validé par Ali : N-FIX-04 d'abord, puis 12, 15, 13, puis les huit refontes. Deux décisions d'Ali consignées dans la fiche : trois états pour la ligne Routines (tous décalés, partiellement décalés en nommant ce qui est touché, rien), « le même mensonge en plus petit » sinon ; une phrase, une cause (la plage qui explique ce décalage-là : la journée entière l'emporte sur l'horaire, l'horaire du jour sur celui de la veille).

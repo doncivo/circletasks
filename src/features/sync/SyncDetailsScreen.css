@@ -2,6 +2,7 @@
 .ct-sync__topRow {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .ct-sync__back {

@@ -1,5 +1,5 @@
 import { accountDisplayName } from './accountName';
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CalendarAccountState } from '../../domain/calendarRefresh';
 import type { CalendarAccount, CalendarRef } from '../../domain/model';
@@ -141,7 +141,7 @@ export function CalendarsScreen() {
       <div className="ct-calendars">
         <div className="ct-calendars__topRow">
           <button type="button" className="ct-calendars__back" aria-label={t('calendars.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-calendars__title">{t('calendars.title')}</h1>

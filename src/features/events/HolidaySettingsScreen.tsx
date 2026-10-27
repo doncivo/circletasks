@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { DEFAULT_HOLIDAY_COUNTRIES, uncoveredLunarYears, type HolidayCountries } from '../../domain/holidays';
@@ -64,7 +64,7 @@ export function HolidaySettingsScreen() {
       <div className="ct-holiday-settings">
         <div className="ct-holiday-settings__topRow">
           <button type="button" className="ct-holiday-settings__back" aria-label={t('events.holidaySettings.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-holiday-settings__title">{t('events.holidaySettings.title')}</h1>

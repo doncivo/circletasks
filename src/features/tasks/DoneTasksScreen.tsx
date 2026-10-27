@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Undo2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { DONE_PERIOD_KINDS, groupDoneByDay, localTimeOfInstant } from '../../domain/donePeriod';
@@ -83,7 +83,7 @@ export function DoneTasksScreen() {
             aria-label={t('done.back')}
             onClick={() => navigate({ tab: 'tasks', screen: 'report' })}
           >
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
 
