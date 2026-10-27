@@ -21,7 +21,7 @@ Chaque fusion a attendu 48 contrôles verts et une revue consignée dans la fich
 1. #91 fusionnée (522b9446, bundle 335 216, marge 23 184) ; PR #92 (ce point d'état) en CI, à fusionner au vert.
 2. **Défaut 12** : fait sur `ui-fix-04-retours` (UI-FIX-04, treize écrans), PR à ouvrir après la fusion de #91 et du point d'état.
 3. **Défaut 15** : fait sur `ui-fix-05-objectif-ajout` (UI-FIX-05), empilée sur UI-FIX-04 ; PR après la fusion de UI-FIX-04.
-4. **Défaut 13, Concentration** : titre français sans capitales à la place de « Focus Time » ; Pause domine visuellement « Terminer la tâche » ; le total du jour ne reste plus à zéro pendant la première minute active.
+4. **Défaut 13** : fait sur `ui-fix-06-concentration` (UI-FIX-06), empilée sur UI-FIX-05 ; PR après la fusion de UI-FIX-05.
 5. **Les huit refontes**, une story par écran, dans cet ordre : Aujourd'hui iPhone clair et sombre, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. Référence `docs/maquettes-refonte/` (sur `main` depuis #84) ; règles transversales du README du dossier ; les lignes « Rappels décalés » (N-FIX-04) et les avertissements de formulaire restent dans les refontes Routines et Événements. Nouvelle tâche et Détail sont déjà livrés (UI-REFONTE-01, #86) mais **sans preuve rouge préalable** : la story n'est pas « fait ».
 6. Après ce travail : une compilation iPhone du lot, les contrôles natifs du guide, puis REL-01 à REL-03.
 

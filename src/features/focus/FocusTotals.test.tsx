@@ -45,7 +45,9 @@ afterEach(() => {
 });
 
 describe('Pied de l’écran Focus (F-03 critères 1 et 2)', () => {
-  const clock = () => createManualClock(Date.parse('2026-10-04T08:05:00.000Z'));
+  // UI-FIX-06 : la session active compte dès sa première seconde ; ces deux critères portent sur les sessions terminées, donc l'horloge est
+  // à l'instant du lancement (0 s active). Le pied vivant est couvert par FocusConcentration.test.tsx.
+  const clock = () => createManualClock(Date.parse('2026-10-04T08:00:00.000Z'));
 
   it('critère 1 : « Aujourd’hui : 1 h 15 de concentration · 3 sessions »', () => {
     render(<FocusView state={stateOf({ minutes: 75, sessions: 3 })} variant="screen" clock={clock()} onAction={() => undefined} />);
