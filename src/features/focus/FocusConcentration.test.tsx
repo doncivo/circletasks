@@ -88,7 +88,8 @@ describe('UI-FIX-06 : Pause domine « Terminer la tâche » pendant la session',
 
   it('le style plein existe et n’est pas transparent', () => {
     const css = readFileSync(join(import.meta.dirname, 'FocusView.css'), 'utf8');
-    const block = /\.ct-focus__button--primary\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    // La règle peut porter plusieurs sélecteurs (`--primary, --resume { … }`).
+    const block = /\.ct-focus__button--primary[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(block).toMatch(/background:\s*var\(--ct-focus-on\)/);
   });
 });

@@ -4,7 +4,7 @@ import type { Messages } from './types';
 export const focusEn: Messages['focus'] = {
   screenLabel: 'Focus session',
   windowTitle: 'Focus',
-  heading: 'FOCUS TIME',
+  heading: 'Focus',
   closeLabel: 'Close Focus',
   metaTime: '{time} · ',
   taskGone: 'Deleted task',
@@ -42,6 +42,9 @@ export const focusEn: Messages['focus'] = {
   launchPcFree: 'Open Focus',
   todayZero: 'Today: 0 min of focus',
   today: 'Today: {duration} of focus · {sessions}',
+  todaySeconds: 'Today: {seconds} s of focus',
+  todayRunning: 'Today: {duration} of focus · session in progress',
+  todayRunningAfter: 'Today: {duration} of focus · {sessions} · in progress',
   sessionOne: '1 session',
   sessionMany: '{count} sessions',
   taskRow: 'Focus time',
