@@ -66,7 +66,8 @@ export function GoalsScreen() {
   const tasksByGoal = useMemo(() => attachedTasksByGoal(entities.values()), [entities]);
 
   // Brouillons : « + Ajouter un objectif » ouvre une section vide (non créée tant qu'aucun titre valide n'est saisi). Sans objectif
-  // affiché, un brouillon implicite (clé 0) tient lieu de champ vide focalisé.
+  // affiché, un brouillon implicite (clé 0) tient lieu de champ vide focalisé. UI-FIX-05 : tant qu'un brouillon est affiché, le bouton
+  // n'est pas rendu (un seul moyen d'ajouter) ; il revient sous le dernier objectif une fois le brouillon créé.
   const [extraDrafts, setExtraDrafts] = useState<readonly number[]>([]);
   const nextDraft = useRef(1);
   const drafts = extraDrafts.length > 0 ? extraDrafts : sections.length === 0 && status === 'ready' ? [0] : [];
@@ -122,7 +123,7 @@ export function GoalsScreen() {
               onToggleTask={(task) => void toggleTask(task)}
               onOpenTask={(task) => openDetail({ type: 'task', id: task.id })}
               onDelete={() => setToDelete(goal)}
-              addButton={goal.id === lastKey ? addButton : undefined}
+              addButton={goal.id === lastKey && drafts.length === 0 ? addButton : undefined}
               onAchieved={(achieved) => void setAchieved(goal.id, achieved)}
             />
           ))}
@@ -133,7 +134,6 @@ export function GoalsScreen() {
               spaces={spaces}
               defaultSpaceId={defaultSpaceId}
               showHelp={total === 1}
-              actions={`draft-${key}` === lastKey ? addButton : undefined}
               onCreate={async (title, spaceId, icon) => {
                 const result = await create({ title, spaceId, icon });
                 if (!result.ok) return false;

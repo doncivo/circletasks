@@ -267,6 +267,8 @@
   color: var(--ct-focus-ink);
 }
 
+/* UI-FIX-06 : pendant la session, Pause puis Reprendre portent le plein ; « Terminer la tâche » reste au trait. */
+.ct-focus__button--primary,
 .ct-focus__button--resume {
   background: var(--ct-focus-on);
   color: var(--ct-focus-ink);

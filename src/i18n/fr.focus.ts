@@ -5,7 +5,7 @@ export const focusFr = {
   // --- écran de session (Focus.html) ---
   screenLabel: 'Session Focus',
   windowTitle: 'Focus',
-  heading: 'FOCUS TIME',
+  heading: 'Concentration',
   closeLabel: 'Fermer Focus',
   metaTime: '{time} · ',
   taskGone: 'Tâche supprimée',
@@ -48,6 +48,10 @@ export const focusFr = {
   // --- totaux (F-03) ---
   todayZero: 'Aujourd’hui : 0 min de concentration',
   today: 'Aujourd’hui : {duration} de concentration · {sessions}',
+  // UI-FIX-06 : la session active compte dès la première seconde (secondes sous la minute, puis minute entamée).
+  todaySeconds: 'Aujourd’hui : {seconds} s de concentration',
+  todayRunning: 'Aujourd’hui : {duration} de concentration · session en cours',
+  todayRunningAfter: 'Aujourd’hui : {duration} de concentration · {sessions} · en cours',
   sessionOne: '1 session',
   sessionMany: '{count} sessions',
   taskRow: 'Concentration',
