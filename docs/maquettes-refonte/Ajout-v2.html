@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Nouvelle tâche</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+.seg{display:flex;background:#F3F1F6;border-radius:12px;padding:3px}
+.seg button{flex:1;height:38px;border:0;border-radius:9px;background:transparent;font:600 15px "DM Sans",sans-serif;color:#6F6790;cursor:pointer}
+.seg button[aria-pressed="true"]{background:#FFFFFF;color:#2E2150;box-shadow:0 1px 3px rgba(46,33,80,.12)}
+.chip{display:flex;align-items:center;gap:7px;height:42px;padding:0 15px;border:1.5px solid #D9D4E4;border-radius:21px;background:#FFFFFF;font:600 15px "DM Sans",sans-serif;color:#2E2150;cursor:pointer}
+.chip.set{border-color:#2E2150;border-width:2px}
+.chip .mut{color:#8C85A3;font-weight:500}
+.half{display:flex;border:1.5px solid #D9D4E4;border-radius:21px;overflow:hidden;height:42px}
+.half button{flex:1;border:0;background:#FFFFFF;font:600 15px "DM Sans",sans-serif;cursor:pointer}
+.more{display:flex;align-items:center;justify-content:space-between;width:100%;height:50px;border:0;border-top:1px solid #E8E4F0;background:transparent;font:600 15px "DM Sans",sans-serif;color:#2E2150;cursor:pointer;padding:0}
+.kb{background:#D2D4DA;padding:8px 5px 6px 5px}
+.krow{display:flex;gap:5px;justify-content:center;margin-bottom:7px}
+.key{background:#FFFFFF;border-radius:5px;height:40px;flex:1;display:flex;align-items:center;justify-content:center;font:400 19px -apple-system,"DM Sans",sans-serif;color:#000}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; flex-direction: column; background: #FFFFFF; overflow: hidden;">
+
+  <!-- zone sûre respectée : 56 px avant tout contenu -->
+  <div style="height: 56px; flex-shrink: 0;"></div>
+
+  <div style="padding: 0 20px; display: flex; flex-direction: column; gap: 16px; flex-grow: 1; overflow: hidden;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 30px; line-height: 1; font-weight: 700;">Nouvelle tâche</h1>
+      <button aria-label="Fermer" style="width: 40px; height: 40px; border: 0; background: transparent; color: #2E2150; cursor: pointer; margin-right: -8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    </div>
+
+    <div class="seg">
+      <button aria-pressed="true">Tâche</button>
+      <button aria-pressed="false">Événement</button>
+      <button aria-pressed="false">Routine</button>
+    </div>
+
+    <!-- Le titre : seul élément qui mérite la taille -->
+    <div style="border-bottom: 2px solid #2E2150; padding-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+      <label style="flex-grow: 1; display: block;">
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Titre de la tâche</span>
+        <input type="text" value="Appeler le notaire" style="width: 100%; border: 0; outline: 0; padding: 0; font: 600 23px 'DM Sans', sans-serif; color: #2E2150; background: transparent;">
+      </label>
+      <button aria-label="Dicter" style="width: 36px; height: 36px; border: 0; background: transparent; color: #6F6790; cursor: pointer; flex-shrink: 0;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"></path></svg></button>
+    </div>
+
+    <!-- Les trois décisions qui comptent, toutes visibles -->
+    <div style="display: flex; flex-wrap: wrap; gap: 9px;">
+      <button class="chip set">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg>
+        Aujourd'hui
+      </button>
+      <button class="chip">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5.2l3.2 2"></path></svg>
+        <span class="mut">Pas d'heure</span>
+      </button>
+    </div>
+
+    <div class="half">
+      <button aria-pressed="true" style="background: #2F6B7A; color: #FFFFFF;">Pro</button>
+      <button aria-pressed="false" style="color: #B5483B;">Perso</button>
+    </div>
+
+    <button class="more" aria-expanded="false">
+      <span>Plus d'options<span style="font-weight: 500; color: #8C85A3;"> — répétition, rappel, projet, icône</span></span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C85A3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+
+    <div style="flex-grow: 1;"></div>
+  </div>
+
+  <!-- L'action, toujours au-dessus du clavier -->
+  <div style="padding: 12px 20px 14px 20px; border-top: 1px solid #E8E4F0; background: #FFFFFF; flex-shrink: 0;">
+    <button style="width: 100%; height: 52px; border: 0; border-radius: 26px; background: #2E2150; color: #FFFFFF; font: 700 17px 'DM Sans', sans-serif; cursor: pointer;">Ajouter la tâche</button>
+  </div>
+
+  <!-- Clavier iOS : l'état réel de cet écran -->
+  <div class="kb" style="flex-shrink: 0;">
+    <div style="display:flex;justify-content:space-around;align-items:center;height:38px;font:400 16px -apple-system,'DM Sans',sans-serif;color:#1C1C1E;margin-bottom:4px;">
+      <span>notaire</span><span style="color:#8E8E93;">|</span><span>Notaire</span><span style="color:#8E8E93;">|</span><span>notaires</span>
+    </div>
+    <div class="krow"><span class="key">A</span><span class="key">Z</span><span class="key">E</span><span class="key">R</span><span class="key">T</span><span class="key">Y</span><span class="key">U</span><span class="key">I</span><span class="key">O</span><span class="key">P</span></div>
+    <div class="krow" style="padding:0 10px;"><span class="key">Q</span><span class="key">S</span><span class="key">D</span><span class="key">F</span><span class="key">G</span><span class="key">H</span><span class="key">J</span><span class="key">K</span><span class="key">L</span><span class="key">M</span></div>
+    <div class="krow"><span class="key" style="flex:1.4;background:#ADB3BC;">⇧</span><span class="key">W</span><span class="key">X</span><span class="key">C</span><span class="key">V</span><span class="key">B</span><span class="key">N</span><span class="key">'</span><span class="key" style="flex:1.4;background:#ADB3BC;">⌫</span></div>
+    <div class="krow"><span class="key" style="flex:1.6;background:#ADB3BC;font-size:15px;">123</span><span class="key" style="flex:5;"> </span><span class="key" style="flex:1.8;background:#2E2150;color:#FFF;font-size:15px;font-weight:600;">OK</span></div>
+    <div style="height:18px;display:flex;align-items:center;justify-content:center;"><span style="width:138px;height:5px;border-radius:3px;background:#000;opacity:.3;"></span></div>
+  </div>
+
+</div>
+</body>
+</html>
