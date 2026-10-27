@@ -1,5 +1,9 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — CI-WEBKIT-01 : cache des paquets système de WebKit, délai propre à l'étape
+
+Constat : le job `e2e iphone-webkit` retéléchargeait 187 paquets `.deb` (117 Mo) du miroir Ubuntu à chaque run ; le 27 octobre, trois runs ont été annulés à 20 min 17 s pendant ce téléchargement, avant tout test (job 122352043390 : 63 paquets reçus en 19 min, `fonts-freefont-ttf` 5,6 Mo en 100 s). Nominal observé sur 16 runs : 26 à 67 s. Correctif (décision d'Ali, pas de test rouge, preuve par mesure) : cache `actions/cache` des `.deb` (`~/.cache/ct-apt-webkit`, clé image du runner + empreinte de `install-deps --dry-run`), recopie dans `/var/cache/apt/archives/` avant `install-deps`, recopie inverse après ; `timeout-minutes: 5` sur l'étape seule, affichage du nombre de `.deb` restaurés et de la durée ; « Installer WebKit » n'installe plus que le navigateur. Aucun test, seuil ou relance automatique touché. Mesure « après » : voir la fiche `docs/stories/CI-WEBKIT-01.md`.
+
 ## 2026-10-27 — UI-FIX-05, défaut 15 : un seul moyen d'ajouter un objectif
 
 Constat : « + Ajouter un objectif » restait affiché sous un brouillon (champ vide ouvert par ce bouton, ou implicite sans objectif), où il ne faisait rien : deux commandes pour une décision. Preuve rouge `88d4c1b2` : trois échecs (bouton présent sous le brouillon et sous le champ implicite). Correctif dans `GoalsScreen.tsx` seulement : le bouton n'est rendu sous le dernier objectif que sans brouillon affiché, les brouillons ne portent plus d'action ; création, focus et conservation du brouillon inchangés. Suites Objectif 123 tests / 10 fichiers verts, le test historique du critère 6 passe sans adaptation ; lint, typage verts ; e2e OB-01 à OB-06 sur `pc` et `iphone` 52 verts et 2 ignorés volontaires ; garde du bundle 62/62, 335 256 normalisés, marge 23 144, inchangé face à UI-FIX-04. Branche `ui-fix-05-objectif-ajout`, empilée sur UI-FIX-04.
