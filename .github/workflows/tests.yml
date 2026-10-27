@@ -316,7 +316,8 @@ jobs:
           key: playwright-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       # CI-WEBKIT-01 : les paquets système de WebKit (187 .deb, 117 Mo) étaient retéléchargés du miroir Ubuntu à chaque run ; trois fois
       # le 27 octobre 2026 le miroir a traîné et le job a été annulé à 20 min avant tout test. Les .deb sont conservés dans un cache
-      # (clé : image du runner et liste des paquets demandés par Playwright), recopiés dans le cache d'apt avant l'installation ; apt les
+      # (clé : système de l'image, liste des paquets demandés par Playwright et semaine ISO ; la version de l'image n'y figure pas, elle
+      # change d'un runner à l'autre le même jour), recopiés dans le cache d'apt avant l'installation ; apt les
       # réutilise sans téléchargement quand l'index les confirme et ne retélécharge que les paquets mis à jour entre-temps. L'étape porte
       # son propre délai (8 min ; nominal 26 à 67 s à miroir normal, 305 s observés deux fois à miroir lent) pour échouer vite au lieu
       # de consommer les 20 min du job ; ce délai ne porte sur aucun test. Les .deb téléchargés sont sauvegardés même si l'étape échoue ou
@@ -325,15 +326,17 @@ jobs:
       - name: Clé du cache des paquets système de WebKit
         id: webkit-deps-key
         run: |
-          echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS}" >> "$GITHUB_OUTPUT"
           echo "pkgs=$(npx playwright install-deps --dry-run webkit | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "semaine=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
       - name: Restauration des paquets système de WebKit (.deb)
         id: apt-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ct-apt-webkit
-          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}
+          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}
           restore-keys: |
+            apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-
             apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-
       - name: Dépendances système de WebKit
         timeout-minutes: 8
@@ -360,7 +363,7 @@ jobs:
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ct-apt-webkit
-          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}
+          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}
       - name: Installer WebKit
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install webkit
