@@ -2,7 +2,7 @@
 
 Module : M16 publication et CI · Palier : outillage, hors version publiée · Agent : ci-release · Ouverte le 2026-10-27 par Claude Code, sur décision d'Ali du 2026-10-27 au soir (« le cache WebKit — pas de test rouge, la preuve est une mesure du temps d'installation avant et après, plus un délai propre à ce job »).
 
-Statut : **en cours** — workflow modifié sur la branche `ci-webkit-01-cache`, mesure « avant » consignée, mesure « après » attendue de la CI de la branche (premier run à cache froid, deuxième à cache chaud). Estimation : 1 h 30 active hors attente CI ; alerte à 2 h 15.
+Statut : **mesure « après » faite (cache chaud : 23 s), PR et fusion requises** ; sur `main`, consigner le premier run (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant. Estimation : 1 h 30 active hors attente CI ; alerte à 2 h 15.
 
 ## Constat (job `e2e iphone-webkit`, `.github/workflows/tests.yml`)
 
@@ -38,7 +38,9 @@ Trois annulations à 20 min 17 s le 27 octobre ont chacune coûté une relance m
 | 40560815702 (4687353c, premier run, délai 5 min, `actions/cache` seul) | froid (`Cache not found`) | téléchargement 117 Mo en 4 min 46 s (409 ko/s, miroir lent), installation terminée à **305 s**, 187 `.deb` conservés | **échec** : délai de 5 min dépassé à la seconde où l'installation finissait ; le cache n'a pas été sauvegardé (post-étape de `actions/cache` ignorée sur échec). Correctif : critère 6 et délai porté à 8 min. |
 | 40565118802 (fad12ce9, correctif) | froid (`Cache not found`, clé `apt-webkit-ubuntu24-20261023.334.3-7f73b4c40481ca81`) | téléchargement 117 Mo en 1 min 25 s (1,37 Mo/s), installation **107 s**, 187 `.deb` conservés, **cache sauvegardé en 3 s** | job `e2e iphone-webkit` vert (46 s de tests). Le run est rouge ailleurs : `e2e iphone (3/4)`, Q-05 critère 9, sans lien avec cette branche (voir ci-dessous). |
 | 40568198592 (0ebfdfc5) | **froid malgré la sauvegarde précédente** : runner sur l'image 20261026.354.1, clé `apt-webkit-ubuntu24-20261026.354.1-…` introuvable alors que `…-20261023.334.3-…` existait | téléchargement 114 Mo en 5 min 2 s (379 ko/s, miroir lent), installation **321 s** (aurait échoué avec le délai initial de 5 min), 181 `.deb` sauvegardés | job vert, run entièrement vert (24 jobs). Correctif : version d'image retirée de la clé, rotation par semaine ISO. |
-| run du correctif de clé (cache chaud attendu) | à consigner | | |
+| 40570759158 (9df44947, clé corrigée) | **chaud** : runner sur l'image 20261012.334.1 (troisième version en quatre runs), clé exacte de la semaine introuvable, `restore-keys` retrouve `apt-webkit-ubuntu24-20261026.354.1-…`, **181 `.deb` restaurés en 1 s** | `apt-get update` seul sur le réseau (index, 25 requêtes), aucun paquet téléchargé, installation **23 s** ; nouvelle sauvegarde sous la clé de la semaine (3 s) | job vert. |
+
+**Résultat.** Avant : 26 à 67 s à miroir normal, 305 à 321 s à miroir lent, annulation à 20 min au-delà. Après, cache chaud : **23 s**, sans dépendre du miroir pour les paquets (seul l'index `apt-get update`, 12 Mo, reste téléchargé) ; cache froid : inchangé mais borné à 8 min et sauvegardé même en échec, donc froid une fois par semaine et par liste de paquets.
 
 Run 40565118802, job `e2e iphone (3/4)` rouge : `Q-05.spec.ts:16` (thème sombre), Entrée ignorée parce que le bouton de soumission est désactivé tant que le bloc à la demande des options n'est pas chargé (UI-REFONTE-01) ; sans lien avec cette branche, cause au journal du 2026-10-27 et story Q-05-FIX-01 au backlog ; run remplacé par celui de 0ebfdfc5 (fiche poussée), donc pas de relance.
 
@@ -49,6 +51,6 @@ Puis premier run de `main` après fusion (cache froid côté `main`, les caches 
 - **Product-owner** : périmètre limité au job WebKit et aux fichiers de CI et de documentation ; aucun code applicatif, aucun test touché ; critères ci-dessus.
 - **Agent du module (ci-release)** : `tests.yml`, job `e2e-webkit` seulement (étape de clé, restauration des `.deb`, étape d'installation avec délai et mesure, conservation et sauvegarde des `.deb` en `always()`, installation du navigateur seul). Commentaire du workflow renvoyant à cette fiche.
 - **QA** : pas de test rouge (décision d'Ali) ; vérification du YAML par l'exécution du workflow sur la branche ; mesure avant / après consignée run par run.
-- **Code-reviewer** : à consigner après la mesure « après ».
+- **Code-reviewer** (relecture à froid du diff final, 9df44947) : approuvée. Trois défauts trouvés et corrigés par les runs eux-mêmes : délai de 5 min trop court pour un miroir lent (305 s observés) ; `actions/cache` qui ne sauvegarde qu'en fin de job réussi, donc jamais dans le cas visé ; `ImageVersion` dans la clé alors qu'elle varie d'un runner à l'autre le même jour. Le diff final : clé par `ImageOS`, empreinte des paquets et semaine ISO, `restore-keys` dégradées, restauration puis recopie dans `/var/cache/apt/archives/`, délai de 8 min sur l'étape seule, conservation et sauvegarde en `always()` hors clé exacte, navigateur installé séparément. Aucun test, seuil ou relance automatique touché ; les trois autres jobs Playwright sont inchangés. Risque résiduel : des `.deb` périmés s'accumulent dans la clé d'une semaine (quelques Mo), apt les ignore ; la rotation hebdomadaire les évacue.
 
 Bundle de départ : l'arbre `src/` de la branche est identique à celui de `main` 89a1f9c6, mesuré le 2026-10-27 à **335 256 normalisés, marge 23 144** ; aucun fichier du front touché.
