@@ -321,8 +321,8 @@ jobs:
       # réutilise sans téléchargement quand l'index les confirme et ne retélécharge que les paquets mis à jour entre-temps. L'étape porte
       # son propre délai (8 min ; nominal 26 à 67 s à miroir normal, 305 s observés deux fois à miroir lent) pour échouer vite au lieu
       # de consommer les 20 min du job ; ce délai ne porte sur aucun test. Les .deb téléchargés sont sauvegardés même si l'étape échoue ou
-      # expire (restore et save séparés, save toujours exécuté) : chaque tentative enrichit le cache, la relance repart de ce qui est déjà
-      # reçu. Mesure avant / après dans docs/stories/CI-WEBKIT-01.md.
+      # expire, sous une clé qui porte leur nombre (une clé existante n'est jamais réécrite) : chaque tentative qui reçoit de nouveaux
+      # paquets enrichit le cache, la relance repart de ce qui est déjà reçu. Mesure avant / après dans docs/stories/CI-WEBKIT-01.md.
       - name: Clé du cache des paquets système de WebKit
         id: webkit-deps-key
         run: |
@@ -334,8 +334,9 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ct-apt-webkit
-          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}
+          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}-
             apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-
             apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-
       - name: Dépendances système de WebKit
@@ -352,18 +353,23 @@ jobs:
           npx playwright install-deps webkit
           echo "Installation des dépendances système de WebKit : $(( $(date +%s) - debut )) s"
       - name: Conservation des .deb téléchargés
-        if: always() && steps.apt-cache.outputs.cache-hit != 'true'
+        id: conserve
+        if: always()
         run: |
           mkdir -p ~/.cache/ct-apt-webkit
+          avant=$(ls ~/.cache/ct-apt-webkit/*.deb 2>/dev/null | wc -l)
           sudo find /var/cache/apt/archives -maxdepth 1 -name '*.deb' -exec cp -t ~/.cache/ct-apt-webkit/ {} +
           sudo chown -R "$(id -u):$(id -g)" ~/.cache/ct-apt-webkit
-          echo "Paquets .deb conservés pour le cache : $(ls ~/.cache/ct-apt-webkit/*.deb 2>/dev/null | wc -l)"
+          apres=$(ls ~/.cache/ct-apt-webkit/*.deb 2>/dev/null | wc -l)
+          echo "Paquets .deb : $avant restaurés, $apres conservés pour le cache"
+          echo "nombre=$apres" >> "$GITHUB_OUTPUT"
+          if [ "$apres" -gt "$avant" ]; then echo "nouveaux=true" >> "$GITHUB_OUTPUT"; else echo "nouveaux=false" >> "$GITHUB_OUTPUT"; fi
       - name: Sauvegarde des paquets système de WebKit (.deb)
-        if: always() && steps.apt-cache.outputs.cache-hit != 'true'
+        if: always() && steps.conserve.outputs.nouveaux == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ct-apt-webkit
-          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}
+          key: apt-webkit-${{ steps.webkit-deps-key.outputs.image }}-${{ steps.webkit-deps-key.outputs.pkgs }}-${{ steps.webkit-deps-key.outputs.semaine }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Installer WebKit
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install webkit

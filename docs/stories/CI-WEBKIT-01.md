@@ -2,7 +2,7 @@
 
 Module : M16 publication et CI · Palier : outillage, hors version publiée · Agent : ci-release · Ouverte le 2026-10-27 par Claude Code, sur décision d'Ali du 2026-10-27 au soir (« le cache WebKit — pas de test rouge, la preuve est une mesure du temps d'installation avant et après, plus un délai propre à ce job »).
 
-Statut : **mesure « après » faite (cache chaud : 23 s), PR et fusion requises** ; sur `main`, consigner le premier run (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant. Estimation : 1 h 30 active hors attente CI ; alerte à 2 h 15.
+Statut : **fusionnée (#97, `main` 95c309dc, 48 contrôles verts) ; complément en cours** sur la branche `ci-webkit-01-progressif` : sauvegarde progressive du cache (voir critère 7 et le run de `main` ci-dessous). Estimation : 1 h 30 active hors attente CI ; alerte à 2 h 15.
 
 ## Constat (job `e2e iphone-webkit`, `.github/workflows/tests.yml`)
 
@@ -44,7 +44,9 @@ Trois annulations à 20 min 17 s le 27 octobre ont chacune coûté une relance m
 
 Run 40565118802, job `e2e iphone (3/4)` rouge : `Q-05.spec.ts:16` (thème sombre), Entrée ignorée parce que le bouton de soumission est désactivé tant que le bloc à la demande des options n'est pas chargé (UI-REFONTE-01) ; sans lien avec cette branche, cause au journal du 2026-10-27 et story Q-05-FIX-01 au backlog ; run remplacé par celui de 0ebfdfc5 (fiche poussée), donc pas de relance.
 
-Puis premier run de `main` après fusion (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant.
+| 40577892231 (`main` 95c309dc, premier run après fusion) | **froid côté `main`** (les caches de branche ne lui sont pas visibles) : `Cache not found` sur les trois clés | miroir très lent : **41 `.deb` reçus en 8 min**, étape expirée (délai de 8 min), **41 `.deb` sauvegardés** sous la clé de la semaine | job rouge ; relance `gh run rerun --failed` (tentative 2) : **41 `.deb` restaurés en 2 s, installation en 30 s**, run `main` vert ; mais, comme prévu, **aucune sauvegarde** (clé exacte déjà prise par les 41 paquets) : le cache de `main` resterait partiel sans le critère 7. Défaut révélé : la clé de la semaine étant désormais prise par ces 41 paquets, la relance aurait restauré le cache (clé exacte) et **n'aurait rien sauvegardé** de plus (une clé existante n'est jamais réécrite, et la sauvegarde était conditionnée à l'absence de clé exacte). Correctif : critère 7. |
+
+7. **Sauvegarde progressive** (complément après le premier run de `main`) : la clé de sauvegarde porte l'identifiant et la tentative du run (jamais réécrite, jamais atteinte exactement) ; la restauration passe par `restore-keys` (semaine, puis liste de paquets, puis système) et prend l'entrée la plus récente ; l'étape « Conservation » compte les `.deb` avant et après l'installation et la sauvegarde n'a lieu que si le nombre a **augmenté** : un run à cache complet ne sauvegarde rien, un run interrompu sauvegarde ce qu'il a reçu, la relance repart de là et sauvegarde l'ensemble. L'entrée la plus récente d'un préfixe est donc toujours la plus fournie.
 
 ## Passes
 
