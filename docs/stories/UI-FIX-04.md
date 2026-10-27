@@ -2,7 +2,7 @@
 
 Module : transverse (M2, M12, M13, M15, M17, M18) · Palier : après la 1.0 par la règle de tri (défaut visible), avancé par Ali dans l'ordre du 27 octobre 2026 après N-FIX-04 · Agent : ui-design-system · Ouverte le 2026-10-27 par Claude Code.
 
-Statut : **code sur la branche `ui-fix-04-retours`, contrat, e2e, DOM, lint, typage et bundle verts ; CI complète et fusion requises**. Estimation : 1 h 30 actives ; alerte à 2 h 15 ; réalisé en moins d'une heure.
+Statut : **fait** — PR #93 fusionnée le 2026-10-27 (48 contrôles verts), `main` f6569eed, bundle de `main` mesuré après le redémarrage à 335 256 normalisés, marge 23 144 ; observation sur l'iPhone au prochain lot. Estimation : 1 h 30 actives ; alerte à 2 h 15 ; réalisé en moins d'une heure.
 
 ## Demande d'Ali (liste du 27 octobre 2026, défaut 12)
 
