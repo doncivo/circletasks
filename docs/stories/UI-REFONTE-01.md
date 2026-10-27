@@ -1,5 +1,13 @@
 # UI-REFONTE-01 — Nouvelle tâche et Détail
 
+## Constat du 2026-10-27 — pas de preuve rouge préalable, story non « fait »
+
+Relecture à la reprise par Claude Code : les tests de la refonte (`TaskRefonte.test.tsx`, `UI-REFONTE-01.spec.ts`, adaptations des anciens parcours) ont été écrits dans le même commit que le code, fbbcba02. Le seul « rouge » consigné ci-dessous est la garde du bundle de départ qui a sauté sur ce même commit ; ce n'est pas un test fonctionnel rouge avant le code. La règle « test rouge avant, vert après » n'a donc pas été appliquée à cette story.
+
+Décision d'Ali du 2026-10-27 : la story ne porte pas le statut « fait ». Statut retenu : **code fusionné (#86), livré en 1.0.2, preuve rouge préalable absente, rendu natif ouvert** (quatre contrôles dans `docs/essais-iphone.md`). Ce qui manque et ne peut plus être rejoué après coup : un commit de tests seuls, exécuté et rouge sur la 1.0.1, avant fbbcba02. Ce qui reste à produire : les quatre contrôles natifs 1.0.2 par Ali. La règle s'applique sans exception aux huit refontes suivantes (Aujourd'hui iPhone, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC) : un commit de tests rouges, puis le code, les deux identifiants dans la fiche ; elle est désormais écrite dans `AGENTS.md`.
+
+Références des maquettes : `docs/maquettes-refonte/Ajout-v2.html` et `Detail-v2.html`, PR #84 fusionnée dans `main` le 2026-10-27 ; le commit bd3a80bf cité plus bas est conservé intact par cette fusion.
+
 ## Refonte 1.0.2 — publication vérifiée
 
 UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.

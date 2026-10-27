@@ -1,5 +1,17 @@
 # Journal de développement CircleTasks
 
+## 2026-10-27 — reprise par Claude Code, fusions et remise en ordre des consignes
+
+Ali rend la main à Claude Code. État établi d'abord à partir du dépôt et de GitHub, sans code. Puis, sur sa demande : PR #88 (UI-FIX-03) fusionnée dans `e9ba7e26` après 48 contrôles verts, bundle sur `main` **62/62, 334 039 normalisés, 333 970 bruts, marge 24 361** ; branche de pause `pause-refonte-20261027` poussée et son commit repris ici ; PR #84 (maquettes) mise à jour par fusion de `main` plutôt que par rebase, pour conserver intact le commit bd3a80bf que la fiche UI-REFONTE-01 cite comme référence et respecter l'interdiction de réécrire une branche publiée.
+
+Consignes corrigées (décisions d'Ali du jour) : AGENTS.md vaut pour tout agent ; référence visuelle `docs/maquettes-refonte/` pour les écrans couverts, `docs/maquettes/` ailleurs ; périmètre réécrit (écriture et suppression hors dépôt interdites, données réelles intouchables, lecture d'un fichier désigné permise) ; plafond du bundle écrit en octets partout ; exception SideStore et seul workflow `tests.yml` dans CLAUDE.md, qui renvoie à AGENTS.md au lieu de répéter ; règle du test rouge avant pour toute story, refontes comprises. Les deux pushs directs d'Ali sur `main` du 24 octobre sont consignés comme exception assumée, règle inchangée. `docs/reprise-codex.md` réduit à l'état courant, historique déplacé dans `docs/reprise-historique-2026-10.md`. UI-REFONTE-01 : constat d'absence de preuve rouge préalable ajouté à la fiche, story non « fait ».
+
+Ménage autorisé : seize worktrees de branches fusionnées supprimés (`y-ios-07` résiste, chemin trop long) ; les deux audits Codex du 19 octobre, restés non suivis, sont commités ; `.codex-tmp/` ignoré par git. Branches mortes à supprimer : rel-02-audit, backup-y-fix-05-pre-rewrite, fix-speech-timer-tests, y-tech-03-scenarios-rouges, rel-03-publication-1-0. Défaut signalé par Ali en 1.0.2 (routines modifiées sans notification) : diagnostic ouvert, test de reproduction avant tout correctif.
+
+## 2026-10-27 — point de pause demandé par Ali
+
+PR #88 ouverte et poussée, ef10846f, preuves rouges e01b756e ; QA/revue locales achevées, bundle 334 025 normalisés, marge 24 375. CI 40490948417 / 40490975874 encore en cours au relevé de pause. Aucune fusion. UI-FIX-04 créée sans modification puis renommée pause-refonte-20261027 pour sauvegarder la pause ; Objectif, Concentration et les huit refontes ne sont pas commencés. Consignes, périmètre 11 à 15, ordre et manipulations de reprise consignés en tête de reprise-codex. Sauvegarde documentaire committée localement, sans nouveau push ni compilation ; arrêt du travail et de la surveillance à la demande d'Ali.
+
 ## 2026-10-27 — UI-FIX-03, Rapport du mois
 
 Demande 11/12/14 reproduite avant correctif e01b756e : quatre échecs DOM sur les phrases absentes et le titre du ratio ; navigateur iPhone confirme le retour à droite. Correction en QA : phrases adaptées à l'absence ou au filtre, retour à gauche sur mobile, titre Taux d'achèvement. Exports alignés sur l'écran avec phrases sur plusieurs lignes. Aucun calcul métier ni schéma modifié. Les résultats verts, revue et CI restent à consigner.

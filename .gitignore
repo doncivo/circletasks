@@ -38,3 +38,6 @@ configurer-secrets-*.ps1
 # Jetons et identifiants locaux, jamais suivis
 token.txt
 *.token
+
+# Dossiers temporaires des agents, jamais suivis
+.codex-tmp/
