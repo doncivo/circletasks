@@ -38,6 +38,8 @@ export const remindersStatusFr = {
   planFailed: 'Les rappels n’ont pas pu être planifiés',
   planFailedAt: 'Dernier essai à {time} · {code}',
   planFailedPartial: '{scheduled} planifiés, {cancelled} annulés, {kept} conservés',
+  planFailedStale: '{n} rappel conservé à l’ancienne heure : la nouvelle notification n’a pas pu être posée',
+  planFailedStalePlural: '{n} rappels conservés à l’ancienne heure : les nouvelles notifications n’ont pas pu être posées',
   focusEndFailed: 'La notification de fin de session n’a pas pu être planifiée',
   zoneUnknown: 'Fuseau de l’appareil illisible : rappels calculés avec le décalage actuel',
   zoneChanged: 'Fuseau modifié : rappels recalculés à {time}',

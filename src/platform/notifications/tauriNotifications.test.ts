@@ -79,7 +79,9 @@ describe('adaptateur iOS : envoi (N-01 critère 4)', () => {
     expect(await scheduler.replace([req('task:a', '2026-10-09T10:00')])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
     expect(await scheduler.replace([req('task:a', '2026-10-09T10:00', { title: 'Autre titre' })])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
     const ids = bridge.shown.map((payload) => payload.id);
-    expect(new Set(ids).size).toBe(3);
+    // Chaque changement prend un numéro différent de celui encore en attente (un numéro libéré peut resservir au tour suivant).
+    expect(ids[1]).not.toBe(ids[0]);
+    expect(ids[2]).not.toBe(ids[1]);
     expect(bridge.pendingMap.size).toBe(1);
     expect(bridge.pendingMap.get(ids[2] as number)?.date).toBe('2026-10-09T10:00:00.000Z');
   });
@@ -305,22 +307,28 @@ describe('adaptateur iOS : fin de Focus et plage réservée (N-01 critère 5)', 
 describe('adaptateur iOS : registre local (N-01 critère 6)', () => {
   const plan = [req('task:a', '2026-10-09T09:00'), req('task:b', '2026-10-10T09:00')];
 
+  // Ancienne attente (N1.2) : mêmes numéros réutilisés, rien d'annulé. Depuis N-FIX-03 (2026-10-27), un élément sans registre est
+  // « changé » : posé sous un numéro neuf, vérifié, puis l'ancien numéro inconnu est annulé. Une fois, sans doublon ni silence.
   it('registre perdu (réinstallation) avec un plan encore en attente : tout est replanifié une fois, sans doublon', async () => {
     const { bridge, ledger, scheduler } = rig();
     await scheduler.replace(plan);
     const ids = [...bridge.pendingMap.keys()].sort();
     ledger.read = { state: 'missing' };
-    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 0, kept: 0 });
-    expect([...bridge.pendingMap.keys()].sort()).toEqual(ids);
+    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 2, kept: 0 });
+    const after = [...bridge.pendingMap.keys()].sort();
+    expect(after).toHaveLength(2);
+    expect(after.filter((id) => ids.includes(id))).toEqual([]);
     expect(await scheduler.replace(plan)).toEqual({ scheduled: 0, cancelled: 0, kept: 2 });
   });
 
+  // N-FIX-03 : sans registre, chaque numéro en attente est inconnu ; les deux sont annulés, le seul élément du plan est posé sous un numéro libre.
   it('registre illisible : même résultat juste, et les notifications d’un plan disparu du nouveau plan sont annulées (get_pending fait foi)', async () => {
     const { bridge, ledger, scheduler } = rig();
     await scheduler.replace(plan);
     ledger.read = { state: 'unreadable' };
-    expect(await scheduler.replace([plan[1] as NotificationRequest])).toEqual({ scheduled: 1, cancelled: 1, kept: 0 });
-    expect([...bridge.pendingMap.keys()]).toEqual([notificationNumericId('task:b')]);
+    expect(await scheduler.replace([plan[1] as NotificationRequest])).toEqual({ scheduled: 1, cancelled: 2, kept: 0 });
+    expect(bridge.pendingMap.size).toBe(1);
+    expect([...bridge.pendingMap.values()][0]?.title).toBe('Titre task:b');
   });
 
   it('registre présent mais plan vidé par iOS : ce qui manque est replanifié', async () => {
@@ -338,8 +346,10 @@ describe('adaptateur iOS : registre local (N-01 critère 6)', () => {
     const ids = [...bridge.pendingMap.keys()].sort();
     expect(ids).toHaveLength(2);
     ledger.failSave = false;
-    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 0, kept: 0 });
-    expect([...bridge.pendingMap.keys()].sort()).toEqual(ids);
+    // N-FIX-03 : registre jamais écrit, numéros en attente inconnus : annulés, le plan est reposé sous des numéros libres, sans doublon.
+    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 2, kept: 0 });
+    expect(bridge.pendingMap.size).toBe(2);
+    expect([...bridge.pendingMap.keys()].filter((id) => ids.includes(id))).toEqual([]);
     expect(await scheduler.replace(plan)).toEqual({ scheduled: 0, cancelled: 0, kept: 2 });
   });
 
@@ -377,7 +387,9 @@ describe('adaptateur iOS : fuseau (N-06 critère 1)', () => {
     await scheduler.replace(plan);
     expect(await scheduler.replace(plan)).toEqual({ scheduled: 0, cancelled: 0, kept: 2 });
     clock.zoneName = 'America/New_York';
-    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 0, kept: 0 });
+    // N-FIX-03 : instants changés = numéros neufs posés, puis les deux anciens annulés.
+    expect(await scheduler.replace(plan)).toEqual({ scheduled: 2, cancelled: 2, kept: 0 });
+    expect(bridge.pendingMap.size).toBe(2);
     // L'heure murale reste 09:00 dans le nouveau fuseau ; l'instant est 6 h plus tard.
     expect(bridge.shown.at(-1)?.schedule.at.date).toBe('2026-12-02T09:00:00.000Z');
     expect(Number(bridge.shown.at(-1)?.extra['at']) - Number(bridge.shown[1]?.extra['at'])).toBe(6 * 3_600_000);

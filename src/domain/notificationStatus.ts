@@ -67,7 +67,9 @@ const isReason = (value: unknown): value is PlanFailureReason => typeof value ==
 function parseReport(value: unknown): StatusReport | null | 'bad' {
   if (value === null) return null;
   if (!isRecord(value) || !isCount(value['scheduled']) || !isCount(value['cancelled']) || !isCount(value['kept'])) return 'bad';
-  return { scheduled: value['scheduled'], cancelled: value['cancelled'], kept: value['kept'] };
+  const stale = value['stale'];
+  if (stale !== undefined && !isCount(stale)) return 'bad';
+  return { scheduled: value['scheduled'], cancelled: value['cancelled'], kept: value['kept'], ...(stale !== undefined && stale > 0 ? { stale } : {}) };
 }
 
 function parseCoverage(value: unknown): PlanCoverage | null {

@@ -78,6 +78,12 @@ export function RemindersStatusSection() {
           {failure.partial !== null && ` · ${t('reminders.status.planFailedPartial', failure.partial)}`}
         </p>
       )}
+      {/* N-FIX-03 : la pose du nouveau a échoué, l'ancien est conservé : il sonnera à l'ancienne heure, l'app le dit. */}
+      {failure !== null && failure.partial !== null && (failure.partial.stale ?? 0) > 0 && (
+        <p className="ct-recap__statusLine" data-kind="problem">
+          {t(failure.partial.stale === 1 ? 'reminders.status.planFailedStale' : 'reminders.status.planFailedStalePlural', { n: failure.partial.stale ?? 0 })}
+        </p>
+      )}
       {status.focusEndFailure !== null && (
         <p className="ct-recap__statusLine" data-kind="problem">
           {t('reminders.status.focusEndFailed')} · {t('reminders.status.planFailedAt', { time: clockTime(status.focusEndFailure.at), code: reasonLabel(status.focusEndFailure.reason) })}
