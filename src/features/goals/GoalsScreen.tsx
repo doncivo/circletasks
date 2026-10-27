@@ -1,4 +1,4 @@
-import { Target, Undo2 } from 'lucide-react';
+import { Target, ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
@@ -89,7 +89,7 @@ export function GoalsScreen() {
       {layout === 'mobile' && (
         <div className="ct-goals__topRow">
           <button type="button" className="ct-goals__iconButton" aria-label={t('goals.back')} onClick={() => navigate({ tab: 'tasks', screen: 'today' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
       )}

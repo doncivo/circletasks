@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { pendingFileCount } from '../../domain/sync/pendingFiles';
@@ -67,7 +67,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
     <div className="ct-settings ct-sync">
       <div className="ct-sync__topRow">
         <button type="button" className="ct-sync__back" aria-label={t('sync.status.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-          <Icon icon={Undo2} size={26} />
+          <Icon icon={ArrowLeft} size={26} />
         </button>
       </div>
       <h1 className="ct-settings__title">{t('sync.status.title')}</h1>

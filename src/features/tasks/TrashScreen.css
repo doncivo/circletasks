@@ -21,7 +21,7 @@
 
 .ct-trash__topRow {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .ct-trash__iconButton {

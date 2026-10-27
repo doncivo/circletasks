@@ -1,4 +1,4 @@
-import { AlertTriangle, FileUp, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, FileUp, ArrowLeft, XCircle } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { ImportRowWarning, UndatedTarget } from '../../domain/csvImport';
 import { t } from '../../i18n';
@@ -72,7 +72,7 @@ export function ImportScreen() {
       <div className="ct-import">
         <div className="ct-import__topRow">
           <button type="button" className="ct-import__back" aria-label={t('importCsv.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 ref={titleRef} tabIndex={-1} className="ct-import__title">

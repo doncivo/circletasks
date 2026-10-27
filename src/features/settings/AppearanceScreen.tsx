@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ThemeChoice } from '../../domain/model';
 import { FIRST_WEEKDAYS, firstWeekdayIso, type FirstWeekday } from '../../domain/week';
@@ -49,7 +49,7 @@ export function AppearanceScreen() {
       <div className="ct-appearance">
         <div className="ct-appearance__topRow">
           <button type="button" className="ct-appearance__back" aria-label={t('appearance.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-appearance__title">{t('appearance.title')}</h1>

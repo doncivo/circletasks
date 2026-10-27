@@ -12,14 +12,14 @@ Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et
 | #84 | DESIGN | Onze maquettes de refonte `docs/maquettes-refonte/` | 962893b1 | 334 039 (24 361) |
 | #89 | PASSATION-02 | AGENTS.md et CLAUDE.md pour tout agent, reprise réduite, historique archivé, audits Codex commités | df9cbc5e | 334 039 (24 361) |
 | #90 | N-FIX-03 | Remplacement vérifiable des notifications iOS : numéro neuf pour tout élément changé, ancien annulé après pose vérifiée, rappels conservés affichés | d6238ecb | 334 135 (24 265) |
-| #91 | N-FIX-04 | Avertissement de plage silencieuse sur les trois formulaires et ligne « Rappels décalés » des routines | **en CI au moment de ce point** ; attendu après fusion : 335 216 (23 184) | |
+| #91 | N-FIX-04 | Avertissement de plage silencieuse sur les trois formulaires et ligne « Rappels décalés » des routines | 522b9446 | 335 216 (23 184) |
 
 Chaque fusion a attendu 48 contrôles verts et une revue consignée dans la fiche ; `main` remesuré après chacune. Versions en service : PC et iPhone **1.0.2** (26 octobre, source f473e113, schéma 19). N-FIX-03 et N-FIX-04 ne sont pas encore dans une version publiée : prochain lot iPhone à compiler quand Ali le décide (une compilation par lot).
 
 ### Reste à faire, dans l'ordre validé par Ali
 
-1. Fusionner #91 au vert, remesurer `main`, puis fusionner la PR de ce point d'état.
-2. **Défaut 12, Objectif** : retour iOS à gauche sur l'écran Objectif, puis vérifier les autres écrans à retour (le Rapport est fait par #88). Fiche à écrire, test rouge d'abord.
+1. #91 fusionnée (522b9446, bundle 335 216, marge 23 184) ; PR #92 (ce point d'état) en CI, à fusionner au vert.
+2. **Défaut 12** : fait sur `ui-fix-04-retours` (UI-FIX-04, treize écrans), PR à ouvrir après la fusion de #91 et du point d'état.
 3. **Défaut 15, Objectif** : un seul moyen d'ajouter quand le champ de saisie est déjà présent ; piste notée par Codex : masquer le bouton d'ajout tant qu'un brouillon est ouvert, conserver l'ajout après création ; préserver saisie, focus et persistance.
 4. **Défaut 13, Concentration** : titre français sans capitales à la place de « Focus Time » ; Pause domine visuellement « Terminer la tâche » ; le total du jour ne reste plus à zéro pendant la première minute active.
 5. **Les huit refontes**, une story par écran, dans cet ordre : Aujourd'hui iPhone clair et sombre, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. Référence `docs/maquettes-refonte/` (sur `main` depuis #84) ; règles transversales du README du dossier ; les lignes « Rappels décalés » (N-FIX-04) et les avertissements de formulaire restent dans les refontes Routines et Événements. Nouvelle tâche et Détail sont déjà livrés (UI-REFONTE-01, #86) mais **sans preuve rouge préalable** : la story n'est pas « fait ».

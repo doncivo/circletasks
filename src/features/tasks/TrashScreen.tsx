@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, type CSSProperties } from 'react';
 import { localDateOfInstant } from '../../domain/donePeriod';
 import type { Space, Task } from '../../domain/model';
@@ -61,7 +61,7 @@ export function TrashScreen() {
             aria-label={t('trash.back')}
             onClick={() => navigate({ tab: 'settings', screen: 'home' })}
           >
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-trash__title">{t('trash.title')}</h1>

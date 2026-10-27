@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { formatTime } from '../../i18n/format';
 import { parseTimeInput } from '../../domain/dateInput';
@@ -88,7 +88,7 @@ export function RecapSettingsScreen() {
       <form className="ct-recap" onSubmit={(event) => void submit(event)} noValidate>
         <div className="ct-recap__topRow">
           <button type="button" className="ct-recap__back" aria-label={t('trash.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-recap__title">{t('reminders.recapsTitle')}</h1>

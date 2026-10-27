@@ -1,4 +1,4 @@
-import { Trash2, Undo2 } from 'lucide-react';
+import { Trash2, ArrowLeft } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { formatTime } from '../../i18n/format';
 import { parseTimeInput } from '../../domain/dateInput';
@@ -93,7 +93,7 @@ export function QuietHoursScreen({ space }: { readonly space: Space }) {
       <form className="ct-quiet" onSubmit={(event) => void submit(event)} noValidate>
         <div className="ct-quiet__topRow">
           <button type="button" className="ct-quiet__back" aria-label={t('spaces.back')} onClick={home}>
-            <Icon icon={Undo2} size={26} />
+            <Icon icon={ArrowLeft} size={26} />
           </button>
         </div>
         <h1 className="ct-quiet__title">

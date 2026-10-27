@@ -1,4 +1,4 @@
-import { Undo2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { t } from '../../i18n';
@@ -50,7 +50,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
     <div ref={rootRef} className="ct-someday" data-layout="mobile">
       <div className="ct-someday__topRow">
         <button type="button" className="ct-someday__iconButton" aria-label={t('someday.back')} onClick={onBack}>
-          <Icon icon={Undo2} size={26} />
+          <Icon icon={ArrowLeft} size={26} />
         </button>
       </div>
       <div className="ct-someday__header">
