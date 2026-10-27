@@ -1,5 +1,9 @@
 # Backlog CircleTasks
 
+## 27 octobre — défauts 11 à 15 puis refonte complète
+
+UI-FIX-03 (Rapport, 11/12/14) en QA : phrases vides, retour iPhone à gauche, taux d'achèvement. Preuve rouge e01b756e, vert/revue/CI/fusion à vérifier. Suivent Objectif (12/15) et Concentration (13), puis une story par écran dans l'ordre autorisé : Aujourd'hui iPhone, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. La pause des huit écrans est levée par Ali ; aucune de ces corrections n'est encore livrée.
+
 ## Refonte 1.0.2 — publication vérifiée
 
 UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.

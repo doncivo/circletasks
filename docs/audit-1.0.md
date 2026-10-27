@@ -1,5 +1,9 @@
 # Audit complet du code avant la 1.0 — rapport unique
 
+## 27 octobre — défauts de contenu 11 à 15
+
+Constats d'Ali : rapport vide présenté par des tirets, retours à droite, titre Focus anglais et hiérarchie des commandes inversée, total à zéro pendant la première minute, anglicisme complétion, double commande d'ajout d'objectif. Correction autorisée avant la refonte des huit autres écrans. UI-FIX-03 couvre Rapport (11/12/14), preuve rouge e01b756e ; non clos tant que QA, revue et CI ne sont pas validées. Pas de nouveau résultat natif 1.0.2 présumé.
+
 ## Refonte 1.0.2 — publication vérifiée
 
 UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.

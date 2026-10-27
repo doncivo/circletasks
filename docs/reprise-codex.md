@@ -1,5 +1,11 @@
 # Reprise par Codex — passation du 2026-10-19 et suivi du palier 1.0
 
+## 27 octobre — cinq défauts puis huit écrans autorisés
+
+Ali a fourni les points 11 à 15 et levé la pause des huit refontes. Ordre : Rapport (11/12/14, UI-FIX-03), Objectif (12/15), Concentration (13), puis Aujourd'hui iPhone clair/sombre, Semaine, Synchronisation, Routines, Checklists, Événements, Aujourd'hui PC, Réglages PC. Une story par écran, preuves avant/après, revue distincte, CI et bundle après chaque fusion. Référence docs/maquettes-refonte sur design-maquettes-refonte, PR #84, bd3a80bf : reprendre hiérarchie, espacements et formulations, pas copier le HTML. Aucun nouveau résultat physique 1.0.2 reçu.
+
+Main a33c2dbf (#87 fusionnée, 48 contrôles verts ; bundle après fusion 62/62, 333 973 octets). Actif : UI-FIX-03, worktree n-ios-apercus. Preuve rouge e01b756e : quatre assertions DOM et retour navigateur à droite. Correctif en QA, pas encore poussé. Estimation trois écrans de correctifs : 4 à 6 h actives ; premier écran 1 h 30 à 2 h, alerte 3 h. Racine sur design-maquettes-refonte conservée. Pas de deuxième compilation 1.0.2 ; un seul futur lot après le travail autorisé.
+
 ## Refonte 1.0.2 — publication vérifiée
 
 UI-REFONTE-01 intégré par #86 ; PC et iPhone **1.0.2** publiés depuis **f473e113**, même code, schéma 19 inchangé. CI complète : runs **40297597829 / 40297604155** verts, revue approuvée. Bundle main après fusion **62/62, 333 973 normalisés, marge 24 427**, soit 5 225 octets économisés face à 1.0.1 ; plafond et couverture inchangés.

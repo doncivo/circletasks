@@ -10,8 +10,10 @@ test('UI-FIX-03 — retour iPhone à gauche et phrases vides lisibles', async ({
   await openReport(page, 'octobre');
   const back = page.getByRole('button', { name: 'Retour', exact: true });
   const rect = await back.boundingBox();
-  expect(rect).not.toBeNull();
-  expect(rect!.x + rect!.width).toBeLessThan(100);
+  const header = await page.locator('.ct-stats__topRow').boundingBox();
+  if (rect === null || header === null) throw new Error('Retour ou en-tête absent');
+  expect(rect.x).toBeCloseTo(header.x, 0);
+  expect(rect.x + rect.width / 2).toBeLessThan(220);
   for (const text of ['Aucune routine ce mois-ci', 'Aucun objectif']) {
     const label = page.getByText(text, { exact: true });
     await expect(label).toBeVisible();

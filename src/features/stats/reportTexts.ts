@@ -6,6 +6,7 @@ import { formatFocusDuration } from '../../i18n/formatFocus';
 import { formatLongDate, formatPercentLabel, formatReportMonth } from '../../i18n/formatStats';
 import { weekdayInitials } from '../../i18n/format';
 import { chartBarsOf } from './CompletionSection';
+import { reportEmptyText } from './reportEmptyText';
 
 const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -17,6 +18,7 @@ export function reportTextsOf(report: MonthReport, options: { readonly currentYe
   const { tasks, routines, focus, goals } = report;
   const noValue = t('stats.noValue');
   const routinesPercent = routines?.percent ?? null;
+  const empty = reportEmptyText(report);
   const bars = chartBarsOf(report);
   return {
     caption: t('stats.caption'),
@@ -24,9 +26,9 @@ export function reportTextsOf(report: MonthReport, options: { readonly currentYe
     filterLabel: t('stats.reportFilter', { filter: options.filterLabel }),
     tiles: [
       tasks.total > 0 ? { label: t('stats.tasksLabel'), value: String(tasks.done), sub: t('stats.tasksOf', { total: tasks.total }) } : { label: t('stats.tasksLabel'), value: noValue },
-      { label: t('stats.routinesLabel'), value: formatPercentLabel(routinesPercent) },
+      { label: t('stats.routinesLabel'), value: routinesPercent === null ? empty.routines : formatPercentLabel(routinesPercent), ...(routinesPercent === null ? { empty: true } : {}) },
       { label: t('stats.focusLabel'), value: formatFocusDuration(focusTotalMinutes(focus)) },
-      goals ? { label: t('stats.goalsLabel'), value: String(goals.achieved), sub: t('stats.goalsOf', { total: goals.total }) } : { label: t('stats.goalsLabel'), value: noValue },
+      goals ? { label: t('stats.goalsLabel'), value: String(goals.achieved), sub: t('stats.goalsOf', { total: goals.total }) } : { label: t('stats.goalsLabel'), value: empty.goals, empty: true },
     ],
     chartTitle: t('stats.chartSection'),
     monthRate: tasks.percent === null ? t('stats.chartMonthRateNone') : t('stats.chartMonthRate', { percent: tasks.percent }),

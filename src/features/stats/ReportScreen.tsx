@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ChevronRight, Undo2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { IsoDateTime } from '../../domain/types';
@@ -69,7 +69,7 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
     <div className="ct-stats" data-layout={layout}>
       <div className="ct-stats__topRow">
         <button type="button" className="ct-stats__iconButton" aria-label={t('report.back')} onClick={() => navigate(back)}>
-          <Icon icon={Undo2} size={26} />
+          <Icon icon={ArrowLeft} size={26} />
         </button>
       </div>
       <div className="ct-stats__headerRow">

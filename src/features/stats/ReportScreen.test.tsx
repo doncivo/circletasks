@@ -74,12 +74,12 @@ describe('Rapport du mois (H-01)', () => {
     expect(group).toHaveTextContent('47 / 60');
   });
 
-  it('critères 4 à 6 : routines, Focus et objectifs, « — » quand il n’y a rien', async () => {
+  it('critères 4 à 6 : routines et objectifs absents nommés explicitement, Focus nul', async () => {
     await task(h, '2026-09-02', true);
     renderReport(h);
-    expect(await tile('Routines : aucune occurrence prévue')).toHaveTextContent('—');
+    expect(await tile('Aucune routine ce mois-ci')).toHaveTextContent('Aucune routine ce mois-ci');
     expect(screen.getByRole('group', { name: 'Focus : 0 min' })).toHaveTextContent('0 min');
-    expect(screen.getByRole('group', { name: 'Objectifs : aucun objectif' })).toHaveTextContent('—');
+    expect(screen.getByRole('group', { name: 'Aucun objectif' })).toHaveTextContent('Aucun objectif');
   });
 
   it('critère 4 : le taux des routines compte les occurrences prévues validées, jours futurs exclus', async () => {

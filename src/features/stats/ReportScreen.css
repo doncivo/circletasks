@@ -1,6 +1,6 @@
 @import './statsTokens.css';
 
-/* Rapport du mois (Rapport.html) : retour en haut à droite, « Rapport du mois » + mois en Fraunces 40, filet, pastilles, tuiles 2 × 2. */
+/* Rapport du mois : retour iPhone à gauche, mois en Fraunces, tuiles 2 × 2. */
 .ct-stats {
   display: flex;
   flex-direction: column;
@@ -14,6 +14,10 @@
 .ct-stats__topRow {
   display: flex;
   justify-content: flex-end;
+}
+
+.ct-stats[data-layout='mobile'] .ct-stats__topRow {
+  justify-content: flex-start;
 }
 
 .ct-stats__iconButton {
@@ -129,6 +133,13 @@
 .ct-stats__tileSub {
   font-size: 1rem;
   color: var(--ct-color-text-secondary);
+}
+
+.ct-stats__tileEmpty {
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .ct-stats__section {
