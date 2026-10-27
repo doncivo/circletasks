@@ -16,7 +16,8 @@ Pas de test rouge : la preuve est la mesure du temps de l'étape avant et après
 
 1. Les `.deb` demandés par Playwright pour WebKit sont conservés d'un run à l'autre (`actions/cache`, chemin `~/.cache/ct-apt-webkit`, clé : image du runner `ImageOS-ImageVersion` et empreinte de la liste de paquets donnée par `npx playwright install-deps --dry-run webkit` ; `restore-keys` sur l'image seule).
 2. Avant l'installation, les `.deb` restaurés sont recopiés dans `/var/cache/apt/archives/` ; `install-deps` garde son `apt-get update` et apt n'en télécharge que ce que l'index ne confirme plus (paquet mis à jour entre-temps). Après l'installation, les `.deb` du cache apt sont recopiés dans le dossier mis en cache.
-3. L'étape « Dépendances système de WebKit » porte `timeout-minutes: 5` (nominal observé 26 à 67 s), tourne toujours (plus de condition sur le cache du navigateur) et affiche le nombre de `.deb` restaurés, la durée de l'installation et le nombre de `.deb` conservés. « Installer WebKit » ne fait plus que `npx playwright install webkit` quand le navigateur n'est pas en cache.
+3. L'étape « Dépendances système de WebKit » porte `timeout-minutes: 8` (nominal observé 26 à 67 s ; 305 s deux fois à miroir lent, dont le premier run de cette branche), tourne toujours (plus de condition sur le cache du navigateur) et affiche le nombre de `.deb` restaurés et la durée de l'installation. « Installer WebKit » ne fait plus que `npx playwright install webkit` quand le navigateur n'est pas en cache.
+6. Les `.deb` déjà reçus sont sauvegardés **même si l'étape échoue ou expire** : `actions/cache/restore` et `actions/cache/save` séparés, étape « Conservation des .deb téléchargés » et sauvegarde en `if: always()` quand la clé exacte n'a pas été trouvée. Chaque tentative enrichit le cache ; une relance après délai repart de ce qui est déjà reçu au lieu de tout retélécharger. (Ajouté après le premier run : `actions/cache` seul ne sauvegarde qu'en fin de job réussi, donc jamais quand le miroir lent fait échouer l'étape, précisément le cas visé.)
 4. Le job garde ses 20 minutes, ses tests, son comptage et ses artefacts ; aucun test, aucun seuil, aucune relance automatique touchés. Les jobs Chromium ne changent pas (leurs dépendances système sont pour l'essentiel déjà dans l'image du runner).
 5. Preuve : tableau avant / après ci-dessous, run par run, à partir des durées d'étape de l'API GitHub.
 
@@ -32,12 +33,18 @@ Trois annulations à 20 min 17 s le 27 octobre ont chacune coûté une relance m
 
 ## Mesure « après »
 
-À consigner après les deux premiers runs de la branche : run à cache froid (téléchargement puis sauvegarde du cache) et run à cache chaud (restauration, aucun téléchargement attendu hors paquets mis à jour entre-temps). Puis premier run de `main` après fusion (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant.
+| Run | Cache | Étape « Dépendances système de WebKit » | Issue |
+| --- | --- | --- | --- |
+| 40560815702 (4687353c, premier run, délai 5 min, `actions/cache` seul) | froid (`Cache not found`) | téléchargement 117 Mo en 4 min 46 s (409 ko/s, miroir lent), installation terminée à **305 s**, 187 `.deb` conservés | **échec** : délai de 5 min dépassé à la seconde où l'installation finissait ; le cache n'a pas été sauvegardé (post-étape de `actions/cache` ignorée sur échec). Correctif : critère 6 et délai porté à 8 min. |
+| run du correctif (cache froid, sauvegarde en `always()`) | à consigner | | |
+| run suivant (cache chaud) | à consigner | | |
+
+Puis premier run de `main` après fusion (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant.
 
 ## Passes
 
 - **Product-owner** : périmètre limité au job WebKit et aux fichiers de CI et de documentation ; aucun code applicatif, aucun test touché ; critères ci-dessus.
-- **Agent du module (ci-release)** : `tests.yml`, job `e2e-webkit` seulement (étape de clé, cache des `.deb`, étape d'installation avec délai et mesure, installation du navigateur seul). Commentaire du workflow renvoyant à cette fiche.
+- **Agent du module (ci-release)** : `tests.yml`, job `e2e-webkit` seulement (étape de clé, restauration des `.deb`, étape d'installation avec délai et mesure, conservation et sauvegarde des `.deb` en `always()`, installation du navigateur seul). Commentaire du workflow renvoyant à cette fiche.
 - **QA** : pas de test rouge (décision d'Ali) ; vérification du YAML par l'exécution du workflow sur la branche ; mesure avant / après consignée run par run.
 - **Code-reviewer** : à consigner après la mesure « après ».
 
