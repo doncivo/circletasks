@@ -190,6 +190,23 @@ describe('adaptateur iOS : vérification et échecs (N-01 critère 4)', () => {
     });
   });
 
+  it('N-FIX-03 : remplacement en place non appliqué par iOS (même identifiant numérique, ancienne demande encore en attente) : jamais un succès, registre sans le nouvel instant', async () => {
+    // Routine dont l'heure passe de 07:00 à 08:30 : le rappel garde son identifiant, donc le plan garde son identifiant stable et son numéro.
+    const { bridge, ledger, scheduler } = rig();
+    const sid = 'routine:r1:2026-10-09';
+    await scheduler.replace([req(sid, '2026-10-09T07:00', { kind: 'routine', category: 'routine' })]);
+    const n = bridge.shown[0]?.id as number;
+    expect(bridge.pendingMap.get(n)?.date).toBe('2026-10-09T07:00:00.000Z');
+    // iOS « réussit » l'appel (constat 8 : show résout avant le résultat de add) mais garde l'ancienne demande telle quelle.
+    bridge.dropOnShow = (payload) => payload.extra['sid'] === sid;
+    await expect(scheduler.replace([req(sid, '2026-10-09T08:30', { kind: 'routine', category: 'routine' })])).rejects.toMatchObject({ reason: 'verify-failed', ids: [sid] });
+    // Le registre ne décrit que ce qu'iOS porte : l'instant 08:30 n'y figure pas.
+    const entries = (ledger.read.state === 'valid' ? ledger.read.ledger : EMPTY_LEDGER).entries;
+    expect(entries.map((entry) => entry.at)).not.toContain(fireAtInstant('2026-10-09T08:30' as LocalDateTime, 'Europe/Paris'));
+    // Chez iOS, l'ancienne demande à 07:00 est toujours en attente : rien n'a été perdu ni inventé.
+    expect([...bridge.pendingMap.values()].map((item) => item.date)).toEqual(['2026-10-09T07:00:00.000Z']);
+  });
+
   it('un rejet de cancel : schedule-failed, les envois sont quand même tentés', async () => {
     const { bridge, scheduler } = rig();
     await scheduler.replace([req('task:a', '2026-10-09T09:00')]);
