@@ -36,7 +36,7 @@ Trois annulations à 20 min 17 s le 27 octobre ont chacune coûté une relance m
 | Run | Cache | Étape « Dépendances système de WebKit » | Issue |
 | --- | --- | --- | --- |
 | 40560815702 (4687353c, premier run, délai 5 min, `actions/cache` seul) | froid (`Cache not found`) | téléchargement 117 Mo en 4 min 46 s (409 ko/s, miroir lent), installation terminée à **305 s**, 187 `.deb` conservés | **échec** : délai de 5 min dépassé à la seconde où l'installation finissait ; le cache n'a pas été sauvegardé (post-étape de `actions/cache` ignorée sur échec). Correctif : critère 6 et délai porté à 8 min. |
-| run du correctif (cache froid, sauvegarde en `always()`) | à consigner | | |
+| 40565118802 (fad12ce9, correctif) | froid (`Cache not found`, clé `apt-webkit-ubuntu24-20261023.334.3-7f73b4c40481ca81`) | téléchargement 117 Mo en 1 min 25 s (1,37 Mo/s), installation **107 s**, 187 `.deb` conservés, **cache sauvegardé en 3 s** | job `e2e iphone-webkit` vert (46 s de tests). Le run est rouge ailleurs : `e2e iphone (3/4)`, Q-05 critère 9, sans lien avec cette branche (voir ci-dessous). |
 | run suivant (cache chaud) | à consigner | | |
 
 Puis premier run de `main` après fusion (cache froid côté `main`, les caches de branche ne lui étant pas visibles) et le suivant.
