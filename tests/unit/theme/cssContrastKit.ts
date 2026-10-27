@@ -502,6 +502,10 @@ export const TOKEN_PAIRS: readonly TokenPair[] = [
   ['--ct-color-today-badge', '--ct-color-bg'],
   ['--ct-color-warning-text', '--ct-color-warning-bg'],
   ['--ct-color-on-nav', '--ct-color-nav-bg'],
+  // UI-REFONTE-02 : agenda du jour iPhone (colonne d'heures, passé atténué, retard).
+  ['--ct-color-agenda-hour', '--ct-color-bg'],
+  ['--ct-color-agenda-past', '--ct-color-bg'],
+  ['--ct-color-agenda-late', '--ct-color-bg'],
 ];
 
 /** Éléments graphiques : 3:1 (WCAG 1.4.11). */
@@ -509,6 +513,8 @@ export const GRAPHIC_TOKEN_PAIRS: readonly TokenPair[] = [
   ['--ct-color-goal', '--ct-color-bg'],
   ['--ct-color-switch-on', '--ct-color-bg'],
   ['--ct-color-switch-on-thumb', '--ct-color-switch-on'],
+  // UI-REFONTE-02 : rond d'événement et trait « maintenant » de l'agenda.
+  ['--ct-color-agenda-event', '--ct-color-bg'],
 ];
 
 /** Écran Focus (F-01 critère 13) : texte 4,5:1. */

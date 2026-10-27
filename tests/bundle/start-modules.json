@@ -519,6 +519,16 @@
       "fichier": "src/ui/DateField.css",
       "story": "UI-REFONTE-01",
       "raison": "CSS inchangé du champ Date du premier affichage PC ; ses 25 classes étaient déjà dans les CSS initiaux de 1.0.1. Le découpage des options le fait apparaître dans la carte JS ; aucun écran secondaire ajouté au départ."
+    },
+    {
+      "fichier": "src/domain/todayAgenda.ts",
+      "story": "UI-REFONTE-02",
+      "raison": "Règle métier de l'agenda du jour iPhone (tri par heure, ligne « maintenant », passé, dû, sans heure) : nécessaire au premier affichage d'Aujourd'hui sur iPhone, dans src/domain comme toute règle métier."
+    },
+    {
+      "fichier": "src/i18n/formatAgenda.ts",
+      "story": "UI-REFONTE-02",
+      "raison": "Formateurs du retard (« En retard de 32 min ») et du libellé parlé de la ligne « maintenant », affichés au premier rendu de l'agenda ; clés dans le bloc today de fr.ts."
     }
   ]
 }

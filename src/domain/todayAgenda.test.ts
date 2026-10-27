@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Goal, Routine, Task } from './model';
 import { buildTodayAgenda, lateMinutes, type AgendaLine } from './todayAgenda';
 import { buildTodayList, type TodayEventEntry } from './todayList';
-import { asEntityId, asLocalTime, type RoutineId, type SpaceId, type TaskId } from './types';
+import { asEntityId, asLocalDate, asLocalTime, type RoutineId, type SpaceId, type TaskId } from './types';
 
 /**
  * UI-REFONTE-02 — l'agenda du jour (Jour.html) : lignes triées par heure, ligne « maintenant » insérée à l'heure courante,
@@ -11,7 +11,7 @@ import { asEntityId, asLocalTime, type RoutineId, type SpaceId, type TaskId } fr
  */
 
 const PRO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
-const DAY = '2026-09-23';
+const DAY = asLocalDate('2026-09-23');
 
 function task(id: string, title: string, time: string | null, extra: Partial<Task> = {}): Task {
   return {

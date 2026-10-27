@@ -1,8 +1,12 @@
 import type { RecurrenceFields, Space } from '../../domain/model';
-import { rowTime, type TodayList, type TodayRow } from '../../domain/todayList';
-import type { RecurrenceId, RoutineId, SpaceFilter, TaskId } from '../../domain/types';
+import type { AgendaLine } from '../../domain/todayAgenda';
+import { rowTime, type TodayEventEntry, type TodayList, type TodayRow } from '../../domain/todayList';
+import type { EventId, LocalDate, RecurrenceId, RoutineId, SpaceFilter, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { DragHandle, ListSkeleton, SwipeRow, SwipeRowGroup, type Layout, type RowGestureFeedback } from '../../ui';
+import { formatTime } from '../../i18n/format';
+import { formatNowLabel } from '../../i18n/formatAgenda';
+import { DragHandle, ListRow, ListSkeleton, SwipeRow, SwipeRowGroup, type Layout, type RowGestureFeedback } from '../../ui';
+import { bandCountdownTag } from '../events/bandCountdown';
 import { taskGestureProps, type TaskGestureApi } from '../tasks/taskGestures';
 import { TodayRoutineRow, TodayTaskRow } from './TodayRows';
 import type { TodayRowActions } from './TodayRowActions';
@@ -15,6 +19,15 @@ export interface TodayGestures {
   /** Valide ou rouvre une routine pour la date affichée (R-03) ; vrai si abouti. */
   readonly toggleRoutine: (id: RoutineId) => Promise<boolean>;
   readonly feedback: RowGestureFeedback;
+}
+
+/** Agenda du jour (UI-REFONTE-02, iPhone) : lignes placées sur la colonne des heures, événements compris. */
+export interface TodayAgendaView {
+  readonly lines: readonly AgendaLine[];
+  readonly date: LocalDate;
+  readonly today: LocalDate;
+  /** Ouvre un événement local en modification (E-01 critère 7) ; un événement d'agenda externe reste en lecture seule. */
+  readonly onOpenEvent: (id: EventId) => void;
 }
 
 export interface TodayListViewProps {
@@ -39,14 +52,17 @@ export interface TodayListViewProps {
   readonly onToggleRoutine: (id: RoutineId) => void;
   readonly onOpen: (id: TaskId) => void;
   readonly gestures: TodayGestures | null;
+  /** iPhone : agenda du jour (Jour.html) ; absent sur PC (liste mêlée, terminés en bas). */
+  readonly agenda?: TodayAgendaView | null;
 }
 
 /**
- * Liste du jour (A-01) : routines et tâches mêlées, terminés en bas ; squelette pendant un chargement lent (A-09). PC : une seule
- * ligne par élément (« HH:MM · Espace » à droite) ; iPhone : sous-ligne sous le titre.
+ * Liste du jour (A-01). PC : routines et tâches mêlées, terminés en bas, une seule ligne par élément (« HH:MM · Espace » à droite).
+ * iPhone (UI-REFONTE-02) : agenda sur la colonne des heures, ligne « maintenant », passé atténué, dû en gros, sans heure derrière un tiret.
+ * Squelette pendant un chargement lent (A-09).
  */
 export function TodayListView(props: TodayListViewProps) {
-  const { list, layout, compact, spaces, spaceFilter, recurrences, edit, rowActions, reorder } = props;
+  const { list, layout, compact, spaces, spaceFilter, recurrences, edit, rowActions, reorder, agenda } = props;
   const iconSize = layout === 'pc' ? 24 : 28;
   const inline = layout === 'pc';
 
@@ -81,7 +97,8 @@ export function TodayListView(props: TodayListViewProps) {
     );
   }
 
-  function renderRow(row: TodayRow, movable: boolean) {
+  function renderRow(row: TodayRow, movable: boolean, lateMinutes: number | null = null) {
+    const inAgenda = agenda != null;
     if (row.kind === 'routine') {
       return swiped(
         row,
@@ -96,6 +113,7 @@ export function TodayListView(props: TodayListViewProps) {
           showSpace={spaceFilter === 'all'}
           checkable={props.routinesCheckable}
           disabled={props.routinesDisabled}
+          agenda={inAgenda}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId)}
         />,
       );
@@ -115,6 +133,7 @@ export function TodayListView(props: TodayListViewProps) {
         opened={props.openedTaskId === task.id}
         compact={compact}
         inline={inline}
+        {...(inAgenda ? { agenda: { lateMinutes } } : {})}
         onToggleDone={() => props.onToggleDone(task.id)}
         onOpen={() => props.onOpen(task.id)}
         onToggleSelect={() => edit.toggle(task.id)}
@@ -133,6 +152,35 @@ export function TodayListView(props: TodayListViewProps) {
     );
   }
 
+  /** Événement dans l'agenda (E-01 à E-04, M8) : rond au trait, titre, source ou « Toute la journée », compte à rebours (E-04). */
+  function renderEvent(event: TodayEventEntry, view: TodayAgendaView) {
+    const countdown = bandCountdownTag(event, view.date, view.today);
+    const source = event.calendarName ?? (event.allDay || event.startTime === null ? t('today.eventAllDay') : null);
+    const subtitle =
+      source || countdown ? (
+        <>
+          {source}
+          {source && countdown && ' · '}
+          {countdown && (
+            <span className="ct-agenda__countdown" data-tag={countdown.kind}>
+              <span aria-hidden={countdown.spoken ? 'true' : undefined}>{countdown.label}</span>
+              {countdown.spoken && <span className="ct-visually-hidden">{countdown.spoken}</span>}
+            </span>
+          )}
+        </>
+      ) : undefined;
+    const interactive = event.calendarName === null && event.kind !== 'holiday';
+    return (
+      <ListRow
+        title={event.title}
+        className="ct-agenda__eventRow"
+        leading={<span className="ct-agenda__eventMark" data-kind={event.kind} aria-hidden="true" />}
+        {...(subtitle !== undefined ? { subtitle } : {})}
+        {...(interactive ? { onActivate: () => view.onOpenEvent(event.id as EventId) } : {})}
+      />
+    );
+  }
+
   if (props.showSkeleton) {
     return (
       <div aria-busy="true">
@@ -140,10 +188,64 @@ export function TodayListView(props: TodayListViewProps) {
       </div>
     );
   }
-  if (list.rows.length === 0 && list.doneRows.length === 0) return null;
 
   const clickCapture = (row: TodayRow) =>
     edit.editMode && row.kind === 'task' ? { onClickCapture: (event: React.MouseEvent<HTMLElement>) => void edit.onRowClick(event, row.task.id) } : {};
+
+  if (agenda) {
+    if (agenda.lines.length === 0) return null;
+    return (
+      <SwipeRowGroup>
+        <div
+          {...reorder.sortable.containerProps}
+          className={`ct-today__list ct-today__list--agenda ${reorder.sortable.containerProps.className}`}
+          aria-label={t('today.listLabel')}
+          aria-busy={props.loading}
+          role="list"
+        >
+          {agenda.lines.map((line) => {
+            if (line.kind === 'now') {
+              return (
+                <div key="now" role="listitem" className="ct-agenda__now" aria-label={formatNowLabel(line.time)}>
+                  <span className="ct-agenda__hour ct-agenda__hour--now">{formatTime(line.time)}</span>
+                  <span className="ct-agenda__nowDot" aria-hidden="true" />
+                  <span className="ct-agenda__nowBar" aria-hidden="true" />
+                </div>
+              );
+            }
+            const hour = line.time === null ? <span className="ct-agenda__hour ct-agenda__hour--none" aria-label={t('today.untimed')}>—</span> : <span className="ct-agenda__hour">{formatTime(line.time)}</span>;
+            if (line.kind === 'event') {
+              return (
+                <div key={line.id} role="listitem" className="ct-agenda__line" data-phase={line.phase}>
+                  {hour}
+                  <div className="ct-agenda__body">{renderEvent(line.event, agenda)}</div>
+                </div>
+              );
+            }
+            const row = line.row;
+            const movable = row.kind === 'task' && list.rows.some((candidate) => candidate.id === row.id);
+            return (
+              <div
+                key={row.id}
+                role="listitem"
+                className="ct-agenda__line"
+                data-phase={line.phase}
+                onFocus={() => focusRow(row)}
+                {...clickCapture(row)}
+                {...(movable ? reorder.sortable.itemProps(row.id) : {})}
+                {...(movable ? reorder.sortable.dragProps(row.id, 'row') : {})}
+              >
+                {hour}
+                <div className="ct-agenda__body">{renderRow(row, movable, line.lateMinutes)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </SwipeRowGroup>
+    );
+  }
+
+  if (list.rows.length === 0 && list.doneRows.length === 0) return null;
 
   return (
     <SwipeRowGroup>

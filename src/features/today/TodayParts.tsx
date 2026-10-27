@@ -59,6 +59,42 @@ export function TodayGoalCard({ entry, compact, onOpen }: { entry: TodayGoalEntr
   );
 }
 
+/**
+ * Objectif épinglé en une ligne (UI-REFONTE-02, Jour.html, OB-02 sans cadre) : « Objectif », titre, « 2/5 » (ou « Atteint », OB-04),
+ * filet dessous ; un toucher ouvre l'écran Objectif. Libellé accessible « Objectif : titre, 2 sur 5 ».
+ */
+export function TodayGoalLine({ entry, onOpen }: { entry: TodayGoalEntry; onOpen: () => void }) {
+  const { goal, progress } = entry;
+  const achieved = goal.status === 'achieved';
+  const summary = achieved ? t('goals.achieved') : progress.total > 0 ? t('today.goalProgress', { done: progress.done, total: progress.total }) : null;
+  return (
+    <button
+      type="button"
+      className="ct-agenda-goal"
+      aria-label={summary ? t('today.goalLineWith', { title: goal.title, summary }) : t('today.goalLine', { title: goal.title })}
+      onClick={onOpen}
+    >
+      <span className="ct-agenda-goal__word" aria-hidden="true">
+        {t('today.goalWord')}
+      </span>
+      <span className="ct-agenda-goal__title" aria-hidden="true">
+        {goal.title}
+      </span>
+      {achieved ? (
+        <span className="ct-agenda-goal__progress ct-agenda-goal__progress--achieved" aria-hidden="true">
+          {t('goals.achieved')}
+        </span>
+      ) : (
+        progress.total > 0 && (
+          <span className="ct-agenda-goal__progress" aria-hidden="true">
+            {progress.done}/{progress.total}
+          </span>
+        )
+      )}
+    </button>
+  );
+}
+
 /** Bandeau d'un événement du jour (Main.html : « 10:00 Point client · Google Agenda »), lecture seule. */
 export function TodayEventBand({ event, compact, date, today, onOpen }: { event: TodayEventEntry; compact: boolean; date: LocalDate; today: LocalDate; onOpen?: (event: TodayEventEntry) => void }) {
   // Compte à rebours d'un événement important (E-04 critère 4) : « J-2 », « Aujourd'hui », sinon rien.

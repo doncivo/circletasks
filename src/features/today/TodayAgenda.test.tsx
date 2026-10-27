@@ -179,7 +179,7 @@ describe('Aujourd’hui iPhone : l’agenda du jour (UI-REFONTE-02)', () => {
     expect(lineOf('Relire le contrat')).toHaveAttribute('data-phase', 'upcoming');
     const sport = screen.getByText('Sport').closest('.ct-agenda__line') as HTMLElement;
     expect(sport).toHaveAttribute('data-phase', 'upcoming');
-    expect(sport).toHaveTextContent('Routine · mar., ven.');
+    expect(sport.querySelector('.ct-list-row__subtitle')).toHaveTextContent(/^Routine · Pro$/); // fréquence hors du départ (voir fiche, critère 6)
 
     const depot = lineOf('Préparer le dépôt GitHub');
     expect(depot).toHaveAttribute('data-phase', 'untimed');
@@ -239,7 +239,7 @@ describe('Aujourd’hui iPhone : l’agenda du jour (UI-REFONTE-02)', () => {
     renderToday(h.container);
     expect(await screen.findByText('Rien de prévu aujourd’hui.')).toBeInTheDocument();
     expect(await screen.findByLabelText(`Il est ${spoken(now)}`)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ajouter', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ajouter' })).toBeInTheDocument();
     expect(screen.getByLabelText('Nouvelle tâche')).toBeInTheDocument();
   });
 

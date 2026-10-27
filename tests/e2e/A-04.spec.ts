@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { waitForScreenLoaded } from './helpers/app';
-import { createTask, isPhone, openToday, todayTab } from './helpers/today';
+import { clickTodayHeaderAction, createTask, isPhone, openToday, todayTab } from './helpers/today';
 
 /**
  * A-04 — J'accède à Aujourd'hui en un geste.
@@ -26,7 +26,7 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
     await expect(tab(page, 'Réglages')).toHaveAttribute('aria-current', 'page');
     await page.keyboard.press('Alt+1');
     await expect(todayTab(page)).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    await expect(page.locator('main h1.ct-today__day')).toBeVisible(); // UI-REFONTE-02 : le badge n'existe plus sur iPhone, le titre du jour fait foi.
   });
 
   test('Alt+2 à Alt+6 activent les autres onglets (critère 6)', async ({ page }) => {
@@ -42,12 +42,12 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
   });
 
   test('Alt+1 depuis un sous-écran de Tâches revient à Aujourd’hui (critère 4)', async ({ page }) => {
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
     await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
     await page.keyboard.press('Alt+1');
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
     await todayTab(page).click();
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
@@ -104,7 +104,7 @@ test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machi
     });
     await openToday(page);
     await waitForScreenLoaded(page, 'reportscreen');
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
     await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
     await page.keyboard.press('Alt+1');
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);

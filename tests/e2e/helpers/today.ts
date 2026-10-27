@@ -47,3 +47,51 @@ export async function openToday(page: Page): Promise<void> {
   await waitForScreenLoaded(page, 'taskdetail');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
+
+/*
+ * UI-REFONTE-02 : sur iPhone, l'en-tête d'Aujourd'hui ne garde que Rechercher et « Plus d’options » ; Un jour, Objectif de la semaine,
+ * Rapport mensuel, Vue compacte et Mode édition sont des entrées de ce menu. Sur PC, les boutons de l'écran restent.
+ */
+const moreButton = (page: Page): Locator => page.getByRole('button', { name: 'Plus d’options' });
+
+/** Ouvre le menu « Plus d’options » (iPhone) et renvoie sa feuille. */
+export async function openMoreMenu(page: Page): Promise<Locator> {
+  await moreButton(page).click();
+  const menu = page.getByRole('dialog', { name: 'Plus d’options' });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** Commande d'en-tête d'Aujourd'hui : bouton de l'écran (PC) ou entrée du menu « Plus d’options » (iPhone). */
+export async function clickTodayHeaderAction(page: Page, name: 'Un jour' | 'Objectif de la semaine' | 'Rapport mensuel'): Promise<void> {
+  if (await moreButton(page).isVisible()) {
+    const menu = await openMoreMenu(page);
+    await menu.getByRole('menuitem', { name: name === 'Un jour' ? /^Un jour/ : name }).click();
+    await expect(menu).toBeHidden();
+    return;
+  }
+  await page.getByRole('button', { name: name === 'Un jour' ? /^Un jour/ : name, exact: name !== 'Un jour' }).click();
+}
+
+/** Interrupteur « Mode édition » ou « Vue compacte » : bouton de l'écran (PC) ou entrée du menu (iPhone). */
+export async function toggleTodayView(page: Page, name: 'Mode édition' | 'Vue compacte'): Promise<void> {
+  if (await moreButton(page).isVisible()) {
+    const menu = await openMoreMenu(page);
+    await menu.getByRole('menuitemcheckbox', { name }).click();
+    await expect(menu).toBeHidden();
+    return;
+  }
+  await page.getByRole('button', { name }).click();
+}
+
+/** État de l'interrupteur (`aria-pressed` du bouton PC, `aria-checked` de l'entrée du menu iPhone, menu refermé). */
+export async function todayViewState(page: Page, name: 'Mode édition' | 'Vue compacte'): Promise<boolean> {
+  if (await moreButton(page).isVisible()) {
+    const menu = await openMoreMenu(page);
+    const checked = (await menu.getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')) === 'true';
+    await menu.getByRole('button', { name: 'Fermer' }).click();
+    await expect(menu).toBeHidden();
+    return checked;
+  }
+  return (await page.getByRole('button', { name }).getAttribute('aria-pressed')) === 'true';
+}

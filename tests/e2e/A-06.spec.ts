@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createTask, openToday, rowOf } from './helpers/today';
+import { createTask, isPhone, openToday, rowOf, todayViewState, toggleTodayView } from './helpers/today';
 
 /**
  * A-06 — Je replie la liste en vue compacte.
@@ -20,12 +20,13 @@ test.describe('A-06 — vue compacte', () => {
     const plain = `Sans heure ${testInfo.project.name}`;
     await createTask(page, testInfo, { title: timed, time: '09:00' });
     await createTask(page, testInfo, { title: plain });
-    const toggle = page.getByRole('button', { name: 'Vue compacte' });
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
+    // UI-REFONTE-02 : sur iPhone la bascule est dans le menu « Plus d’options » et l'heure est dans la colonne de l'agenda (sous-ligne « Pro », ou « En retard … · Pro »).
+    const phone = isPhone(testInfo);
+    expect(await todayViewState(page, 'Vue compacte')).toBe(false);
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(phone ? /Pro$/ : '09:00 · Pro');
 
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await toggleTodayView(page, 'Vue compacte');
+    expect(await todayViewState(page, 'Vue compacte')).toBe(true);
     await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveCount(0);
     await expect(rowOf(page, timed).locator('.ct-list-row__time')).toHaveText('09:00');
     await expect(rowOf(page, plain).locator('.ct-list-row__time')).toHaveCount(0);
@@ -33,18 +34,18 @@ test.describe('A-06 — vue compacte', () => {
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     expect(box?.height ?? 999).toBeLessThan(60);
 
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
+    await toggleTodayView(page, 'Vue compacte');
+    expect(await todayViewState(page, 'Vue compacte')).toBe(false);
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(phone ? /Pro$/ : '09:00 · Pro');
   });
 
   test('le choix est conservé au changement d’onglet ; terminer et mode édition fonctionnent (critères 5, 6)', async ({ page }, testInfo) => {
     const title = `Tâche ${testInfo.project.name}`;
     await createTask(page, testInfo, { title });
-    await page.getByRole('button', { name: 'Vue compacte' }).click();
+    await toggleTodayView(page, 'Vue compacte');
     await page.getByRole('navigation').getByRole('button', { name: 'Réglages', exact: true }).click();
     await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Vue compacte' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await todayViewState(page, 'Vue compacte')).toBe(true);
 
     await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();
     await expect(page.getByRole('checkbox', { name: `Rouvrir : ${title}` })).toBeVisible();

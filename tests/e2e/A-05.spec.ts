@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { createTask, isPhone, listTitles, openToday, rowOf } from './helpers/today';
+import { createTask, isPhone, listTitles, openToday, rowOf, todayViewState, toggleTodayView } from './helpers/today';
 
 /**
  * A-05 — Je passe en mode édition.
@@ -11,7 +11,7 @@ import { createTask, isPhone, listTitles, openToday, rowOf } from './helpers/tod
  * et Maj+clic, Suppr (10, PC), champ d'ajout utilisable (11). Exécuté sur `pc` et `iphone`.
  * Routines (Q13) : tests unitaires, le module n'existe pas encore.
  */
-const toggle = (page: Page) => page.getByRole('button', { name: 'Mode édition' });
+// UI-REFONTE-02 : sur iPhone, « Mode édition » est une entrée du menu « Plus d’options » (helpers/today).
 const select = (page: Page, title: string) => page.getByRole('button', { name: `Sélectionner : ${title}` }).click();
 const bar = (page: Page) => page.getByRole('toolbar', { name: 'Actions sur la sélection' });
 const status = (page: Page) => page.getByRole('status');
@@ -30,8 +30,8 @@ test.describe('A-05 — mode édition', () => {
   test('les commandes d’édition remplacent les cases, et l’interrupteur ramène au mode normal (critères 1, 9, 12)', async ({ page }, testInfo) => {
     const [a] = (await seed(page, testInfo, ['Facture'])) as [string];
     await expect(page.getByRole('checkbox', { name: `Terminer : ${a}` })).toBeVisible();
-    await toggle(page).click();
-    await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
+    await toggleTodayView(page, 'Mode édition');
+    expect(await todayViewState(page, 'Mode édition')).toBe(true);
     await expect(page.getByRole('checkbox', { name: `Terminer : ${a}` })).toHaveCount(0);
     await expect(page.getByRole('button', { name: `Sélectionner : ${a}` })).toBeVisible();
     await expect(page.getByRole('button', { name: `Supprimer : ${a}` })).toBeVisible();
@@ -39,13 +39,13 @@ test.describe('A-05 — mode édition', () => {
     // Le mode n'est pas mémorisé quand on change d'onglet.
     await page.getByRole('navigation').getByRole('button', { name: 'Réglages', exact: true }).click();
     await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
-    await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
+    expect(await todayViewState(page, 'Mode édition')).toBe(false);
     await expect(page.getByRole('checkbox', { name: `Terminer : ${a}` })).toBeVisible();
   });
 
   test('« − » supprime après confirmation et s’annule (critère 2)', async ({ page }, testInfo) => {
     const [a, b] = (await seed(page, testInfo, ['Courses', 'Autre'])) as [string, string];
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     await page.getByRole('button', { name: `Supprimer : ${a}` }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Supprimer' }).click();
     await expect(page.getByRole('button', { name: a, exact: true })).toHaveCount(0);
@@ -57,7 +57,7 @@ test.describe('A-05 — mode édition', () => {
 
   test('la barre de sélection compte, reporte en une annulation et supprime par lot (critères 4, 5, 6)', async ({ page }, testInfo) => {
     const [a, b, c] = (await seed(page, testInfo, ['A', 'B', 'C'])) as [string, string, string];
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     await expect(bar(page)).toHaveCount(0);
     await select(page, a);
     await expect(bar(page)).toContainText('1 sélectionnée');
@@ -85,13 +85,13 @@ test.describe('A-05 — mode édition', () => {
 
   test('« Déplacer » change l’espace de la sélection, pas la date (critère 7, Q12)', async ({ page }, testInfo) => {
     const [a, b] = (await seed(page, testInfo, ['A', 'B'])) as [string, string];
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     await select(page, a);
     await select(page, b);
     await bar(page).getByRole('button', { name: 'Déplacer' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Perso · aucun projet' }).click();
     await expect(status(page)).toContainText('2 tâches déplacées dans Perso');
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     await expect(rowOf(page, a).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
     await expect(rowOf(page, b).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
     await status(page).getByRole('button', { name: 'Annuler' }).click();
@@ -100,7 +100,7 @@ test.describe('A-05 — mode édition', () => {
 
   test('glisser la poignée réordonne la liste : souris sur PC, toucher sur iPhone (critère 3)', async ({ page }, testInfo) => {
     const [a, b, c] = (await seed(page, testInfo, ['A', 'B', 'C'])) as [string, string, string];
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     const handle = (title: string) => page.getByRole('button', { name: `Déplacer : ${title}` });
     const from = await handle(c).boundingBox();
     const to = await handle(a).boundingBox();
@@ -135,7 +135,7 @@ test.describe('A-05 — mode édition', () => {
   test('PC : Ctrl+clic, Maj+clic, Suppr et Échap (critère 10)', async ({ page }, testInfo) => {
     test.skip(isPhone(testInfo), 'Raccourcis clavier et souris du PC.');
     const [a, b, c] = (await seed(page, testInfo, ['A', 'B', 'C'])) as [string, string, string];
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     await page.getByRole('button', { name: a, exact: true }).click({ modifiers: ['Control'] });
     await expect(bar(page)).toContainText('1 sélectionnée');
     await page.getByRole('button', { name: c, exact: true }).click({ modifiers: ['Shift'] });
@@ -147,13 +147,13 @@ test.describe('A-05 — mode édition', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
+    expect(await todayViewState(page, 'Mode édition')).toBe(false);
     await expect(bar(page)).toHaveCount(0);
   });
 
   test('le champ « Ajouter une tâche » reste utilisable en mode édition (critère 11)', async ({ page }, testInfo) => {
     await seed(page, testInfo, ['A']);
-    await toggle(page).click();
+    await toggleTodayView(page, 'Mode édition');
     const added = `Ajoutée ${testInfo.project.name}`;
     await createTask(page, testInfo, { title: added });
     await expect(page.getByRole('button', { name: `Sélectionner : ${added}` })).toBeVisible();

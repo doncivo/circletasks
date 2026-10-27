@@ -626,3 +626,201 @@
   flex-wrap: wrap;
   row-gap: 4px;
 }
+
+/*
+ * UI-REFONTE-02 — agenda du jour sur iPhone (docs/maquettes-refonte/Jour.html, Jour-Sombre.html) : colonne d'heures à gauche,
+ * ligne « maintenant » qui traverse l'écran, passé atténué, dû en gros (Fraunces), tiret pour les éléments sans heure.
+ */
+.ct-today__list--agenda {
+  overflow-y: auto;
+  padding-top: var(--ct-space-1);
+}
+
+.ct-agenda__line {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ct-agenda__hour {
+  width: 46px;
+  flex-shrink: 0;
+  padding-top: 15px;
+  text-align: right;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-agenda__hour--none {
+  color: var(--ct-color-agenda-past);
+}
+
+.ct-agenda__body {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-agenda__body .ct-list-row {
+  padding: 11px 0;
+}
+
+.ct-agenda__body .ct-list-row__title {
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-semibold);
+  line-height: 1.3;
+}
+
+/* Passé : tout recule. */
+.ct-agenda__line[data-phase='past'] .ct-agenda__hour,
+.ct-agenda__line[data-phase='past'] .ct-list-row__title,
+.ct-agenda__line[data-phase='past'] .ct-list-row__subtitle,
+.ct-agenda__line[data-phase='past'] .ct-list-row__subtitle span {
+  color: var(--ct-color-agenda-past) !important;
+  font-weight: var(--ct-font-weight-medium);
+}
+
+.ct-agenda__line[data-phase='past'] .ct-checkbox,
+.ct-agenda__line[data-phase='past'] .ct-agenda__eventMark {
+  opacity: 0.55;
+}
+
+/* Dû : en retard, donc en tête et en gros. */
+.ct-agenda__line[data-phase='due'] .ct-agenda__hour {
+  color: var(--ct-color-text);
+  font-weight: var(--ct-font-weight-bold);
+  padding-top: 18px;
+}
+
+.ct-agenda__line[data-phase='due'] .ct-list-row__title {
+  font-family: var(--ct-font-title);
+  font-size: 1.6875rem; /* 27px */
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.1;
+}
+
+.ct-agenda__line[data-phase='due'] .ct-list-row__subtitle {
+  margin-top: 5px;
+}
+
+.ct-agenda__late {
+  color: var(--ct-color-agenda-late);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* La ligne « maintenant » : heure en gras, point, trait qui traverse. */
+.ct-agenda__now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 6px 0 2px;
+}
+
+.ct-agenda__hour--now {
+  padding-top: 0;
+  color: var(--ct-color-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-agenda__nowDot {
+  width: 9px;
+  height: 9px;
+  margin-left: -4px;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-text);
+  flex-shrink: 0;
+}
+
+.ct-agenda__nowBar {
+  flex-grow: 1;
+  height: 2px;
+  background: var(--ct-color-text);
+}
+
+/* Événement : rond au trait de la couleur des événements à la place de la case. */
+.ct-agenda__eventMark {
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border: 2px solid var(--ct-color-agenda-event);
+  border-radius: var(--ct-radius-round);
+  flex-shrink: 0;
+}
+
+.ct-agenda__eventMark[data-kind='birthday'],
+.ct-agenda__eventMark[data-kind='important'] {
+  border-color: var(--ct-color-event-local-text);
+}
+
+.ct-agenda__eventMark[data-kind='holiday'] {
+  border-color: var(--ct-color-achieved-text);
+}
+
+.ct-agenda__countdown {
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Objectif en une ligne, filet dessous, sans cadre. */
+.ct-agenda-goal {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-space-2);
+  width: 100%;
+  min-height: var(--ct-hit-target-min);
+  padding: 0 0 var(--ct-space-3);
+  border: 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-agenda-goal:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-agenda-goal__word,
+.ct-agenda-goal__progress {
+  color: var(--ct-color-text-secondary);
+  flex-shrink: 0;
+}
+
+.ct-agenda-goal__title {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ct-agenda-goal__progress {
+  font-weight: var(--ct-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-agenda-goal__progress--achieved {
+  color: var(--ct-color-achieved-text);
+}
+
+/* Ajout : champ, Scanner et « + » sur une rangée, collés en bas au-dessus de la zone de sécurité. */
+.ct-agenda__add {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.ct-agenda__add > .ct-today__addBlock {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-agenda__add .ct-today__addLine {
+  align-items: center;
+}

@@ -22,19 +22,21 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     await teardownToday(h);
   });
 
-  it('en-tête iPhone : mois court, jour court et badge AUJOURD’HUI (critère 2)', async () => {
+  it('en-tête iPhone : mois court, jour court ; plus de badge AUJOURD’HUI depuis UI-REFONTE-02 (la ligne « maintenant » dit le jour courant) (critère 2)', async () => {
     mockViewport(440);
     renderToday(h.container);
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/^2 ven\.$/);
     expect(screen.getByText('oct. 2026')).toBeInTheDocument();
-    expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
+    expect(screen.queryByText('Aujourd’hui')).toBeNull();
+    expect(screen.getByRole('listitem', { name: /^Il est / })).toBeInTheDocument();
   });
 
-  it('en-tête PC : mois et jour en toutes lettres (critère 2)', async () => {
+  it('en-tête PC : mois et jour en toutes lettres, badge AUJOURD’HUI (critère 2)', async () => {
     mockViewport(1440);
     renderToday(h.container);
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('2 vendredi');
     expect(screen.getByText('octobre 2026')).toBeInTheDocument();
+    expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
   });
 
   it('chaque tâche affiche « HH:MM · Espace » en filtre Tout, l’heure seule en filtre Pro (critères 5, 6)', async () => {
@@ -42,16 +44,21 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     await seedTask(h, { title: 'Appeler le notaire', time: '14:00', spaceId: SPACE_PERSO_ID });
     mockViewport(440);
     renderToday(h.container);
-    const facture = (await screen.findByRole('button', { name: 'Envoyer la facture' })).closest('.ct-list-row') as HTMLElement;
-    expect(facture).toHaveTextContent('09:00 · Pro');
+    // UI-REFONTE-02 : sur iPhone l'heure est dans la colonne de l'agenda, la sous-ligne ne porte que l'espace.
+    const facture = (await screen.findByRole('button', { name: 'Envoyer la facture' })).closest('.ct-agenda__line') as HTMLElement;
+    expect(facture.querySelector('.ct-agenda__hour')).toHaveTextContent('09:00');
+    expect(facture.querySelector('.ct-list-row__subtitle')).toHaveTextContent(/Pro$/);
     expect(within(facture).getByText('Pro')).toBeInTheDocument(); // couleur de l'espace : spaceColor.test.ts (color-mix non rendu par jsdom)
-    const notaire = screen.getByRole('button', { name: 'Appeler le notaire' }).closest('.ct-list-row') as HTMLElement;
-    expect(notaire).toHaveTextContent('14:00 · Perso');
+    const notaire = screen.getByRole('button', { name: 'Appeler le notaire' }).closest('.ct-agenda__line') as HTMLElement;
+    expect(notaire.querySelector('.ct-agenda__hour')).toHaveTextContent('14:00');
+    expect(notaire.querySelector('.ct-list-row__subtitle')).toHaveTextContent(/Perso$/);
 
     act(() => useAppStore.getState().setSpaceFilter(SPACE_PRO_ID));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Appeler le notaire' })).toBeNull());
-    const proRow = screen.getByRole('button', { name: 'Envoyer la facture' }).closest('.ct-list-row') as HTMLElement;
-    expect(proRow.querySelector('.ct-list-row__subtitle')).toHaveTextContent(/^09:00$/);
+    const proRow = screen.getByRole('button', { name: 'Envoyer la facture' }).closest('.ct-agenda__line') as HTMLElement;
+    // Sous « Pro », l'espace n'est plus écrit ; la sous-ligne ne garde que le retard éventuel (tâche de 09:00 due à l'heure de test).
+    expect(proRow.querySelector('.ct-list-row__subtitle')?.textContent ?? '').not.toContain('Pro');
+    expect(proRow.querySelector('.ct-agenda__hour')).toHaveTextContent('09:00');
   });
 
   it('PC : la ligne dont la fiche est ouverte est surlignée, et la liste reste utilisable (A-08 critères 1, 4)', async () => {
@@ -84,7 +91,7 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     renderToday(h.container);
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Terminer : Faite' }));
     await waitFor(() => {
-      const titles = screen.getAllByRole('listitem').map((item) => item.textContent);
+      const titles = screen.getAllByRole('listitem').filter((item) => item.querySelector('.ct-list-row__title')).map((item) => item.textContent);
       expect(titles[0]).toContain('Restante');
       expect(titles[1]).toContain('Faite');
     });
@@ -125,7 +132,7 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
       total: 5,
     });
 
-    it('ordre vertical : objectif, événements, routines et tâches mêlées, terminées, checklists (critère 3)', async () => {
+    it('ordre vertical (agenda iPhone, UI-REFONTE-02) : objectif en ligne, puis l’agenda par heure (routine faite à son heure, événement, tâche), puis checklists (critère 3)', async () => {
       await seedTask(h, { title: 'Envoyer la facture', time: '09:00' });
       plug({
         goals: [{ goal: { id: 'g', spaceId: SPACE_PRO_ID, title: 'Finaliser le PRD', icon: null, weekStart: '2026-09-28', pinned: true, status: 'open', createdAt: '2026-09-28T08:00:00.000Z', deletedAt: null } as unknown as Goal, progress: { done: 2, total: 5 } }],
@@ -136,17 +143,19 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
         ],
         checklists: [checklist(h.today)],
       });
+      h.db.clock.advance(8 * 60 * 60 * 1000);
       mockViewport(440);
       renderToday(h.container);
       await screen.findByText('Finaliser le PRD');
 
       const first = screen.getByText('Boire de l’eau');
+      // Agenda, toutes les heures passées : 07:00 Faire mon lit (faite), 08:30 Boire de l’eau (routine), 10:00 Point client (événement), puis la tâche due de 09:00 juste avant « maintenant » ; l'objectif au-dessus, les checklists dessous.
       const order = [
         screen.getByText('Finaliser le PRD'),
-        screen.getByText('Point client'),
-        first,
-        screen.getByRole('button', { name: 'Envoyer la facture' }),
         screen.getByText('Faire mon lit'),
+        first,
+        screen.getByText('Point client'),
+        screen.getByRole('button', { name: 'Envoyer la facture' }),
         screen.getByText('Valise'),
       ];
       for (let i = 0; i < order.length - 1; i += 1) {
@@ -155,8 +164,9 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
       expect(screen.getByText('2/5')).toBeInTheDocument();
       expect(screen.getByText('Google Agenda')).toBeInTheDocument();
       expect(screen.getByText('3/5')).toBeInTheDocument();
-      // Routine : « HH:MM · Routine », sans case tant qu'aucun module ne sait la valider.
-      expect(first.closest('.ct-list-row')).toHaveTextContent('08:30 · Routine');
+      // Routine : heure dans la colonne, « Routine » en sous-ligne, sans case tant qu'aucun module ne sait la valider.
+      expect(first.closest('.ct-agenda__line')?.querySelector('.ct-agenda__hour')).toHaveTextContent('08:30');
+      expect(first.closest('.ct-list-row')).toHaveTextContent('Routine');
       expect(screen.queryByRole('checkbox', { name: 'Terminer : Boire de l’eau' })).toBeNull();
     });
 
@@ -225,7 +235,9 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     renderToday(h.container);
     expect(await screen.findByText('Rien de prévu aujourd’hui.')).toBeInTheDocument();
     expect(screen.getByText(/Ajoutez une tâche ci-dessous/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Un jour' })).toBeInTheDocument();
+    // UI-REFONTE-02 : « Un jour » est une entrée du menu « Plus d’options », sans compte à zéro.
+    fireEvent.click(screen.getByRole('button', { name: 'Plus d’options' }));
+    expect(await screen.findByRole('menuitem', { name: 'Un jour' })).toBeInTheDocument();
   });
 
   describe('flèches de jour sur PC (Q10, critère 10)', () => {

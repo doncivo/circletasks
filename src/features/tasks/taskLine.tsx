@@ -24,6 +24,8 @@ export interface TaskSubtitleOptions {
   readonly rule: RecurrenceFields | undefined;
   /** « Un jour » : projets connus ; le nom du projet de la tâche suit l'espace, dans la couleur de l'espace (SD-01 critère 8). */
   readonly projects?: readonly Project[];
+  /** Agenda du jour (UI-REFONTE-02) : l'heure est dans la colonne de gauche, pas dans la sous-ligne. */
+  readonly hideTime?: boolean;
 }
 
 /**
@@ -31,8 +33,10 @@ export interface TaskSubtitleOptions {
  * (`taskLineSegments`), rendu ici (couleur de l'espace, libellés i18n). Partagée par toutes les listes
  * de tâches (Aujourd'hui, Semaine, Un jour) ; `undefined` s'il n'y a rien à afficher.
  */
-export function taskSubtitle(task: Task, { spaces, showSpace, rule, projects }: TaskSubtitleOptions): ReactNode {
-  const segments = taskLineSegments(task, { showSpace, hasRule: rule !== undefined, showProject: projects !== undefined });
+export function taskSubtitle(task: Task, { spaces, showSpace, rule, projects, hideTime }: TaskSubtitleOptions): ReactNode {
+  const segments = taskLineSegments(task, { showSpace, hasRule: rule !== undefined, showProject: projects !== undefined }).filter(
+    (segment) => !(hideTime && segment.kind === 'time'),
+  );
   if (segments.length === 0) return undefined;
   const parts: ReactNode[] = [];
   for (const segment of segments) {

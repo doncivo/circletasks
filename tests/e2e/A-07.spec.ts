@@ -1,5 +1,5 @@
 import { expect, test, type CDPSession, type Locator, type Page } from '@playwright/test';
-import { isPhone, openToday, createTask } from './helpers/today';
+import { createTask, isPhone, openToday, toggleTodayView } from './helpers/today';
 import { openWeek } from './helpers/week';
 
 /**
@@ -166,12 +166,12 @@ test.describe('A-07 — gestes de ligne sur iPhone', () => {
   test('mode édition : aucun geste, rond de sélection à la place de la case (critère 9)', async ({ page }, testInfo) => {
     test.skip(!isPhone(testInfo), 'Gestes tactiles de l’iPhone.');
     await createTask(page, testInfo, { title: 'Geste édition' });
-    await page.getByRole('button', { name: 'Mode édition' }).click();
+    await toggleTodayView(page, 'Mode édition');
     await expect(page.getByRole('group', { name: 'Actions : Geste édition' })).toHaveCount(0);
     const row = swipeRowOf(page, 'Geste édition');
     await swipeRight(page, row);
     await expect(row.locator('.ct-swipe-row__under')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Mode édition' }).click();
+    await toggleTodayView(page, 'Mode édition');
     await expect(page.getByRole('checkbox', { name: 'Terminer : Geste édition' })).toHaveAttribute('aria-checked', 'false');
   });
 

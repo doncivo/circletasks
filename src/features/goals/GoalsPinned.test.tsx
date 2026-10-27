@@ -19,7 +19,8 @@ function renderToday(h: GoalsHarness) {
   );
 }
 
-const cards = () => [...document.querySelectorAll<HTMLElement>('.ct-today-goal')];
+// UI-REFONTE-02 : sur iPhone (440), l'encadré est une ligne `.ct-agenda-goal` nommée « Objectif : titre, avancement ».
+const cards = () => [...document.querySelectorAll<HTMLElement>('.ct-agenda-goal')];
 
 describe('Encadrés d’objectif épinglés dans Aujourd’hui (OB-02)', () => {
   let h: GoalsHarness;
@@ -37,10 +38,10 @@ describe('Encadrés d’objectif épinglés dans Aujourd’hui (OB-02)', () => {
     await seedGoal(h);
     await seedTask(h, { title: 'Envoyer la facture' });
     renderToday(h);
-    const card = await screen.findByRole('button', { name: /^Objectif de la semaine : Finaliser le PRD CircleTasks/ });
+    const card = await screen.findByRole('button', { name: /^Objectif : Finaliser le PRD CircleTasks/ });
     const task = screen.getByRole('button', { name: 'Envoyer la facture' });
     expect(card.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText('OBJECTIF DE LA SEMAINE', { exact: false })).toBeInTheDocument();
+    expect(within(card).getByText('Objectif')).toBeInTheDocument();
   });
 
   it('pas d’encadré pour un objectif non épinglé, d’une autre semaine ou clos', async () => {
@@ -113,7 +114,7 @@ describe('Encadrés d’objectif épinglés dans Aujourd’hui (OB-02)', () => {
   it('toucher l’encadré ouvre l’écran Objectif (critère 4)', async () => {
     await seedGoal(h);
     renderToday(h);
-    fireEvent.click(await screen.findByRole('button', { name: /^Objectif de la semaine : Finaliser/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Objectif : Finaliser/ }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'tasks', screen: 'goals' });
   });
 

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { setWheels } from '../e2e/helpers/schedule';
 import { insertSearchTasks, openSearch, typeSearch } from '../e2e/helpers/search';
-import { createTask, openToday } from '../e2e/helpers/today';
+import { createTask, openToday, toggleTodayView } from '../e2e/helpers/today';
 import { attachTasks, insertGoals } from '../e2e/helpers/goals';
 import { insertChecklists, openChecklists } from '../e2e/helpers/checklists';
 import { insertFocusSessions } from '../e2e/helpers/focus';
@@ -328,7 +328,7 @@ async function prepareScan(page: Page): Promise<void> {
 }
 
 const SCREENS: Screen[] = [
-  { name: 'Main', mockup: 'Main.html', viewport: PHONE, date: WEDNESDAY, data: true },
+  { name: 'Main', mockup: '../maquettes-refonte/Jour.html', viewport: PHONE, date: WEDNESDAY, data: true },
   {
     name: 'Main-Edition',
     mockup: 'Main-Edition.html',
@@ -336,7 +336,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     data: true,
     prepare: async (page) => {
-      await page.getByRole('button', { name: 'Mode édition' }).click();
+      await toggleTodayView(page, 'Mode édition');
     },
   },
   {
@@ -346,7 +346,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     data: true,
     prepare: async (page) => {
-      await page.getByRole('button', { name: 'Vue compacte' }).click();
+      await toggleTodayView(page, 'Vue compacte');
     },
   },
   {
