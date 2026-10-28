@@ -50,9 +50,10 @@ describe('UI-REFONTE-08 — Aujourd’hui PC', () => {
     fireEvent.click(within(bar).getByRole('button', { name: 'Mode édition' }));
     fireEvent.click(compact);
     await waitFor(() => expect(document.querySelector('.ct-list-row[data-compact="true"]')).not.toBeNull());
-    // « Ajouter » ouvre la feuille « Nouvelle tâche ».
+    // « Ajouter » garde le geste PC du bouton flottant (T-01 critères 4 à 8) : focus du champ en ligne, aucune feuille.
     fireEvent.click(within(bar).getByRole('button', { name: 'Ajouter' }));
-    expect(await screen.findByRole('dialog', { name: 'Nouvelle tâche' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Nouvelle tâche')).toHaveFocus();
+    expect(screen.queryByRole('dialog', { name: 'Nouvelle tâche' })).toBeNull();
   });
 
   it('colonne du jour : mois, jour en grand, flèches, ni badge ni filet ; l’agenda du jour avec sa ligne « maintenant » (critère 2)', async () => {
@@ -103,7 +104,7 @@ describe('UI-REFONTE-08 — Aujourd’hui PC', () => {
     expect(within(side).queryByText('Lundi prochain')).toBeNull();
     expect(within(side).getByRole('heading', { name: 'Raccourcis' })).toBeInTheDocument();
     expect(within(side).getByText(/nouvelle tâche/)).toBeInTheDocument();
-    expect(within(side).getByRole('button', { name: /tous les raccourcis/ })).toBeInTheDocument();
+    expect(within(side).getByRole('button', { name: 'Afficher les raccourcis clavier' })).toBeInTheDocument();
   });
 
   it('seconde colonne : jours vides dits (« Rien de prévu ») (critère 3)', async () => {

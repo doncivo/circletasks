@@ -846,6 +846,18 @@
   flex-grow: 1;
 }
 
+/* Les pastilles gardent leur largeur ; « Rechercher » se réduit avant elles (F-03, P-06 : un clic intercepté par la recherche). */
+.ct-today__topbar .ct-filter-bar {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  width: auto;
+}
+
+.ct-today__topbar .ct-search-field-button {
+  flex-shrink: 1;
+  min-width: 160px;
+}
+
 .ct-today__barButton,
 .ct-today__topbar .ct-someday-button--named {
   display: inline-flex;

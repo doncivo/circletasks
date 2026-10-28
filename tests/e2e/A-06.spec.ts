@@ -23,7 +23,8 @@ test.describe('A-06 — vue compacte', () => {
     // UI-REFONTE-02 : sur iPhone la bascule est dans le menu « Plus d’options » et l'heure est dans la colonne de l'agenda (sous-ligne « Pro », ou « En retard … · Pro »).
     const phone = isPhone(testInfo);
     expect(await todayViewState(page, 'Vue compacte')).toBe(false);
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(phone ? /Pro$/ : '09:00 · Pro');
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/); // UI-REFONTE-08 : agenda sur PC aussi
+    void phone;
 
     await toggleTodayView(page, 'Vue compacte');
     expect(await todayViewState(page, 'Vue compacte')).toBe(true);

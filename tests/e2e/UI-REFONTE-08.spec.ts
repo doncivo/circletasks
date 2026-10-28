@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { openApp } from './helpers/app';
 import { createTask, openToday } from './helpers/today';
 import { insertTasks } from './helpers/week';
 
@@ -17,13 +16,12 @@ test.describe('UI-REFONTE-08 — Aujourd’hui PC', () => {
     test(`thème ${scheme} : barre nommée, colonne du jour bornée avec l'agenda, seconde colonne (critères 1 à 4)`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await page.clock.setFixedTime(new Date('2026-09-23T14:32:00+02:00'));
-      await openApp(page);
+      await openToday(page); // une seule ouverture : `openToday` recharge la page, les insertions directes ne survivent pas
       await insertTasks(page, [
         { title: 'Réunion d’équipe', date: '2026-09-24', time: '11:00' },
         { title: 'Clôture mensuelle', date: '2026-09-24' },
         { title: 'Point Capgemini', date: '2026-09-25', time: '09:00' },
       ]);
-      await openToday(page);
       await createTask(page, test.info(), { title: 'Relire le contrat', time: '11:00' });
       await createTask(page, test.info(), { title: 'Sport', time: '18:00' });
 
@@ -71,7 +69,7 @@ test.describe('UI-REFONTE-08 — Aujourd’hui PC', () => {
     });
   }
 
-  test('les bascules nommées commandent le mode édition et la vue compacte ; « Ajouter » ouvre la feuille (critère 1)', async ({ page }) => {
+  test('les bascules nommées commandent le mode édition et la vue compacte ; « Ajouter » met le focus dans le champ (critère 1)', async ({ page }) => {
     await openToday(page);
     await createTask(page, test.info(), { title: 'À sélectionner' });
     const bar = page.locator('.ct-today__topbar');
@@ -83,6 +81,7 @@ test.describe('UI-REFONTE-08 — Aujourd’hui PC', () => {
     await expect(page.locator('.ct-list-row[data-compact="true"]').first()).toBeVisible();
     await bar.getByRole('button', { name: 'Vue compacte' }).click();
     await bar.getByRole('button', { name: 'Ajouter', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Nouvelle tâche' })).toBeVisible();
+    await expect(page.getByLabel('Nouvelle tâche')).toBeFocused();
+    await expect(page.getByRole('dialog', { name: 'Nouvelle tâche' })).toHaveCount(0);
   });
 });

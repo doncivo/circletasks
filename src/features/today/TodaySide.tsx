@@ -6,6 +6,7 @@ import { weekStartOf } from '../../domain/week';
 import { formatTime, formatWeekDayHeader } from '../../i18n/format';
 import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { tTodaySide } from '../../i18n/todaySideText';
+import { t } from '../../i18n';
 import { Kbd } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { bandCountdownTag } from '../events/bandCountdown';
@@ -118,7 +119,7 @@ export function TodaySide({ today, filter, projectFilter, refreshKey, onOpenShor
   );
 
   return (
-    <aside className="ct-today__side" aria-label={tTodaySide('regionLabel')}>
+    <section className="ct-today__side" aria-label={tTodaySide('regionLabel')}>
       {section(tTodaySide('tomorrow'), data?.tomorrow)}
       {section(tTodaySide('thisWeek'), data?.week)}
       <section className="ct-today-side__section">
@@ -130,11 +131,11 @@ export function TodaySide({ today, filter, projectFilter, refreshKey, onOpenShor
           <span>
             <Kbd keys="Ctrl+K" separator=" " /> {tTodaySide('hintSearch')}
           </span>
-          <button type="button" className="ct-today-side__hintButton" onClick={onOpenShortcuts}>
+          <button type="button" className="ct-today-side__hintButton" aria-label={t('shortcutsUi.openHelpLabel')} onClick={onOpenShortcuts}>
             <Kbd keys="Ctrl+/" separator=" " /> {tTodaySide('hintAll')}
           </button>
         </p>
       </section>
-    </aside>
+    </section>
   );
 }

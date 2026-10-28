@@ -124,9 +124,10 @@ test.describe('T-03 — note et icône', () => {
     const changeButton = detail.getByRole('button', { name: 'Changer l’icône' });
     await expect(changeButton).toBeVisible();
 
-    // La ligne Aujourd'hui reflète aussitôt le changement, sans recharger la liste.
+    // UI-REFONTE-08 : l'agenda PC n'affiche pas l'icône (écart T-03 assumé depuis UI-REFONTE-02) ; la ligne reste et le panneau porte l'icône.
     const row = page.locator('.ct-list-row', { hasText: title });
-    await expect(row.locator('svg')).toBeVisible();
+    await expect(row).toBeVisible();
+    await expect(row.locator('svg')).toHaveCount(0);
 
     await changeButton.click();
     await detail.getByRole('button', { name: 'Retirer l’icône' }).click();

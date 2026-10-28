@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { useAppStore } from './features/app/appStore';
@@ -34,7 +34,8 @@ describe('App (coquille, T-01)', () => {
   it('démarre la base réelle et affiche l’écran Aujourd’hui sur l’onglet Tâches', async () => {
     mockViewport(1440);
     render(<App />);
-    expect(await screen.findByText(t('tasks.todayBadge'), {}, { timeout: 10_000 })).toBeInTheDocument();
+    // UI-REFONTE-08 : plus de badge « Aujourd’hui » sur PC ; le jour en grand (h1) tient lieu d'en-tête.
+    await waitFor(() => expect(document.querySelector('main h1.ct-today__day')).not.toBeNull(), { timeout: 10_000 });
     expect(useAppStore.getState().dbStatus).toBe('ready');
     const tasksTab = screen.getByRole('button', { name: t('nav.tabs.tasks') });
     expect(tasksTab).toHaveAttribute('aria-current', 'page');

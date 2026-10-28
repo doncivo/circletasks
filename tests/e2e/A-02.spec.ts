@@ -74,7 +74,7 @@ test.describe('A-02 — réordonner la liste', () => {
     test.skip(isPhone(testInfo), 'Au toucher, le glisser passe par la poignée du mode édition (A-05).');
     const [a, b, c] = ['A', 'B', 'C'].map((n) => `${n} pc`) as [string, string, string];
     for (const name of [a, b, c]) await createTask(page, testInfo, { title: name });
-    const rows = page.getByRole('listitem');
+    const rows = page.getByRole('listitem').filter({ has: page.locator('.ct-list-row') }); // UI-REFONTE-08 : la ligne « maintenant » de l'agenda est aussi un listitem
     const first = await rows.nth(0).boundingBox();
     const last = await rows.nth(2).boundingBox();
     if (!first || !last) throw new Error('lignes introuvables');

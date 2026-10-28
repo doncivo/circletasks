@@ -11,7 +11,7 @@ import { buildTodayList } from '../../domain/todayList';
 import type { LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { Icon, openNow, useDelayedFlag, useLayout } from '../../ui';
+import { Fab, Icon, openNow, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -210,7 +210,6 @@ export function TodayScreen() {
     if (layout === 'pc') inlineInputRef.current?.focus();
     else openNow(() => setSheetOpen(true));
   }, [layout]);
-  const openSheet = useCallback((): void => openNow(() => setSheetOpen(true)), []);
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
   // D-01 : « Ajout rapide » de la zone de notification = même comportement que Ctrl+N. Abonnement au store plutôt qu'état lu au
@@ -285,7 +284,7 @@ export function TodayScreen() {
         <span>{t('today.barReport')}</span>
       </button>
       <SomedayButton showLabel />
-      <button type="button" className="ct-today__barButton" aria-label={t('common.add')} onClick={openSheet}>
+      <button type="button" className="ct-today__barButton" aria-label={t('common.add')} onClick={openCreate}>
         <Icon icon={Plus} size={18} />
         <span>{t('common.add')}</span>
       </button>
@@ -373,9 +372,7 @@ export function TodayScreen() {
         /* Jour.html : champ « Ajouter une tâche », Scanner et « + » sur une seule rangée, au-dessus de la zone de sécurité ; la bascule édition est dans le menu. */
         <div className="ct-agenda__add">
           <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} scanInline />
-          <button type="button" className="ct-fab" aria-label={t('common.add')} onClick={openSheet}>
-            <Icon icon={Plus} size={28} color="var(--ct-color-accent-on)" strokeWidth={2.2} />
-          </button>
+          <Fab onClick={openCreate} label={t('common.add')} />
         </div>
       ) : (
         /* PC-Jour.html : champ d'ajout avec « Date » (T-14) et « Scanner » (Q-04) en bas de la colonne du jour ; plus de bouton flottant. */

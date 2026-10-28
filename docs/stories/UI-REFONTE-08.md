@@ -19,7 +19,7 @@ Le PC cesse d'étirer la mise en page du téléphone (règle 7 : on borne et on 
 | A-01 | badge « AUJOURD'HUI » sur le jour courant (PC) | retiré sur PC comme sur iPhone (UI-REFONTE-02) ; la ligne « maintenant » et `data-today` disent le jour courant ; e2e A-01 adapté |
 | A-05 | « Interrupteur « − » en bas à gauche » (PC) | bascule nommée « Édition » dans la barre fixe (libellé accessible « Mode édition » conservé) |
 | A-06 | « Icône à deux flèches à droite de la date » | bascule nommée « Compacte » dans la barre fixe (libellé « Vue compacte » conservé) |
-| Maquette | bouton flottant retiré, rien à sa place | « Ajouter » nommé dans la barre fixe (feuille « Nouvelle tâche », Ctrl N inchangé) : la feuille reste le seul accès aux options de création, la saisie en ligne reste le geste rapide |
+| Maquette | bouton flottant retiré, rien à sa place | « Ajouter » nommé dans la barre fixe, même geste que le bouton flottant sur PC : focus du champ en ligne (T-01 critères 4 à 8, Q-05 critère 9), aucune feuille ; Ctrl N inchangé |
 | Maquette | « dans 40 j » dans « Cette semaine » | « J-40 » (forme du PRD E-04, partagée) |
 | PC-Aujourdhui.html (septembre) | liste à cartes, bandeaux, encadré d'objectif | remplacés par l'agenda du jour, les lignes d'événements et la ligne d'objectif de UI-REFONTE-02 : une seule grammaire du jour sur les deux plateformes |
 
@@ -61,7 +61,15 @@ Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, 
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI, premier passage (run 40724750323, head e0114e34)** : 30 verts, 16 rouges (Vitest dom 2/3 et 3/3, e2e pc 1/4 à 4/4, fumée Windows, « suite verte »). Causes, toutes du côté des tests ou de deux écarts de l'écran, aucune donnée touchée :
+  - **iPhone changé par inadvertance** : le bouton flottant rendu « en ligne » avait perdu les 64 px du composant `Fab` (`QuickCaptureIphone.test`, critère 5 de la fiche). Correction : `Fab` de nouveau sur iPhone, ligne `src/ui/Fab.tsx` rétablie dans la liste blanche.
+  - **« Ajouter » (barre PC) ouvrait la feuille** : contraire à T-01 critères 4 à 8 et Q-05 critère 9 (focus du champ en ligne sur PC) ; e2e `T-01`, `Q-05` rouges (deux éléments « Nouvelle tâche »). Correction : « Ajouter » fait le geste PC du bouton flottant (focus du champ) ; écart de la fiche corrigé ; test DOM et e2e de la story alignés.
+  - **Pastilles recouvertes** : dans la barre fixe, `.ct-filter-bar` se réduisait et « Rechercher » interceptait les clics sur « Perso » / « Tout » (`F-03`, `P-06`). Correction : pastilles à largeur fixe, la recherche se réduit en premier.
+  - **Deux `complementary`** : la seconde colonne était un `aside` (`D-04` : `getByRole('complementary')` ambigu). Correction : `section` nommée ; le bouton « Ctrl / Tous les raccourcis » porte le libellé « Afficher les raccourcis clavier » (D-04 critère 5, le pied PC n'existe plus).
+  - **Badge « Aujourd’hui » attendu sur PC** : `smoke.spec`, `App.test`, fumée Windows `pc-demarrage.spec` ; adaptés sur `h1.ct-today__day` (trace).
+  - **Sous-ligne « 09:00 · Pro » attendue sur PC** : l'agenda met l'heure dans sa colonne et « En retard de … » devant l'espace (`A-01`, `A-06`, `A-08`, `Q-01`, `Q-03`, `Q-06`) ; adaptés comme la branche iPhone de UI-REFONTE-02 (`.ct-agenda__hour` + sous-ligne `/Pro$/`).
+  - **Autres adaptations tracées** : `A-02` (la ligne « maintenant » est un `listitem`), `OB-02` (ligne « Objectif · titre » sur PC aussi), `T-03` (l'agenda n'affiche pas l'icône ; le panneau la porte), `UI-REFONTE-08.spec` (une seule ouverture de l'app : `openToday` recharge la page et perdait les insertions directes).
+- **CI, second passage** : à consigner.
 
 ## Passe code-reviewer
 
