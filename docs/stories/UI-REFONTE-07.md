@@ -44,7 +44,16 @@ Les deux autres refontes ; le PRD ; le volet PC ; les bandeaux d'Aujourd'hui et 
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit 04c8baab (tests seuls) : `src/features/events/EventsRefonte.test.tsx` (6 tests, 5 rouges ; le test « sans calendrier de fériés » est vert dès le départ, attendu), `tests/e2e/UI-REFONTE-07.spec.ts` (3 tests, joués par la CI seule).
+- **Catalogue à la demande** `src/i18n/eventsRefonteText.ts` : « Masquer les fériés », « Afficher les fériés », « Vue calendrier », « Événement ». Dans le départ, `events.holidaySubtitle` devient « Jour férié en {country} » (`en` : « Public holiday in {country} »), pour les deux mises en page.
+- **Écran** (`EventsScreen.tsx`) : état `hideHolidays` (session de l'écran, jamais écrit) ; `entries` filtrées des fériés sur iPhone quand il est actif (les mois sans ligne disparaissent avec `groupByMonth`, l'état vide suit) ; filet décoratif sur PC seulement ; rangée `.ct-events__pillsRow` : pastilles d'espace puis `.ct-events__holidaysToggle` (iPhone, calendriers activés, hors filtre projet) ; `tag` nul pour un férié sur iPhone ; rangée du bas iPhone : « Vue calendrier » (même feuille « Calendrier ») et `.ct-events__addButton` « Événement » (`Plus`, libellé accessible « Ajouter un événement », même `openAdd`) ; PC garde son bouton flottant « Ajouter ».
+- **Feuille de style** (`EventsScreen.css`) : pastille des fériés, fériés grisés (`--ct-color-agenda-hour` / `-past`) sur iPhone, rangée du bas collante au-dessus de `--ct-safe-area-bottom`, « Vue calendrier » au trait prenant la largeur, bouton « Événement » plein ; jetons existants, aucune paire de contraste nouvelle.
+- **Tests adaptés, avec trace « UI-REFONTE-07 »** : `EventsHolidays.test` (sous-ligne en toutes lettres, plus de badge dans la liste iPhone ; les bandeaux d'Aujourd'hui gardent « Férié FR »), `EventsCountdown.test` (férié sans étiquette), `EventsScreen.test` (« Vue calendrier ») ; e2e `E-01` (« Vue calendrier »), `E-03` (sous-ligne ; badges sur PC seulement), `capture.spec` (maquette `Evenements-v2.html`).
+- **Vérifié en local** : typage, lint, suites Vitest `events` (89 tests), garde du bundle 66/66 (depuis un worktree complet).
+
+## Mesure du bundle
+
+Avant push (commit 67af8e20, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 592 octets normalisés** (brute 337 566), **marge 20 808** ; **+6** face à `main` 337 586 (la nouvelle valeur de `holidaySubtitle`) ; l'écran et son catalogue sont à la demande. Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 
@@ -52,4 +61,10 @@ Les deux autres refontes ; le PRD ; le volet PC ; les bandeaux d'Aujourd'hui et 
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `04c8baab..67af8e20` (écran, catalogue, textes, feuille de style, tests) avant le premier passage en CI.
+
+- **Vérifié sans remarque** : le filtre des fériés n'agit que sur iPhone et ne touche ni `holidays` (toujours chargés : le volet PC, la grille et les points restent justes) ni les réglages ; `dots` de la grille du mois se calcule sur `entries` (filtrées) : fériés masqués = points de fériés masqués dans la feuille « Calendrier », cohérent ; `firstUpcomingEntry` à l'ouverture lit aussi `entries`, l'état initial n'est pas filtré ; la pastille n'apparaît ni sans calendrier activé ni sous un filtre projet (où la liste est vide par règle E-01 critère 10) ; `tag` nul seulement pour un férié sur iPhone (les comptes à rebours des événements propres et externes restent) ; libellés accessibles inchangés (« Ajouter un événement », « Calendrier » pour la feuille) ; aucun texte en dur hors catalogue ; PC : seul `holidaySubtitle` change.
+- **Point d'attention laissé à la QA** : « Masquer les fériés » + aucun événement propre → état vide « Aucun événement en 2026 » avec le bouton d'ajout, alors que des fériés existent (voulu, critère 3) ; la pastille reste visible pour les remontrer.
+- **Point d'attention appareil** : rangée du bas collante au-dessus de la zone de sécurité ; lisibilité des fériés en gris sur le thème sombre (`--ct-color-agenda-hour` déjà validé par le contraste de l'agenda).
+
+Verdict : approuvée sous réserve de la CI complète (QA à consigner).
