@@ -45,7 +45,18 @@ Les trois autres refontes ; le PRD ; le volet PC ; la feuille « Modifier la che
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit f02e0b35 (tests seuls) : `src/features/checklists/ChecklistsRefonte.test.tsx` (7 tests, 6 rouges ; le test « PC inchangé » est vert dès le départ, attendu), `tests/e2e/UI-REFONTE-06.spec.ts` (3 tests, joués par la CI seule). Trois attentes corrigées avant le vert, sans toucher au code : le bandeau « Annuler » est aussi un `role="status"`, la progression se lit dans `.ct-checklist-progress`.
+- **Catalogue à la demande** `src/i18n/checklistsRefonteText.ts` : « {checked} sur {total} », `clearCheckedLabel` (« Supprimer les 2 éléments cochés », « Supprimer l’élément coché », « Supprimer les éléments cochés » à zéro). Aucune clé du départ ne change ; `DropdownSelect` (départ) reçoit `textAs?: 'span' | 'h1'` (+18 octets mesurés).
+- **Rangée du titre** (`ChecklistsScreen.tsx`, iPhone) : `DropdownSelect` `textAs="h1"` avec la classe `ct-checklists__chooser--title` (Fraunces 36 px, chevron, sans cadre ; le `<select>` natif « Choisir une checklist » recouvre toujours le bouton) ; à droite, `.ct-checklists__topActions` : « Nouvelle checklist » (`Plus`, masqué sous un filtre de projet comme l'état vide) et « Modifier la checklist » (`Pencil`, même ouverture de la feuille) ; le bouton flottant et la rangée du bas disparaissent ; sans checklist, `h1` « Checklists » et le « + ».
+- **Détail** (`ChecklistDetail.tsx`) : sur iPhone, ni en-tête (icône, titre, bascule, crayon) ni filet ; `ChecklistProgressBar mobile` avec « Réorganiser » / « Terminer » comme `trailing` (`ReactNode` accepté) ; `compact` transmis aux éléments sur PC seulement ; libellé du bas par `clearCheckedLabel(progress.checked)` sur iPhone, « Effacer les cochés » sur PC ; confirmation, annulation, focus et « Tout décocher » inchangés.
+- **Progression** (`ChecklistProgressBar.tsx`) : `data-layout="mobile"`, texte « 2 sur 3 » (libellé accessible « Progression : 2 sur 3 » inchangé), barre et remplissage de 6 px en encre ; PC inchangé.
+- **Feuille de style** (`Checklists.css`) : titre-sélecteur, actions du haut, progression fine, éléments en lignes sans carte, champ d'ajout arrondi au trait plein, rangée du bas collante au-dessus de `--ct-safe-area-bottom` avec deux libellés texte (rouge seulement quand il y a de quoi) ; jetons existants, aucune paire de contraste nouvelle.
+- **Tests adaptés, avec trace « UI-REFONTE-06 »** : DOM à 440 : « 3 sur 6 » (`ChecklistsBatch`, `ChecklistsCheck`, `ChecklistsQa`, `ChecklistsTemplate`), bouton « Supprimer … cochés » (`ChecklistsBatch`, `ChecklistsQa`), vue compacte jouée à 1440 (`ChecklistsCheck`) ; e2e : aides `progressText` et `clearCheckedButton` dans `helpers/checklists.ts`, `C-02` à `C-05` (progression par mise en page, bouton du bas, « Vue compacte » PC seulement), `capture.spec` (maquette `Checklists-v2.html`).
+- **Vérifié en local** : typage, lint, suites Vitest `checklists` (98 tests), garde du bundle 66/66 (depuis un worktree complet).
+
+## Mesure du bundle
+
+Avant push (commit 17e087f8, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 604 octets normalisés** (brute 337 589), **marge 20 796** ; **+18** face à `main` 337 586 : la propriété `textAs` de `DropdownSelect` (départ) ; l'écran et son catalogue sont à la demande. Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 
@@ -53,4 +64,10 @@ Les trois autres refontes ; le PRD ; le volet PC ; la feuille « Modifier la che
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `f02e0b35..17e087f8` (écran, détail, progression, `DropdownSelect`, catalogue, feuilles de style, tests) avant le premier passage en CI.
+
+- **Vérifié sans remarque** : le nom accessible du `h1` est le seul titre (le `<select>` est un frère, pas un enfant : son option choisie n'entre pas dans le nom du titre ; l'aide e2e `chooseChecklist` attend ce `h1`) ; « Modifier la checklist » et « Nouvelle checklist » gardent leurs libellés et leurs effets (`setEditor('edit')`, `openCreate`) ; « Réorganiser » garde `aria-pressed` et `onReorderingChange` (le changement de checklist le quitte toujours, l'état vit dans l'écran) ; la confirmation d'effacement, la restitution du focus et « Tout décocher » sont textuellement inchangés ; le PC garde en-tête, filet, bascule, « 3 / 6 », « Effacer les cochés » et son bouton flottant ; `compact` n'est plus appliqué aux éléments sur iPhone sans être écrit ; `ChecklistProgressBar` accepte un `ReactNode` en `trailing` et n'en rend rien quand il est vide ; `clearCheckedLabel` ne change pas le `data-variant="danger"` ni `aria-disabled` à zéro (le gris vient de la feuille de style) ; aucun texte en dur hors catalogue.
+- **Point d'attention laissé à la QA** : un titre très long en Fraunces 36 px passe à la ligne (`overflow-wrap: anywhere`) et pousse les deux boutons d'icône vers le haut (`align-items: flex-start`) : voulu ; à voir sur l'appareil avec « Choisir une checklist » (roue iOS).
+- **Point d'attention appareil** : rangée du bas collante au-dessus de la zone de sécurité, clavier ouvert sur le champ d'ajout.
+
+Verdict : approuvée sous réserve de la CI complète (QA à consigner).
