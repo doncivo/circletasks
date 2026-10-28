@@ -21,6 +21,7 @@ describe('Cas limites QA du lot « Un jour » (SD-01, SD-03, S-06)', () => {
   afterEach(() => teardownSomeday(h));
 
   it('SD-01 critère 6 : le badge plafonne à « 99+ » au-delà de 99 tâches', async () => {
+    mockViewport(1440); // UI-REFONTE-02 : le badge n'existe que sur l'icône PC ; sur iPhone, le compte est dans le menu « Plus d’options »
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Un jour' });
     for (let n = 1; n <= 100; n += 1) await seedSomeday(h, { title: `T${String(n)}` });
@@ -29,6 +30,7 @@ describe('Cas limites QA du lot « Un jour » (SD-01, SD-03, S-06)', () => {
   });
 
   it('SD-01 critère 6 : 99 tâches affichent « 99 » exactement', async () => {
+    mockViewport(1440); // UI-REFONTE-02 : idem
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Un jour' });
     for (let n = 1; n <= 99; n += 1) await seedSomeday(h, { title: `T${String(n)}` });

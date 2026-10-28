@@ -133,8 +133,9 @@ describe('Anniversaire et date importante (E-02), iPhone', () => {
     try {
       await seedEvent(h, { title: 'Anniversaire de Karim', date: '1992-10-02', kind: 'birthday', birthYear: 1992, repeat: 'yearly' });
       renderToday(h.container);
-      const band = (await screen.findByText('Anniversaire de Karim')).closest('li');
-      expect(band).toHaveAttribute('data-kind', 'birthday');
+      // UI-REFONTE-02 : sur iPhone, ligne de l'agenda dont la marque ronde porte le type.
+      const line = (await screen.findByText('Anniversaire de Karim')).closest('.ct-agenda__line') as HTMLElement;
+      expect(line.querySelector('.ct-agenda__eventMark')).toHaveAttribute('data-kind', 'birthday');
     } finally {
       unregisterEventsSource();
     }

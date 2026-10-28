@@ -182,6 +182,13 @@ describe('bundle de départ (index.html)', () => {
     expect(Object.values(manifest).some((chunk) => (chunk.file.endsWith('.js') || chunk.file.endsWith('.css')) && readFileSync(join(outDir, chunk.file), 'utf8').includes(marker))).toBe(true);
   });
 
+  // UI-REFONTE-02 : le menu « Plus d’options » d'Aujourd'hui (iPhone) et son catalogue sont un bloc à la demande, hors du départ.
+  it.each(['ct-today-menu__item', 'Monthly report'])('UI-REFONTE-02 : %s reste hors du départ', (marker) => {
+    const start = startChunks().filter((chunk) => chunk.file.endsWith('.js') || chunk.file.endsWith('.css'));
+    for (const chunk of start) expect(readFileSync(join(outDir, chunk.file), 'utf8').includes(marker), chunk.file).toBe(false);
+    expect(Object.values(manifest).some((chunk) => (chunk.file.endsWith('.js') || chunk.file.endsWith('.css')) && readFileSync(join(outDir, chunk.file), 'utf8').includes(marker))).toBe(true);
+  });
+
   // Y-04 critère 12, revue 7 : le client du simulateur de dossier (`__ctSyncSim`, route `/rpc`, codage `__ctMap`) n'est installé
   // qu'en développement (`import.meta.env.DEV`) ; aucun fichier JavaScript du build n'en contient la moindre trace.
   it('aucune trace du simulateur de synchro dans le JavaScript de production', () => {

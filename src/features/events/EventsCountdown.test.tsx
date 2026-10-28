@@ -191,10 +191,11 @@ describe('Compte à rebours dans les bandeaux d’Aujourd’hui et de la Semaine
     await seedEvent(h, { title: 'Anniversaire', date: '1992-10-02', kind: 'birthday', repeat: 'yearly', birthYear: 1992, important: true });
     await seedEvent(h, { title: 'Ordinaire', date: '2026-10-02', important: false });
     renderToday(h.container);
-    const band = (await screen.findByText('Anniversaire')).closest('li') as HTMLElement;
-    expect(band.querySelector('.ct-today-event__tag')).toHaveTextContent('Aujourd’hui');
-    const ordinary = screen.getByText('Ordinaire').closest('li') as HTMLElement;
-    expect(ordinary.querySelector('.ct-today-event__tag')).toBeNull();
+    // UI-REFONTE-02 : sur iPhone l'événement est une ligne de l'agenda, le compte à rebours en sous-ligne (.ct-agenda__countdown).
+    const band = (await screen.findByText('Anniversaire')).closest('.ct-agenda__line, li') as HTMLElement;
+    expect(band.querySelector('.ct-agenda__countdown, .ct-today-event__tag')).toHaveTextContent('Aujourd’hui');
+    const ordinary = screen.getByText('Ordinaire').closest('.ct-agenda__line, li') as HTMLElement;
+    expect(ordinary.querySelector('.ct-agenda__countdown, .ct-today-event__tag')).toBeNull();
   });
 
   it('désactiver l’interrupteur retire le tag des bandeaux sans toucher la liste Événements (critère 5)', async () => {

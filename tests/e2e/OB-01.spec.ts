@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { closeGoalScreen, goalButton, goalScreen, goalSections, goalTitleField, openGoalScreen } from './helpers/goals';
+import { closeGoalScreen, goalScreen, goalSections, goalTitleField, openGoalScreen } from './helpers/goals';
 import { createTask } from './helpers/today';
 
 /**
@@ -15,7 +15,7 @@ test.describe('OB-01 — fixer un objectif pour la semaine', () => {
     if (testInfo.project.name === 'iphone') {
       await expect(page.getByRole('button', { name: 'Retour' })).toBeVisible();
       await page.getByRole('button', { name: 'Retour' }).click();
-      await expect(goalButton(page)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Plus d’options' })).toBeVisible(); // UI-REFONTE-02 : l'accès à Objectif est dans ce menu sur iPhone
     } else {
       await expect(page.getByRole('complementary', { name: 'Objectif de la semaine' })).toBeVisible();
       await page.getByRole('button', { name: 'Fermer' }).click();

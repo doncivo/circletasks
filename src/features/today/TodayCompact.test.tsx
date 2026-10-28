@@ -2,9 +2,11 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { createAppContainer } from '../app/container';
-import { mockViewport, renderToday, seedTask, setupToday, teardownToday, type TodayHarness } from './testKit';
+import { menuToggleState, mockViewport, renderToday, seedTask, setupToday, teardownToday, toggleViaMenu, type TodayHarness } from './testKit';
 
-const toggle = () => screen.getByRole('button', { name: 'Vue compacte' });
+// UI-REFONTE-02 : sur iPhone l'interrupteur est une entrée du menu « Plus d’options » ; sur PC le bouton de l'écran (voir testKit).
+const toggle = () => toggleViaMenu('Vue compacte');
+const toggled = () => menuToggleState('Vue compacte');
 
 describe('Aujourd’hui : vue compacte (A-06)', () => {
   let h: TodayHarness;
@@ -22,11 +24,13 @@ describe('Aujourd’hui : vue compacte (A-06)', () => {
   it('une ligne par élément : sous-lignes et icône masquées, pastille, heure à droite seulement si elle existe (critères 1, 2)', async () => {
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Envoyer la facture' });
-    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
-    expect(row('Envoyer la facture').querySelector('.ct-list-row__subtitle')).toHaveTextContent('09:00 · Pro');
+    expect(await toggled()).toBe(false);
+    // UI-REFONTE-02 : l'heure est dans la colonne de l'agenda, la sous-ligne ne porte que l'espace.
+    expect(row('Envoyer la facture').querySelector('.ct-list-row__subtitle')).toHaveTextContent(/Pro$/);
+    expect(row('Envoyer la facture').closest('.ct-agenda__line')?.querySelector('.ct-agenda__hour')).toHaveTextContent('09:00');
 
-    fireEvent.click(toggle());
-    expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+    await toggle();
+    expect(await toggled()).toBe(true);
     const facture = row('Envoyer la facture');
     expect(facture).toHaveAttribute('data-compact', 'true');
     expect(facture.querySelector('.ct-list-row__subtitle')).toBeNull();
@@ -35,15 +39,15 @@ describe('Aujourd’hui : vue compacte (A-06)', () => {
     expect(facture).not.toHaveTextContent('Pro');
     expect(row('Sans heure').querySelector('.ct-list-row__time')).toBeNull();
 
-    fireEvent.click(toggle());
-    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    await toggle();
+    expect(await toggled()).toBe(false);
     expect(row('Envoyer la facture').querySelector('.ct-list-row__subtitle')).not.toBeNull();
   });
 
   it('le choix est mémorisé et relu au redémarrage, séparément des autres écrans (critère 5)', async () => {
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Envoyer la facture' });
-    fireEvent.click(toggle());
+    await toggle();
     await waitFor(async () => expect((await h.container.data.repos.settings.get('view.compact')).today).toBe(true));
     expect(await h.container.data.repos.settings.get('view.compact')).toEqual({ today: true, routines: false, checklists: false, someday: false });
     cleanup();
@@ -51,19 +55,19 @@ describe('Aujourd’hui : vue compacte (A-06)', () => {
     const restarted = createAppContainer({ clock: h.db.clock, hlc: createHlcClock({ clock: h.db.clock, deviceId: h.db.deviceId }), data: h.db.data });
     renderToday(restarted);
     await screen.findByRole('button', { name: 'Envoyer la facture' });
-    await waitFor(() => expect(toggle()).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(async () => expect(await toggled()).toBe(true));
   });
 
   it('terminer, ouvrir le détail et le mode édition fonctionnent en vue compacte (critère 6)', async () => {
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Envoyer la facture' });
-    fireEvent.click(toggle());
+    await toggle();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Sans heure' }));
     await screen.findByRole('checkbox', { name: 'Rouvrir : Sans heure' });
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
     expect(await screen.findByRole('dialog', { name: 'Détail de la tâche' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mode édition' }));
+    await toggleViaMenu('Mode édition');
     expect(screen.getByRole('button', { name: 'Sélectionner : Envoyer la facture' })).toBeInTheDocument();
   });
 
@@ -72,7 +76,7 @@ describe('Aujourd’hui : vue compacte (A-06)', () => {
     if (id) await h.container.data.repos.tasks.update(id, { note: 'Note secrète' });
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Envoyer la facture' });
-    fireEvent.click(toggle());
+    await toggle();
     expect(screen.queryByText('Note secrète')).toBeNull();
   });
 });

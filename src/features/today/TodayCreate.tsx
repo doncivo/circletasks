@@ -14,6 +14,8 @@ export interface TodayAddRowProps {
   readonly inputRef: RefObject<HTMLInputElement>;
   /** Crée la tâche ; rend true si elle l'est (le champ se vide). `choice` : date réglée à la main (PC), qui l'emporte sur celle du texte. */
   readonly onSubmit: (capture: CaptureInput, choice: DateChoice | null) => Promise<boolean>;
+  /** Agenda iPhone (UI-REFONTE-02, Jour.html) : « Scanner » à droite du champ, sur la même rangée que le « + ». */
+  readonly scanInline?: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ export interface TodayAddRowProps {
  * (T-14) est intégré à droite du même cadre gris ; sur iPhone, la date se règle dans la feuille « Nouvelle tâche » (Fab).
  * Le texte est analysé à la frappe (Q-06, Q-02) : « Relancer client demain 9h #pro @mission » ; l'aperçu est sous le champ.
  */
-export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowProps) {
+export function TodayAddRow({ layout, today, inputRef, onSubmit, scanInline = false }: TodayAddRowProps) {
   const [choice, setChoice] = useState<DateChoice | null>(null);
   const busy = useRef(false);
   const projectFilter = useEffectiveProjectFilter();
@@ -69,12 +71,12 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
         {/* Bouton d'envoi masqué : avec deux champs texte (titre, date), Entrée ne soumet le formulaire que par lui. */}
         <button type="submit" className="ct-visually-hidden" tabIndex={-1} aria-hidden="true" />
       </form>
-      {layout === 'pc' && <ScanButton layout={layout} />}
+      {(layout === 'pc' || scanInline) && <ScanButton layout={layout} />}
       </div>
       <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
       <DictationHelp dictation={dictation} />
       <ListeningSheet dictation={dictation} />
-      {layout === 'mobile' && (
+      {layout === 'mobile' && !scanInline && (
         <div className="ct-today__scanRow">
           <ScanButton layout={layout} />
         </div>

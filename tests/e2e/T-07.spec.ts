@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
+import { clickTodayHeaderAction } from './helpers/today';
 
 /**
  * T-07 : Je consulte les tâches terminées.
@@ -35,7 +36,7 @@ async function completeTask(page: Page, title: string): Promise<void> {
 }
 
 async function openDoneScreen(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+  await clickTodayHeaderAction(page, 'Rapport mensuel'); // UI-REFONTE-02 : entrée du menu sur iPhone
   await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Tâches terminées' }).click();
   await expect(page.getByRole('heading', { name: 'Tâches terminées', level: 1 })).toBeVisible();

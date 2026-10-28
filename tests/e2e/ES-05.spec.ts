@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { addProject, backToToday, detailOf, filterPill, openSpacesScreen, setTaskProject } from './helpers/spaces';
-import { createTask, isPhone, rowOf } from './helpers/today';
+import { createTask, isPhone, rowOf, toggleTodayView } from './helpers/today';
 
 /**
  * ES-05 — Je déplace un élément d'un espace ou projet à l'autre.
@@ -12,7 +12,8 @@ import { createTask, isPhone, rowOf } from './helpers/today';
  * « Modifier »). Le formulaire de routine et la conservation de la date, des rappels et de l'objectif : Vitest. `pc` et `iphone`.
  */
 test.describe('ES-05 — déplacer un élément', () => {
-  const toggle = (page: Page) => page.getByRole('button', { name: 'Mode édition' });
+  // UI-REFONTE-02 : sur iPhone, « Mode édition » est une entrée du menu « Plus d’options » (helpers/today).
+  const toggle = (page: Page) => toggleTodayView(page, 'Mode édition');
   const status = (page: Page) => page.getByRole('status');
   const subtitle = (page: Page, title: string) => rowOf(page, title).locator('.ct-list-row__subtitle, .ct-list-row__meta');
 
@@ -31,7 +32,7 @@ test.describe('ES-05 — déplacer un élément', () => {
 
   test('« Perso · aucun projet » déplace les deux tâches en une action ; Annuler restaure espace et projet (critères 4, 5)', async ({ page }, testInfo) => {
     const [a, b] = await seed(page, testInfo);
-    await toggle(page).click();
+    await toggle(page);
     await page.getByRole('button', { name: `Sélectionner : ${a}` }).click();
     await page.getByRole('button', { name: `Sélectionner : ${b}` }).click();
     await page.getByRole('toolbar', { name: 'Actions sur la sélection' }).getByRole('button', { name: 'Déplacer' }).click();
@@ -40,7 +41,7 @@ test.describe('ES-05 — déplacer un élément', () => {
     await expect(dialog.getByRole('button', { name: 'Perso · aucun projet' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Perso · aucun projet' }).click();
     await expect(status(page)).toContainText('2 tâches déplacées dans Perso');
-    await toggle(page).click();
+    await toggle(page);
     await expect(subtitle(page, a)).toHaveText('Perso');
     await expect(subtitle(page, b)).toHaveText('Perso');
     await status(page).getByRole('button', { name: 'Annuler' }).click();
@@ -54,7 +55,7 @@ test.describe('ES-05 — déplacer un élément', () => {
   test('sous le filtre Pro, les tâches déplacées dans Perso quittent la liste aussitôt ; Ctrl+Z les rend (critères 5, 6)', async ({ page }, testInfo) => {
     const [a, b] = await seed(page, testInfo);
     await filterPill(page, 'Pro').click();
-    await toggle(page).click();
+    await toggle(page);
     await page.getByRole('button', { name: `Sélectionner : ${a}` }).click();
     await page.getByRole('toolbar', { name: 'Actions sur la sélection' }).getByRole('button', { name: 'Déplacer' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Perso · aucun projet' }).click();

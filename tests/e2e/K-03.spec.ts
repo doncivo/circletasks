@@ -84,7 +84,8 @@ test.describe('K-03 — rafraîchissement des agendas externes', () => {
     const today = await browserToday(page);
     await connect(page, [timed('point', 'Point client', today, '08:00')]);
     await todayTab(page).click();
-    const band = page.locator('.ct-today-event').filter({ hasText: 'Point client' });
+    // UI-REFONTE-02 : sur iPhone l'événement est une ligne de l'agenda (rond au trait, source en sous-ligne) ; sur PC, le bandeau.
+    const band = page.locator('.ct-today-event, .ct-agenda__line:has(.ct-agenda__eventMark)').filter({ hasText: 'Point client' });
     await expect(band).toHaveCount(1);
     await expect(band).toContainText('Google Agenda');
     await expect(band.getByRole('checkbox')).toHaveCount(0);

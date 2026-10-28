@@ -192,8 +192,9 @@ describe('Jours fériés dans Aujourd’hui et la Semaine (E-03 D5)', () => {
 
   it('bandeau en lecture seule le jour du férié, visible sous tous les filtres d’espace', async () => {
     renderToday(h.container);
-    const band = (await screen.findByText('Toussaint')).closest('li') as HTMLElement;
-    expect(band).toHaveAttribute('data-kind', 'holiday');
+    // UI-REFONTE-02 : sur iPhone, ligne de l'agenda dont la marque ronde porte le type ; sur PC, le bandeau.
+    const band = (await screen.findByText('Toussaint')).closest('.ct-agenda__line, li') as HTMLElement;
+    expect(band.querySelector('.ct-agenda__eventMark') ?? band).toHaveAttribute('data-kind', 'holiday');
     expect(within(band).getByText('Férié FR')).toBeInTheDocument();
     expect(within(band).queryByRole('button')).toBeNull();
     act(() => useAppStore.getState().setSpaceFilter(SPACE_PERSO_ID));

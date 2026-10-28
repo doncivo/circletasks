@@ -181,11 +181,12 @@ describe('Cartes « Reconduire / Clore » en tête d’Aujourd’hui (OB-05)', (
     fireEvent.click(await screen.findByRole('button', { name: /^Reconduire/ }));
     await waitFor(() => expect(screen.queryByText(/^Objectif non atteint :/)).toBeNull());
     expect((await h.container.data.repos.goals.getById(old.id))?.status).toBe('closed');
-    await waitFor(() => expect(document.querySelectorAll('.ct-today-goal')).toHaveLength(1));
-    expect(document.querySelector('.ct-today-goal')).toHaveTextContent('Finaliser le PRD');
+    // UI-REFONTE-02 : sur iPhone (440), l'encadré est la ligne .ct-agenda-goal.
+    await waitFor(() => expect(document.querySelectorAll('.ct-today-goal, .ct-agenda-goal')).toHaveLength(1));
+    expect(document.querySelector('.ct-today-goal, .ct-agenda-goal')).toHaveTextContent('Finaliser le PRD');
     fireEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
     await waitFor(() => expect(screen.getByText('Objectif non atteint : Finaliser le PRD')).toBeInTheDocument());
-    expect(document.querySelectorAll('.ct-today-goal')).toHaveLength(0);
+    expect(document.querySelectorAll('.ct-today-goal, .ct-agenda-goal')).toHaveLength(0);
   });
 
   it('« Clore » retire la carte sans créer d’objectif (critère 5)', async () => {

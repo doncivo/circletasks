@@ -4,7 +4,7 @@ import { addProject, backToToday, filterPill, openSpacesScreen, projectFilterMen
 import { insertGoals } from './helpers/goals';
 import { insertRoutines } from './helpers/routines';
 import { insertTasks, openReport, tileOf } from './helpers/stats';
-import { createTask, isPhone, rowOf, todayTab } from './helpers/today';
+import { clickTodayHeaderAction, createTask, isPhone, rowOf, todayTab } from './helpers/today';
 import { weekTab } from './helpers/week';
 
 /**
@@ -85,16 +85,16 @@ test.describe('ES-08 — filtre unique espace + projet (parcours clé 6)', () =>
     }
 
     const row = (label: string) => page.getByRole('region', { name: 'CONCENTRATION' }).getByRole('listitem').filter({ hasText: label });
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
     await expect(row('Ce mois')).toContainText('1 h 15'); // Tout
     await todayTab(page).click();
     await filterPill(page, 'Pro').click();
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
     await expect(row('Ce mois')).toContainText('50 min');
     await expect(row('Courses')).toHaveCount(0);
     await todayTab(page).click();
     await projectFilterMenu(page).selectOption({ label: 'Mission client' });
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
     await expect(row('Ce mois')).toContainText('25 min');
     await expect(row('Facture')).toContainText('25 min');
     await expect(row('Réunion')).toHaveCount(0); // sans projet : seulement dans « Tous les projets »

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { closeSomeday, insertSomeday, openSomeday, somedayButton, somedayList, somedayTitles } from './helpers/someday';
+import { closeSomeday, insertSomeday, openSomeday, somedayLabel, somedayList, somedayTitles } from './helpers/someday';
 import { isPhone, openToday, todayTab } from './helpers/today';
 import { weekTab } from './helpers/week';
 
@@ -34,7 +34,7 @@ test.describe('SD-02 — planifier une tâche « Un jour »', () => {
     await expect.poll(() => somedayTitles(page)).toEqual(['Lire le rapport annuel']);
     await expect(page.getByRole('status')).toContainText('« Renouveler le passeport » planifiée pour aujourd’hui');
     await closeSomeday(page, testInfo);
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+    expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
     await expect(page.getByRole('button', { name: 'Renouveler le passeport', exact: true })).toBeVisible();
   });
 

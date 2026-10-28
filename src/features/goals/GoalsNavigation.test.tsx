@@ -15,16 +15,23 @@ describe.each([
   });
   afterEach(() => teardownToday(h));
 
+  // UI-REFONTE-02 : sur iPhone, « Objectif de la semaine » est une entrée du menu « Plus d’options » ; sur PC, l'icône cible.
+  async function goalsCommand(): Promise<HTMLElement> {
+    if (width >= 1024) return screen.findByRole('button', { name: 'Objectif de la semaine' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Plus d’options' }));
+    return screen.findByRole('menuitem', { name: 'Objectif de la semaine' });
+  }
+
   it('l’icône cible « Objectif de la semaine » ouvre l’écran Objectif', async () => {
     renderToday(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Objectif de la semaine' }));
+    fireEvent.click(await goalsCommand());
     expect(useNavigationStore.getState().route).toEqual({ tab: 'tasks', screen: 'goals' });
   });
 
   it('ouvrir l’écran Objectif ferme la fiche détail ouverte', async () => {
     renderToday(h.container);
     useNavigationStore.getState().openDetail({ type: 'goal', id: 'x' as never });
-    fireEvent.click(await screen.findByRole('button', { name: 'Objectif de la semaine' }));
+    fireEvent.click(await goalsCommand());
     expect(useNavigationStore.getState().detail).toBeNull();
   });
 });

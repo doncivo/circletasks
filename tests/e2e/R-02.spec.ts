@@ -70,9 +70,10 @@ test.describe('R-02 — heure optionnelle d’une routine', () => {
     await todayTab(page).click();
     await expect(page.locator('.ct-list-row').filter({ hasText: 'Ranger le bureau' })).toBeVisible();
     const titles = await listTitles(page);
-    expect(titles.slice(0, 3)).toEqual(['Réunion', 'Boire de l’eau', 'Appeler le notaire']);
+    // UI-REFONTE-02 : sur iPhone l'ordre des éléments à l'heure dépend de l'heure du passage (passé, dû, « maintenant », à venir) ; les trois restent devant les sans heure.
+    expect([...titles.slice(0, 3)].sort()).toEqual(['Appeler le notaire', 'Boire de l’eau', 'Réunion']);
     expect(titles.indexOf('Ranger le bureau')).toBeGreaterThan(titles.indexOf('Appeler le notaire'));
-    await expect(page.locator('.ct-list-row').filter({ hasText: 'Boire de l’eau' })).toContainText('08:30 · Routine');
+    await expect(page.locator('.ct-list-row').filter({ hasText: 'Boire de l’eau' })).toContainText(/08:30.*Routine/);
     await expect(page.locator('.ct-list-row').filter({ hasText: 'Ranger le bureau' })).not.toContainText(/\d\d:\d\d/);
   });
 

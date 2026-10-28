@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { waitForScreenLoaded } from './app';
+import { clickTodayHeaderAction } from './today';
 import { addIsoDays, browserToday } from './schedule';
 import { mondayOf } from './week';
 
@@ -73,10 +74,10 @@ export const goalButton = (page: Page): Locator => page.getByRole('button', { na
 /** Écran Objectif : écran plein (iPhone) ou panneau à droite (PC). */
 export const goalScreen = (page: Page): Locator => page.getByRole('heading', { level: 1, name: 'Objectif', exact: true });
 
-/** Ouvre l'écran Objectif depuis Aujourd'hui par l'icône cible. */
+/** Ouvre l'écran Objectif depuis Aujourd'hui : icône cible (PC) ou entrée du menu « Plus d’options » (iPhone, UI-REFONTE-02). */
 export async function openGoalScreen(page: Page): Promise<void> {
   await waitForScreenLoaded(page, 'goalsscreen');
-  await goalButton(page).click();
+  await clickTodayHeaderAction(page, 'Objectif de la semaine');
   await expect(goalScreen(page)).toBeVisible();
 }
 
@@ -94,4 +95,5 @@ export const goalTitleField = (page: Page, n = 1): Locator =>
   page.getByRole('textbox', { name: n <= 1 ? 'Objectif de la semaine' : `Objectif de la semaine (${n})`, exact: true });
 
 /** Encadrés d'objectif épinglés d'Aujourd'hui. */
-export const goalCards = (page: Page): Locator => page.locator('.ct-today-goal');
+/** Encadré d'objectif (PC) ou ligne d'objectif de l'agenda (iPhone, UI-REFONTE-02). */
+export const goalCards = (page: Page): Locator => page.locator('.ct-today-goal, .ct-agenda-goal');

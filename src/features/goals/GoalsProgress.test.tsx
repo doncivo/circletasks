@@ -153,7 +153,8 @@ describe('Avancement dans l’encadré d’Aujourd’hui (OB-04)', () => {
         <UndoToast />
       </AppContainerProvider>,
     );
-  const card = () => document.querySelector<HTMLElement>('.ct-today-goal') as HTMLElement;
+  // UI-REFONTE-02 : sur iPhone (440), l'encadré est la ligne .ct-agenda-goal.
+  const card = () => document.querySelector<HTMLElement>('.ct-today-goal, .ct-agenda-goal') as HTMLElement;
 
   it('« 2/5 » dans l’encadré, « 3/5 » dès qu’une tâche rattachée est terminée dans la liste (critères 1 et 2)', async () => {
     const goal = await seedGoal(h);
@@ -162,7 +163,7 @@ describe('Avancement dans l’encadré d’Aujourd’hui (OB-04)', () => {
     await waitFor(() => expect(card()).toHaveTextContent('2/5'));
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Terminer : C' }));
     await waitFor(() => expect(card()).toHaveTextContent('3/5'));
-    expect(card()).toHaveAccessibleName('Objectif de la semaine : Finaliser le PRD CircleTasks, 3 sur 5');
+    expect(card()).toHaveAccessibleName('Objectif : Finaliser le PRD CircleTasks, 3 sur 5') // UI-REFONTE-02 : ligne iPhone « Objectif : titre, avancement »;
   });
 
   it('aucune tâche rattachée : l’encadré n’affiche pas de compteur (critère 4)', async () => {
@@ -170,7 +171,7 @@ describe('Avancement dans l’encadré d’Aujourd’hui (OB-04)', () => {
     renderToday();
     await waitFor(() => expect(card()).toBeTruthy());
     expect(card()).not.toHaveTextContent('/');
-    expect(card()).toHaveAccessibleName('Objectif de la semaine : Finaliser le PRD CircleTasks');
+    expect(card()).toHaveAccessibleName('Objectif : Finaliser le PRD CircleTasks');
   });
 
   it('atteint : l’encadré affiche « Atteint » à la place du compteur (critère 5)', async () => {

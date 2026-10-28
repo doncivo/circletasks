@@ -148,7 +148,7 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
   /*
    * Titres datés : horloge figée (test déterministe, quel que soit le jour du passage) sur les libellés les plus longs. Ils partagent
    * leur rangée avec des boutons ; le titre se réduit, badge et boutons restent entiers à sa droite.
-   * - Tâches : jour à deux chiffres et jours courts les plus larges (« 28 mer. », « 27 dim. »), badge « AUJOURD'HUI » affiché.
+   * - Tâches : jour à deux chiffres et jours courts les plus larges (« 28 mer. », « 27 dim. »), boutons Rechercher et « Plus d’options » à droite (UI-REFONTE-02, plus de badge).
    * - Semaine : semaines à cheval sur deux mois (« 28 sept. – 4 oct. », « 26 janv. – 1 févr. », « 29 juin – 5 juil. »).
    */
   const days = ['2026-10-28', '2026-09-27', '2026-09-30'] as const;
@@ -157,8 +157,9 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
       await page.clock.setFixedTime(new Date(`${day}T10:00:00+02:00`));
       await openApp(page);
       await expect(page.locator('main h1.ct-today__day')).toBeVisible();
-      await expect(page.locator('.ct-today__badge')).toBeVisible();
-      await expectOneLineTitle(page, `Tâches (${day})`, [page.locator('.ct-today__badge'), page.locator('.ct-today__headerActions')]);
+      // UI-REFONTE-02 : plus de badge « AUJOURD'HUI » sur iPhone ; le titre partage sa rangée avec Rechercher et « Plus d’options ».
+      await expect(page.locator('.ct-today__badge')).toHaveCount(0);
+      await expectOneLineTitle(page, `Tâches (${day})`, [page.locator('.ct-today__headerActions')]);
     });
   }
 
@@ -183,7 +184,7 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
    * ENTRE deux mots seulement, sans déborder, et sans chevaucher ses voisins, qui restent dans l'écran.
    */
   const zoomed = [
-    ['Tâches', '2026-10-28', 'main h1.ct-today__day', ['.ct-today__badge', '.ct-today__headerActions']],
+    ['Tâches', '2026-10-28', 'main h1.ct-today__day', ['.ct-today__headerActions']], // UI-REFONTE-02 : plus de badge sur iPhone
     ['Semaine', '2026-09-30', 'main h1.ct-week__range', ['.ct-week__arrows']],
   ] as const;
   for (const [tab, day, selector, neighbours] of zoomed) {

@@ -4,7 +4,7 @@ import { fr } from '../../src/i18n/fr';
 import { openApp } from './helpers/app';
 import { openRoutines } from './helpers/routines';
 import { openSomeday } from './helpers/someday';
-import { isPhone, todayTab } from './helpers/today';
+import { clickTodayHeaderAction, isPhone, todayTab } from './helpers/today';
 import { weekTab } from './helpers/week';
 import { checklistsTab } from './helpers/checklists';
 import { disableHolidays, eventsTab } from './helpers/events';
@@ -16,7 +16,7 @@ import { disableHolidays, eventsTab } from './helpers/events';
 type Info = { project: { name: string } };
 
 async function openDone(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+  await clickTodayHeaderAction(page, 'Rapport mensuel');
   await page.getByRole('button', { name: 'Tâches terminées' }).click();
   await expect(page.getByRole('heading', { name: 'Tâches terminées', level: 1 })).toBeVisible();
 }
@@ -36,7 +36,7 @@ const openers: Record<string, (page: Page, info: Info) => Promise<void>> = {
   },
   routines: async (page) => openRoutines(page),
   report: async (page) => {
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel');
   },
   events: async (page) => {
     await disableHolidays(page);

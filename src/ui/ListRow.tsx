@@ -11,6 +11,8 @@ export interface ListRowProps {
   icon?: ReactNode;
   /** Élément de tête (ex. `<Checkbox .../>`). */
   leading?: ReactNode;
+  /** Colonne avant l'élément de tête (agenda iPhone, UI-REFONTE-02 : l'heure ou le tiret), dans la ligne pour que la ligne la contienne. */
+  prefix?: ReactNode;
   /** Élément terminé : titre barré, couleur atténuée (Main.html, « Faire mon lit »). */
   done?: boolean;
   /** Ligne sélectionnée (mode édition, A-05) : fond #F1EEF7. */
@@ -49,7 +51,7 @@ export interface ListRowProps {
  *   onActivate={() => openDetail(task.id)}
  * />
  */
-export function ListRow({ title, subtitle, icon, trailing, leading, done, selected, compact, time, dotColor, inlineSubtitle, onActivate, expanded, className }: ListRowProps) {
+export function ListRow({ title, subtitle, icon, trailing, leading, prefix, done, selected, compact, time, dotColor, inlineSubtitle, onActivate, expanded, className }: ListRowProps) {
   return (
     <div
       className={['ct-list-row', className].filter(Boolean).join(' ')}
@@ -57,6 +59,7 @@ export function ListRow({ title, subtitle, icon, trailing, leading, done, select
       data-selected={selected ? 'true' : undefined}
       data-compact={compact ? 'true' : undefined}
     >
+      {prefix}
       {leading}
       {compact && <span className="ct-list-row__dot" style={{ background: dotColor ?? 'var(--ct-color-text-secondary)' }} aria-hidden="true" />}
       <div className="ct-list-row__body">

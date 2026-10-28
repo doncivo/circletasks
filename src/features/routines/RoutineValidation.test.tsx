@@ -112,7 +112,7 @@ describe('Aujourd’hui et Semaine : valider une routine (R-03)', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Terminer : Faire mon lit' }));
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Rouvrir : Faire mon lit' })).toBeChecked());
     const titles = Array.from(document.querySelectorAll('.ct-today__list .ct-list-row__title')).map((node) => node.textContent);
-    expect(titles).toEqual(['Boire de l’eau', 'Faire mon lit']); // terminée : en bas
+    expect(titles).toEqual(['Faire mon lit', 'Boire de l’eau']); // UI-REFONTE-02 : la routine validée reste à son heure (07:30 avant 08:30), barrée
     expect(await logDates(h, lit.id as RoutineId)).toEqual(['2026-10-02']);
     expect(screen.getByRole('status')).toHaveTextContent('« Faire mon lit » validée');
 

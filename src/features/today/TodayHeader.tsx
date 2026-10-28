@@ -14,20 +14,23 @@ export interface TodayHeaderProps {
   /** Flèches « Jour précédent / Jour suivant » : PC seulement (Q10), absentes de l'iPhone. */
   onPreviousDay?: () => void;
   onNextDay?: () => void;
-  /** Boutons de droite (vue compacte, A-06). */
+  /** Boutons de droite (vue compacte, A-06 ; iPhone : Rechercher et « Plus d’options », UI-REFONTE-02). */
   actions?: ReactNode;
+  /** Agenda iPhone (UI-REFONTE-02, Jour.html) : plus de badge « AUJOURD'HUI » ; la ligne « maintenant » dit le jour courant. */
+  hideBadge?: boolean;
 }
 
 /**
  * En-tête d'Aujourd'hui (A-01, Main.html / PC-Aujourdhui.html) : mois, jour en grand (Fraunces), badge
  * « AUJOURD'HUI » sur le jour courant seulement, flèches de jour sur PC, filet décoratif.
  */
-export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, actions }: TodayHeaderProps) {
+export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, actions, hideBadge = false }: TodayHeaderProps) {
   const header = formatTodayHeader(date, layout === 'pc' ? 'long' : 'short');
   const rowRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const badge = date === today && !hideBadge;
   // Jour en grand sur une ligne, réduit à la place laissée par le badge et les boutons (iPhone 375 pt ; IOS-titres).
-  useFitText(titleRef, rowRef, `${header.dayLine}|${String(date === today)}`);
+  useFitText(titleRef, rowRef, `${header.dayLine}|${String(badge)}`);
   return (
     <>
       <div className="ct-today__headerRow" ref={rowRef}>
@@ -37,7 +40,7 @@ export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, act
             <h1 className="ct-today__day" ref={titleRef}>
               {header.dayLine}
             </h1>
-            {date === today && <span className="ct-today__badge">{t('tasks.todayBadge')}</span>}
+            {badge && <span className="ct-today__badge">{t('tasks.todayBadge')}</span>}
           </div>
         </div>
         <div className="ct-today__headerActions">

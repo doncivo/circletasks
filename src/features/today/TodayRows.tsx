@@ -2,13 +2,16 @@ import type { ReactNode } from 'react';
 import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model';
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
-import { Checkbox, IconView, ListRow, RemoveButton, SelectCircle, resolveIconRefColor } from '../../ui';
+import { formatLate } from '../../i18n/formatAgenda';
+import { Checkbox, IconView, ListRow, RemoveButton, SelectCircle, resolveIconRefColor, spaceTextColor } from '../../ui';
 import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Lignes de la liste d'Aujourd'hui (A-01, A-05, A-06) : présentation seule, les actions viennent de l'écran.
  * Mode édition (Main-Edition.html) : rond de sélection à la place de la case, bouton « − », poignée ; la
  * routine n'a aucune de ces commandes (Q13).
+ * Agenda iPhone (UI-REFONTE-02, Jour.html) : l'heure est dans la colonne de gauche (plus dans la sous-ligne), aucune icône
+ * décorative, une tâche due porte « En retard de 32 min » en tête de sous-ligne, une routine sa fréquence.
  */
 
 export interface TodayTaskRowProps {
@@ -26,6 +29,8 @@ export interface TodayTaskRowProps {
   readonly compact: boolean;
   /** PC : « HH:MM · Espace » à droite du titre, sur une seule ligne. */
   readonly inline: boolean;
+  /** Agenda (UI-REFONTE-02) : colonne d'heure (ou tiret) en tête de ligne, heure hors de la sous-ligne, pas d'icône ; `lateMinutes` pour une tâche due. */
+  readonly agenda?: { readonly lateMinutes: number | null; readonly hour: ReactNode };
   readonly onToggleDone: () => void;
   readonly onOpen: () => void;
   readonly onToggleSelect: () => void;
@@ -34,10 +39,21 @@ export interface TodayTaskRowProps {
   readonly handle: ReactNode;
 }
 
-export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode, selected, opened, compact, inline, onToggleDone, onOpen, onToggleSelect, onRemove, handle }: TodayTaskRowProps) {
+export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode, selected, opened, compact, inline, agenda, onToggleDone, onOpen, onToggleSelect, onRemove, handle }: TodayTaskRowProps) {
+  const prefix = agenda ? { prefix: agenda.hour } : {};
   const done = task.status === 'done';
   const color = task.icon ? resolveIconRefColor(task.icon) : undefined;
-  const subtitle = editMode && done ? t('today.doneBadge') : taskSubtitle(task, { spaces, showSpace, rule });
+  const base = editMode && done ? t('today.doneBadge') : taskSubtitle(task, { spaces, showSpace, rule, hideTime: agenda !== undefined });
+  const late = agenda?.lateMinutes ?? null;
+  const subtitle =
+    late !== null && !editMode ? (
+      <>
+        <span className="ct-agenda__late">{formatLate(late)}</span>
+        {base !== undefined && <span> · {base}</span>}
+      </>
+    ) : (
+      base
+    );
   return (
     <ListRow
       title={task.title}
@@ -46,6 +62,7 @@ export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode
       compact={compact}
       inlineSubtitle={inline}
       {...(compact ? { time: task.time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle })}
+      {...prefix}
       leading={
         editMode ? (
           <SelectCircle selected={selected} onToggle={onToggleSelect} label={t(selected ? 'today.deselect' : 'today.select', { title: task.title })} />
@@ -53,7 +70,7 @@ export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode
           <Checkbox compact={compact} checked={done} onChange={onToggleDone} label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: task.title })} />
         )
       }
-      icon={!compact && !editMode && task.icon ? <IconView icon={task.icon} color={color ?? 'currentColor'} size={iconSize} /> : undefined}
+      icon={!compact && !editMode && !agenda && task.icon ? <IconView icon={task.icon} color={color ?? 'currentColor'} size={iconSize} /> : undefined}
       trailing={
         editMode ? (
           <>
@@ -83,23 +100,47 @@ export interface TodayRoutineRowProps {
   readonly checkable: boolean;
   /** Jour futur : seuls aujourd'hui et les jours passés se valident (R-03 critère 11, QB-03) ; la case est inactive. */
   readonly disabled?: boolean;
+  /** Agenda (UI-REFONTE-02) : colonne d'heure en tête de ligne, « Routine » en sous-ligne, pas d'icône. */
+  readonly agenda?: { readonly hour: ReactNode } | null;
   readonly onToggle: () => void;
 }
 
+/**
+ * Sous-ligne d'agenda d'une routine : « Routine », en « Tout » suivie de l'espace dans sa couleur. La fréquence de la maquette
+ * (« tous les mardis et vendredis ») n'est pas écrite : son formateur et le catalogue des routines sont hors du départ (plafond du bundle).
+ */
+function routineAgendaSubtitle(routine: Routine, spaces: readonly Space[], showSpace: boolean): ReactNode {
+  const parts: ReactNode[] = [t('today.routineLabel')];
+  const space = showSpace ? spaces.find((s) => s.id === routine.spaceId) : undefined;
+  if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {index > 0 && ' · '}
+          {part}
+        </span>
+      ))}
+    </>
+  );
+}
+
 /** Routine du jour (M4) : « HH:MM · Routine », icône à droite ; jamais sélectionnable ni déplaçable (Q13). */
-export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, spaces, showSpace, checkable, disabled = false, onToggle }: TodayRoutineRowProps) {
+export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, spaces, showSpace, checkable, disabled = false, agenda = null, onToggle }: TodayRoutineRowProps) {
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
+  const subtitle = agenda ? routineAgendaSubtitle(routine, spaces, showSpace) : routineSubtitle(routine, time, { spaces, showSpace });
   return (
     <ListRow
       title={routine.title}
       done={done}
       compact={compact}
       inlineSubtitle={inline}
-      {...(compact ? { time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle: routineSubtitle(routine, time, { spaces, showSpace }) })}
+      {...(compact ? { time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle })}
+      {...(agenda ? { prefix: agenda.hour } : {})}
       {...(checkable
         ? { leading: <Checkbox compact={compact} checked={done} disabled={disabled} onChange={onToggle} label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })} /> }
         : {})}
-      icon={!compact && routine.icon ? <IconView icon={routine.icon} color={color ?? 'currentColor'} size={iconSize} /> : undefined}
+      icon={!compact && !agenda && routine.icon ? <IconView icon={routine.icon} color={color ?? 'currentColor'} size={iconSize} /> : undefined}
     />
   );
 }
