@@ -85,7 +85,7 @@ test.describe('R-07 — tous les N jours / semaines', () => {
     await form.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(form).not.toBeVisible();
     const card = cardOf(page, 'Courses');
-    await expect(card).toContainText('toutes les 2 semaines : lun., jeu.');
+    await expect(card).toContainText(isPhone(testInfo) ? 'toutes les 2 semaines, le lundi et le jeudi' : 'toutes les 2 semaines : lun., jeu.') // UI-REFONTE-05;
     // Semaine du lun. 21 au dim. 27 sept., départ mer. 23 : jeu. 24 seulement de prévu (le lun. 21 précède le départ).
     const states = await card.getByRole('checkbox').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-state')));
     expect(states).toEqual(['off', 'off', 'off', 'planned', 'off', 'off', 'off']);

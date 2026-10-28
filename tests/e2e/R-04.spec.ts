@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { isPhone } from './helpers/today';
 import { openApp } from './helpers/app';
 import { cardOf, insertRoutines, reopenRoutines, routineForm } from './helpers/routines';
 import { addIsoDays } from './helpers/schedule';
@@ -21,23 +22,23 @@ test.describe('R-04 — série en cours et meilleure série', () => {
     await openApp(page);
   });
 
-  test('quotidienne : 10 jours validés, aujourd’hui non fait = « série 10 jours » ; après validation d’aujourd’hui : 11 (critère 1)', async ({ page }) => {
+  test('quotidienne : 10 jours validés, aujourd’hui non fait = « série 10 jours » ; après validation d’aujourd’hui : 11 (critère 1)', async ({ page }, testInfo) => {
     await insertRoutines(page, [{ title: 'Faire mon lit', space: 'perso', time: '07:30', done: days('2026-09-13', 10) }]);
     await reopenRoutines(page);
     const card = cardOf(page, 'Faire mon lit');
-    await expect(card).toContainText('07:30 · Perso · série 10 jours');
+    await expect(card).toContainText(isPhone(testInfo) ? '07:30 · Perso · tous les jours · série 10 jours' : '07:30 · Perso · série 10 jours'); // UI-REFONTE-05 : fréquence en toutes lettres sur iPhone
     await card.getByRole('checkbox', { name: 'Mercredi', exact: true }).click();
     await expect(card).toContainText('série 11 jours');
   });
 
-  test('Sport lun., mer., ven. : 4 séances, mardi et jeudi ne cassent pas ; mercredi non validé : toujours 4 ; plus tard : 0 (critères 2, 3)', async ({ page }) => {
+  test('Sport lun., mer., ven. : 4 séances, mardi et jeudi ne cassent pas ; mercredi non validé : toujours 4 ; plus tard : 0 (critères 2, 3)', async ({ page }, testInfo) => {
     await insertRoutines(page, [
       { title: 'Sport', scheduleType: 'weekdays', weekdays: [1, 3, 5], done: ['2026-09-14', '2026-09-16', '2026-09-18', '2026-09-21'] },
       { title: 'Yoga', scheduleType: 'weekdays', weekdays: [1, 3, 5], done: ['2026-09-14', '2026-09-16'] },
     ]);
     await reopenRoutines(page);
     // Aujourd'hui mer. 23 (prévu, non validé) ne casse pas la série de Sport : 4 séances.
-    await expect(cardOf(page, 'Sport')).toContainText('lun., mer., ven. · série 4 séances');
+    await expect(cardOf(page, 'Sport')).toContainText(isPhone(testInfo) ? 'lundi, mercredi et vendredi · série 4 séances' : 'lun., mer., ven. · série 4 séances');
     // Yoga : ven. 18 prévu et manqué -> 0, aucune mention.
     await expect(cardOf(page, 'Yoga')).not.toContainText('série');
   });

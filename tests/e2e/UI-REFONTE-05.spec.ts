@@ -68,7 +68,8 @@ test.describe('UI-REFONTE-05 — Routines iPhone', () => {
     await form.getByLabel('Nom de la routine').fill('Lire');
     await form.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(form).toBeHidden();
-    await expect(cardOf(page, 'Lire').locator('.ct-routine-card__info')).toHaveText(/^tous les jours · 0 sur \d cette semaine$/);
+    // Sous « Tout », l'espace précède la fréquence (Pro par défaut).
+    await expect(cardOf(page, 'Lire').locator('.ct-routine-card__info')).toHaveText(/^Pro · tous les jours · 0 sur \d cette semaine$/);
     await expect(page.locator('.ct-routines__summary')).toHaveText(/^Semaine du 21 au 27 sept\. · 0 sur \d faite/);
   });
 });

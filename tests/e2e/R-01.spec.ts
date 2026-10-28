@@ -62,7 +62,9 @@ test.describe('R-01 — créer une routine', () => {
 
     const card = cardOf(page, 'Sport');
     await expect(card).toBeVisible();
-    await expect(card.locator('svg').first()).toBeVisible(); // icône Lucide
+    // UI-REFONTE-05 : plus d'icône sur la carte iPhone (elle reste dans le formulaire et le rapport) ; PC inchangé.
+    if (isPhone(testInfo)) await expect(card.locator('svg')).toHaveCount(0);
+    else await expect(card.locator('svg').first()).toBeVisible(); // icône Lucide
     const rounds = card.getByRole('checkbox');
     await expect(rounds).toHaveCount(7);
     // Aucun jour antérieur à aujourd'hui n'est prévu : tous les ronds passés sont en pointillés.

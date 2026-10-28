@@ -451,7 +451,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: async (page) => {
       await prepareRoutines(page, ROUTINE_SEED);
-      await page.getByRole('button', { name: 'Éditer la routine Sport' }).click();
+      await page.getByRole('button', { name: 'Modifier la routine Sport' }).click();
       await expect(page.getByRole('form', { name: 'Modifier la routine' })).toBeVisible();
     },
   },
@@ -462,7 +462,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: async (page) => {
       await prepareRoutines(page, [STRETCH]);
-      await page.getByRole('button', { name: "Éditer la routine Séance d'étirements" }).click();
+      await page.getByRole('button', { name: "Modifier la routine Séance d'étirements" }).click();
       await expect(page.getByRole('form', { name: 'Modifier la routine' })).toBeVisible();
     },
   },
