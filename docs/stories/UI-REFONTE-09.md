@@ -2,7 +2,7 @@
 
 Module : M12 Réglages · Palier : refontes après la 1.0.2, huitième et dernière des huit dans l'ordre d'Ali du 2026-10-27 · Agent : settings-personalization avec ui-design-system · Ouverte le 2026-10-28 par Claude Code.
 
-Statut : **en CI après la décision d'Ali sur le critère 4 de BUNDLE-01 (voir « Passe QA »).** Estimation : 6 à 9 h actives ; alerte à 12 h.
+Statut : **fusionnée (#107, a17c9ada), quatre passes consignées.** Estimation : 6 à 9 h actives ; alerte à 12 h.
 
 Références : `docs/maquettes-refonte/PC-Reglages.html`, huit règles transversales du README du même dossier. Écran de départ : `src/features/settings/SettingsScreen.tsx`, `SettingsScreen.css`, `AboutSection.tsx`, `src/features/shortcuts/ShortcutsSettingsSection.tsx` (+ `.css`), `src/features/sync/SyncSettingsSection.tsx`, lignes partagées (`BackupRow`, `ImportRow`, `SampleDataRow`, `SecuritySection`, `QuietHoursRows`, `SpacesSummaryRow`, `CalendarsSummaryRow`, `HolidaysSummaryRow`, `FocusSoundSetting`). Écran à la demande (`lazyScreens.tsx`) : rien n'entre dans le départ.
 
@@ -64,7 +64,7 @@ Le PRD ; l'iPhone ; les écrans de second niveau ; la fenêtre d'appairage ; tou
 
 ## Mesure du bundle
 
-Avant push (commit 7287609b, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 432 octets normalisés** (brute 337 393), **marge 20 968** ; **−28** face à `main` 337 460 (textes `helpRow`, `helpOpen`, `unavailableNote` retirés du départ ; l'écran, ses sections et son catalogue sont à la demande ; garde 66/66). Mesure de `main` après fusion : à consigner.
+Avant push (commit 7287609b, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 432 octets normalisés** (brute 337 393), **marge 20 968** ; **−28** face à `main` 337 460 (textes `helpRow`, `helpOpen`, `unavailableNote` retirés du départ ; l'écran, ses sections et son catalogue sont à la demande ; garde 66/66). Mesure de `main` après fusion (#107, a17c9ada) : **337 895 octets normalisés** (brute 337 749, écart +146 dans la borne large de 300), marge 20 505 ; −27 face à 337 922.
 
 ## Passe QA
 
@@ -72,7 +72,7 @@ Avant push (commit 7287609b, build `--manifest`, `node tests/bundle/measureStart
 - **CI, second passage** (runs 40741070613 / 40741080112, head f983d04a, branche à jour de `main` e4fb9e9a) : job « Performance et bundle » rouge sur la garde `tests/bundle/startBundle.test.ts` : **critère 4 de BUNDLE-01** (écart absolu normalisé / brut ≤ 100 octets) : **normalisé 337 914, brut 337 771, écart 143**, reproduit en local sur le même commit. Le plafond n'est pas en cause (marge 20 486) et l'écart est dans le sens inoffensif (la mesure jugée dépasse le gzip réel). Cause : avec UI-REFONTE-08 et 09 réunis, le départ compte 85 blocs à la demande ; le bruit de compression des pseudo-hachages (de même longueur et alphabet que ceux de Vite) croît avec leur nombre ; la borne de 100 octets avait été calibrée sur une quarantaine de blocs.
 - **Arrêt et remontée à Ali**, comme l'exige la fiche BUNDLE-01 (critère 4 : « S'il le dépasse, arrêt et remontée à Ali »). Aucune modification de la garde n'est poussée (un essai local a été annulé). Les e2e et les autres jobs du second passage n'ont pas été attendus : la fusion est impossible tant que la garde est rouge.
 - **Options proposées à Ali** : (a) rendre le critère 4 unilatéral : borne stricte de 100 octets dans le sens dangereux (mesure jugée plus petite que le build réel = relèvement de fait), borne de bon sens de 300 octets dans l'autre sens ; (b) relever la borne absolue à 200 octets ; (c) revoir le modèle de normalisation (pseudo-hachages à bruit nul, par exemple un hachage réel du contenu logique, ce qui change `bundleMeasure.ts` et demande de re-relever toutes les mesures). La variante (a) est prête à être écrite en quelques lignes dès la décision.
-- **Décision d'Ali (2026-10-28)** : option (a), borne asymétrique 100 / 300. Raison, consignée dans la garde et dans BUNDLE-01 : les deux erreurs ne coûtent pas la même chose ; une mesure trop basse fait croire qu'on est sous le plafond alors qu'on l'a dépassé (dépassement silencieux, exactement ce qu'on élimine) ; une mesure trop haute ne fait qu'inquiéter à tort ; donc borne serrée dans le sens qui ment, large dans l'autre. L'option (c) devient la dette BUNDLE-02 (modèle de normalisation sans bruit), à faire quand le plafond redeviendra serré : re-relever toutes les mesures n'achète rien aujourd'hui. Garde adaptée (`NORMALIZATION_UNDERSHOOT_BYTES = 100`, `NORMALIZATION_OVERSHOOT_BYTES = 300`), plafond intact ; CI relancée.
+- **Décision d'Ali (2026-10-28)** : option (a), borne asymétrique 100 / 300. Raison, consignée dans la garde et dans BUNDLE-01 : les deux erreurs ne coûtent pas la même chose ; une mesure trop basse fait croire qu'on est sous le plafond alors qu'on l'a dépassé (dépassement silencieux, exactement ce qu'on élimine) ; une mesure trop haute ne fait qu'inquiéter à tort ; donc borne serrée dans le sens qui ment, large dans l'autre. L'option (c) devient la dette BUNDLE-02 (modèle de normalisation sans bruit), à faire quand le plafond redeviendra serré : re-relever toutes les mesures n'achète rien aujourd'hui. Garde adaptée (`NORMALIZATION_UNDERSHOOT_BYTES = 100`, `NORMALIZATION_OVERSHOOT_BYTES = 300`), plafond intact ; CI relancée : **troisième passage** (head 6daa5970) : 48 verts. Fusionnée (#107, a17c9ada).
 
 ## Passe code-reviewer
 
