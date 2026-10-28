@@ -47,7 +47,17 @@ Les quatre autres refontes ; le PRD ; le formulaire, le rapport de routine et le
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit 78354189 (tests seuls) : `src/features/routines/RoutinesRefonte.test.tsx` (8 tests, 8 rouges), `tests/e2e/UI-REFONTE-05.spec.ts` (3 tests, joués par la CI seule). Trois attentes du test DOM corrigées avant le vert, sans toucher au code : la série en cours (R-04) reste dans la ligne d'informations avant le compteur ; sous « Tout » l'espace précède la fréquence ; une routine « en pause » posée directement en base n'a pas d'intervalle de pause (le domaine compte ses jours) : le cas « aucun jour prévu » est joué avec une routine qui démarre la semaine suivante.
+- **Catalogue à la demande** `src/i18n/routinesRefonteText.ts` : `formatRoutinesSummary` (« Semaine du 19 au 25 oct. · 7 sur 10 faites », « 1 sur 1 faite », « Aucune routine prévue cette semaine »), `formatWeekSpan` (même mois « du 19 au 25 oct. », sinon « du 28 sept. au 4 oct. »), `scheduleSentence` (« tous les jours », « du lundi au vendredi » pour trois jours consécutifs ou plus, « lundi, mercredi et vendredi », « 3 fois par semaine », « tous les 3 jours », « toutes les 2 semaines, le mardi et le jeudi »), « Routine ». Dans le départ, seules les valeurs `routines.edit` / `editLabel` changent (« Modifier », « Modifier la routine {title} »).
+- **Écran** (`RoutinesScreen.tsx`) : synthèse `useMemo` (somme de `weekCounter` sur les routines du filtre, `daysOfWeek` pour le dimanche) rendue sous le titre sur iPhone à la place du filet décoratif ; bascule « Vue compacte » et pastilles d'espace dans l'en-tête sur PC seulement (les pastilles restent sous la synthèse sur iPhone) ; `compact` transmis aux cartes sur PC seulement ; phrase d'aide retirée ; rangée du bas iPhone : « Rapport du mois » (inchangé) et bouton `.ct-routines__addButton` « Routine » avec `Plus` (libellé accessible « Ajouter une routine », même `openCreate`) ; PC garde son aide clavier et son bouton flottant.
+- **Carte** (`RoutineCard.tsx`) : sur iPhone, pas d'icône ni d'horloge, pastilles sans compteur, ligne d'informations toujours rendue avec `scheduleSentence` et le compteur en phrase (`.ct-routine-card__counter`, même libellé accessible) à sa fin ; PC inchangé (icône, `scheduleShort`, compteur « 2/7 » à droite des pastilles, ligne masquée en vue compacte).
+- **Feuille de style** : `RoutinesScreen.css` (synthèse, rangée du bas collante au-dessus de `--ct-safe-area-bottom`, « Rapport du mois » au trait prenant la largeur, bouton « Routine » plein) et `RoutineCard.css` (titre 19 px, « Modifier » au trait 34 px, ligne d'informations 14 px) avec les jetons existants : aucune paire de contraste nouvelle.
+- **Tests adaptés, avec trace « UI-REFONTE-05 »** : « Éditer la routine » → « Modifier la routine » dans toutes les suites `routines` et les e2e `R-01` à `R-07`, parcours ; compteur en phrase (`RoutinesScreen.test`, `RoutineValidation.test`, `RoutineEveryN.test`), fréquence en toutes lettres et icône absente (`RoutinesScreen.test`, `RoutineStreaks.test`, `RoutineEveryN.test`), aide retirée ; e2e : aide `counterText(testInfo, done, planned)` dans `helpers/routines.ts`, `R-01` / `R-03` / `R-07` (compteur par mise en page, fréquence), `capture.spec` (maquette `Routines-v2.html`).
+- **Vérifié en local** : typage, lint, suites Vitest `routines` + `formatRoutine` (115 tests), garde du bundle 66/66.
+
+## Mesure du bundle
+
+Avant push (branche à jour de `main` c9507aa1, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 578 octets normalisés** (brute 337 570), **marge 20 822** ; **−8** face à `main` 337 586 : l'écran Routines et son catalogue sont dans le bloc à la demande ; dans le départ, « Modifier » est plus court qu'« Éditer la routine… ». Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 
@@ -55,4 +65,10 @@ Les quatre autres refontes ; le PRD ; le formulaire, le rapport de routine et le
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `78354189..73b2694e` (écran, carte, catalogue, feuilles de style, tests) avant le premier passage en CI.
+
+- **Vérifié sans remarque** : la synthèse ne se calcule que sur iPhone et quand il y a des routines (`useMemo`, dépendances complètes : `routines`, `doneByRoutine`, `pausesOf`, `today`) ; `EMPTY_DONE` est une constante de module, disponible au rendu ; la bascule « Vue compacte » disparaît de l'écran iPhone mais le réglage n'est jamais écrit (`compact={layout === 'pc' && compact}` ne force rien en base) ; le bouton « Routine » appelle le même `openCreate` que le bouton flottant (feuille Ajout au segment Routine, `openNow` pour le focus du nom, Ctrl+N inchangé) ; sur PC, rien ne change hors « Modifier » ; la carte iPhone garde `role="checkbox"`, `aria-checked`, `aria-disabled`, `data-state` et `data-date` des pastilles, le corps cliquable et le titre-bouton ; le compteur garde son libellé accessible (lu par `getByLabelText` dans les tests existants) ; `scheduleSentence` trie les jours avant de tester la suite consécutive ; aucun texte en dur hors du catalogue à la demande ; `Clock` de `lucide-react` toujours importé pour le PC.
+- **Point d'attention laissé à la QA** : « toutes les 2 semaines, le mardi et le jeudi » met l'article devant chaque jour ; « du lundi au vendredi » exige trois jours consécutifs (deux jours consécutifs s'écrivent « lundi et mardi ») : voulu.
+- **Point d'attention appareil** : la rangée du bas collante avec `--ct-safe-area-bottom` et la liste longue (défilement sous la rangée) ; à observer sur l'iPhone.
+
+Verdict : approuvée sous réserve de la CI complète (QA à consigner).
