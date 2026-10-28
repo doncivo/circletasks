@@ -57,7 +57,7 @@ La dernière refonte (Réglages PC) ; le PRD ; l'agenda iPhone ; la fiche détai
 
 ### Mesure du bundle de départ
 
-Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 544 octets normalisés** (brute 337 547), **marge 20 856** ; **+84** face à `main` 337 460 (barre PC et ses quatre textes ; la seconde colonne et son catalogue sont à la demande ; `CompactToggle` quitte le départ, ligne retirée de `tests/bundle/start-modules.json` sur demande de la garde). Projection annoncée +1 000 à +2 500 : tenue. Mesure de `main` après fusion : à consigner.
+Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 544 octets normalisés** (brute 337 547), **marge 20 856** ; **+84** face à `main` 337 460 (barre PC et ses quatre textes ; la seconde colonne et son catalogue sont à la demande ; `CompactToggle` et `Fab` quittent le départ (le bouton flottant iPhone est rendu en ligne), lignes retirées de `tests/bundle/start-modules.json` sur demande de la garde). Projection annoncée +1 000 à +2 500 : tenue. Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 

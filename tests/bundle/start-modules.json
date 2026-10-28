@@ -69,7 +69,6 @@
         "src/ui/EmojiPicker.tsx",
         "src/ui/EmptyState.css",
         "src/ui/EmptyState.tsx",
-        "src/ui/Fab.tsx",
         "src/ui/Icon.tsx",
         "src/ui/IconChooser.tsx",
         "src/ui/IconPicker.css",
