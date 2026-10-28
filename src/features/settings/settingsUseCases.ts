@@ -39,6 +39,8 @@ export interface SettingsUseCases {
   setCompactView(screen: CompactViewScreen, compact: boolean): Promise<void>;
   /** ES-03 : filtre Pro / Perso / Tout mémorisé par appareil (`spaces.filter`, local). */
   saveSpaceFilter(filter: SpaceFilter): Promise<void>;
+  /** UI-FIX-08 : « Masquer les fériés » de la liste Événements (`events.hideHolidays`, local). */
+  setHideHolidays(value: boolean): Promise<void>;
   // --- M12 apparence et formats (P-03) ---
   /** P-03 : premier jour de semaine et format d'heure (partagés). */
   loadFormats(): Promise<FormatSettings>;
@@ -107,6 +109,9 @@ export function createSettingsUseCases(deps: SettingsDeps): SettingsUseCases {
     },
     async saveSpaceFilter(filter) {
       await settings().set('spaces.filter', filter);
+    },
+    async setHideHolidays(value) {
+      await settings().set('events.hideHolidays', value);
     },
     // --- M12 apparence et formats (P-03) ---
     async loadFormats() {

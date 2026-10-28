@@ -60,8 +60,11 @@ export function EventsScreen() {
   const [selected, setSelected] = useState<LocalDate | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  // UI-REFONTE-07 (iPhone, critère 3) : fériés masqués le temps de la consultation ; les calendriers restent réglés dans Réglages (E-03).
-  const [hideHolidays, setHideHolidays] = useState(false);
+  // UI-REFONTE-07 (iPhone, critère 3) puis UI-FIX-08 : fériés masqués dans la liste, choix mémorisé par appareil (`events.hideHolidays`) ;
+  // les calendriers restent réglés dans Réglages (E-03).
+  const hideHolidays = useFeatureStore(eventsStore, (s) => s.hideHolidays);
+  const setHideHolidays = useFeatureStore(eventsStore, (s) => s.setHideHolidays);
+  const settingErrorKey = useFeatureStore(eventsStore, (s) => s.settingErrorKey);
   const listRef = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef<string | null>(null);
   const taskSheet = useStandaloneTaskSheet(selected ?? today);
@@ -206,11 +209,16 @@ export function EventsScreen() {
       <div className="ct-events__pillsRow">
         <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />
         {layout === 'mobile' && holidayCountriesText && !projectFilter && (
-          <button type="button" className="ct-events__holidaysToggle" aria-pressed={hideHolidays} onClick={() => setHideHolidays((value) => !value)}>
+          <button type="button" className="ct-events__holidaysToggle" aria-pressed={hideHolidays} onClick={() => void setHideHolidays(!hideHolidays)}>
             {tEventsRefonte(hideHolidays ? 'showHolidays' : 'hideHolidays')}
           </button>
         )}
       </div>
+      {settingErrorKey && (
+        <p className="ct-events__error" role="alert">
+          {t(settingErrorKey)}
+        </p>
+      )}
       {status === 'error' && errorKey && (
         <p className="ct-events__error" role="alert">
           {t(errorKey)}
