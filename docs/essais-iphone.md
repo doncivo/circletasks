@@ -2,6 +2,83 @@
 
 **Retour du 26 octobre 2026 :** Ali confirme la réussite du paquet A et des autres essais natifs ci-dessous en 1.0.1. Ne pas les refaire pour la refonte. A9 reste non exécuté, risque accepté ; A6b reste une vérification future en usage après la 1.0.
 
+## Séance unique — tout ce qui attend tes appareils (préparée le 2026-10-28)
+
+Une seule liste ordonnée, demandée par Ali : les six contrôles des refontes, les quatre contrôles natifs de la 1.0.2 jamais faits, le paquet A rejoué sur les écrans refondus, et tout ce que le backlog garde « en attente de vérification appareil ». Les parcours déjà prouvés par la CI ne sont pas rejoués ; les régressions iCloud 1 à 9 de la section « Parcours, dans cet ordre » ont été acceptées en 1.0.1 (retour d'Ali du 26 octobre) et ne sont pas refaites. Ce qui exige une IPA **publiée** (mise à jour SideStore par la source, I-06 A3 / A7 / A10) attend REL-03 et n'est pas dans cette séance.
+
+Matériel : l'IPA de laboratoire du lot (compilation 40750480780, 7 383 017 octets, SHA-256 `e85a4e1f…c8ec`, version affichée 1.0.2), le PC à jour de `main` (`npm run tauri dev` ou le dernier installeur 1.0.2 : les écrans PC 08 et 09 ne sont que dans le build de `main`). Pour chaque ligne : version, heure, succès ou échec, capture et texte exact si écart ; « non reproduit » si la condition n'a pas pu être obtenue, jamais une case cochée par supposition. Les écarts listés dans `docs/stories/PRD-02.md` ne sont pas des défauts.
+
+**Préparation (10 min)**
+
+1. **S1, copie locale.** Dans la 1.0.2 installée : Réglages › Sauvegarde automatique › Restaurer › « Sauvegarder maintenant » → entrée datée, aucune erreur. (Schéma inchangé : S2 à S4 non exigés.)
+2. **A1 / A2, état de référence.** Noter la version d'À propos, le thème, le filtre, Face ID, le dossier iCloud ; garder trois tâches dont une avec rappel, une routine, une tâche Perso ; recevoir une tâche du PC.
+3. **Installation de l'IPA de laboratoire** par SideStore (import manuel, sans désinstallation, comme les IPA de laboratoire précédentes) → une seule icône, même app.
+4. **A4, conservation.** Ouvrir l'app → verrou demandé s'il était actif, mêmes tâches, filtre, thème, espaces ; aucune fenêtre d'accueil (REL-01 J01 et J06).
+
+**Nouvelle tâche et Détail — 1.0.2, jamais vérifiés (15 min)**
+
+5. **Clavier à l'ouverture (UI-REFONTE-01).** Toucher + → feuille ouverte, titre actif et clavier visible, « Ajouter la tâche » au-dessus du clavier.
+6. **Options et sélecteurs.** Date puis Heure aux roues ; « Plus d'options » ouvert, défilé, replié → choix conservés, titre inchangé, bouton d'ajout accessible. Créer une seule tâche d'essai « Essai détail HHMM », Pro, 19:30, rappel « À l'heure ».
+7. **Rappel décalé dit au moment du choix (N-FIX-04, régression 4 / B10).** Avec une plage silencieuse Pro qui couvre 19:30 : la ligne « Rappel décalé au … — aucun rappel Pro après … » apparaît sous le choix de rappel, disparaît si l'heure sort de la plage.
+8. **Détail.** Ouvrir la tâche d'essai et une tâche avec rappel → titre et espace séparés, échéance et rappel sur deux lignes, motif du décalage visible ; Reporter / Un jour / Dupliquer avant Focus et suppression ; **une seule commande Terminer** (UI-FIX-02 n° 8) ; « Créée aujourd'hui… » sans « le le » (UI-FIX-02 n° 4) ; en-tête et note atteignables au défilement.
+9. **Objectif : un seul moyen d'ajouter (UI-FIX-05).** Depuis Détail, rattacher à l'objectif : sans objectif cette semaine, interrupteur inactif et une seule explication (UI-FIX-02 n° 7) ; dans l'écran Objectif, un brouillon affiché masque le bouton « + Ajouter un objectif », qui revient une fois le titre validé.
+10. **Clair, sombre, paysage** sur ces deux écrans, clavier ouvert puis fermé → lisible, rien sous l'encoche ni la barre basse.
+
+**Aujourd'hui (20 min)**
+
+11. **Agenda du jour (UI-REFONTE-02), clair et sombre.** Colonne des heures, ligne « maintenant », passé atténué, dû en gros « En retard de … », sans heure derrière un tiret, aucun badge ; menu « Plus d'options » : Un jour (compte), Objectif, Rapport, Vue compacte, Mode édition ; rangée d'ajout au-dessus de la barre basse, clavier ouvert puis fermé.
+12. **Geste sur une ligne (A-07).** Balayer la tâche d'essai → actions terminer / reporter proposées, annulation 5 s après « Terminer » (T-04).
+13. **Capture rapide (Q-05).** « + » → feuille avec le titre actif ; taper « Acheter du pain #perso demain 10h » et **Entrée tout de suite** → tâche créée (si l'Entrée est ignorée : c'est Q-05-FIX-01, noter l'heure et la durée avant que le bouton s'active).
+14. **Concentration (UI-FIX-06).** Détail › Focus → en-tête « Concentration », Pause en bouton plein puis Reprendre, « Terminer la tâche » au trait ; le pied « Aujourd'hui : … de concentration · session en cours » avance chaque seconde. Terminer la session (F-04 : son ou texte « Session terminée »).
+
+**Semaine (10 min)**
+
+15. **UI-REFONTE-03.** Heures en colonne, aujourd'hui au trait et en gras, jours en minuscules, week-end allégé, synthèse « N restantes · N faites · N en retard » ; toucher l'en-tête de jeudi → « Ajouter à jeudi N », ajout au bon jour ; clavier ouvert : rangée au-dessus de la barre basse ; semaine suivante puis retour → « Cette semaine » seulement hors de la semaine courante ; sombre lisible.
+
+**Routines (15 min)**
+
+16. **UI-REFONTE-05.** Synthèse en tête, pastilles pointillé / contour / plein, « N sur N cette semaine », fréquence en toutes lettres, pas d'icône, rangée du bas « Rapport du mois » + « Routine » ; « Modifier » ouvre le formulaire.
+17. **Rappels décalés d'une routine (N-FIX-04 critère 6).** Une routine Pro à 19:30 avec rappel, plage silencieuse couvrant 19:30 → ligne « Rappels décalés à … » sur la carte ; retirer la plage → la ligne disparaît.
+18. **Remplacement d'une notification (N-FIX-03, ton constat du 27 octobre).** Modifier l'heure d'une routine à quelques minutes, verrouiller → le rappel sonne à la **nouvelle** heure, pas à l'ancienne, une seule fois ; Réglages › Rappels : « Planifiés jusqu'au … » cohérent (régression 7 / B9).
+
+**Checklists (10 min)**
+
+19. **UI-REFONTE-06 et clavier (C-FIX-01 critère 6, régression 10).** Créer une checklist → clavier immédiatement visible, titre actif ; après création, champ « Nouvel élément » actif et visible au-dessus du clavier, Entrée enchaîne ; titre = sélecteur (roue « Choisir une checklist »), « + » et crayon à droite, « N sur N » avec « Réorganiser », rangée du bas « Supprimer les N éléments cochés » (rouge, éteint à zéro) et « Tout décocher » ; titre très long : rien ne sort de l'écran.
+
+**Événements (10 min)**
+
+20. **UI-REFONTE-07.** Fériés en gris sans badge, « Jour férié en France / en Tunisie », événements propres en encre avec « J-N », pastille « Masquer les fériés » (session seulement), rangée du bas « Vue calendrier » + « Événement » ; tous fériés masqués et aucun événement → état vide avec le bouton d'ajout, pastille visible.
+
+**Réglages et Synchronisation (25 min)**
+
+21. **Retour à gauche partout (UI-FIX-04).** Un jour, Objectif, Rapport, Réglages › Apparence / Onglets / Récapitulatifs / Heures calmes / Espaces / Agendas / Jours fériés / Synchronisation › Détails / Corbeille / Import → bouton « Retour » à gauche avec sa flèche, même destination.
+22. **Expiration de signature (I-02, UI-FIX-02 n° 9).** Réglages ouvert depuis le haut → ligne d'expiration visible avant Général ; si bandeau, « Voir » y mène. Ne pas avancer l'horloge.
+23. **Face ID (I-03).** Réglages › Verrouillage Face ID : activer demande une authentification ; refuser → réglage inchangé et message ; accepter puis quitter / rouvrir → verrou demandé.
+24. **Synchronisation (UI-REFONTE-04 ; UI-FIX-02 n° 1, 3, 5, 6, 10).** Détails : carte d'état en une phrase et « Synchroniser » ; mode avion puis réseau rétabli → attente neutre, vert seulement après une synchro complète ; appareils en gabarit, statut en pastille alignée, « Cet appareil » pour l'iPhone, nom + huit caractères pour le PC ; renommer le PC puis fermer / rouvrir → nom conservé ; un appareil jamais lu dit « Jamais lu » sans heure inventée (sinon « non reproduit ») ; conflit existant → « Heure prévue de « … » », « Rétablir » ; « Repartir de zéro » isolé en bas avec son avertissement ; rien ne déborde à droite.
+25. **Sélecteur et confirmation iOS (Y-IOS-06, régression 11).** Choix du dossier : annuler par bouton puis rouvrir, puis par balayage → propre et réouvrable ; deux demandes rapprochées → une seule interface ; mise en arrière-plan pendant une confirmation → refus propre, pas de blocage.
+26. **Zones sûres (UI-FIX-02 n° 2)**, en traversant 21 à 25 : aucun contenu dans la barre d'état, titres entiers, boutons bas accessibles, portrait et paysage.
+
+**Notifications sur écran verrouillé (20 min, plus les attentes)**
+
+27. **Actions depuis la notification (N-03, J02 / A6a).** Créer sur PC un rappel Pro à quelques minutes hors plage silencieuse, synchroniser, verrouiller ; recevoir → « +15 min » puis « Fait » sur le rappel reporté, synchroniser → report unique puis tâche terminée sur PC, aucun rappel émis par le PC.
+28. **Aperçus masqués (N-IOS-FIX-01, régression 12).** Aperçus « Si déverrouillé » ; rappels de tâche, routine et événement → texte de remplacement par catégorie, aucun titre privé ; déverrouiller → vrai titre et corps.
+29. **Pourcentages (N-IOS-CHK-01, régression 13).** Protocole complet de la fiche : espace renommé `50 % %u`, tâche `Essai % · 50 % · %u`, aperçus « Toujours » → titre et corps exacts, verdict séparé ; remettre nom et réglage.
+30. **Autorisations au bon moment (I-05).** Sur une app fraîchement installée les demandes (notifications, caméra, micro) n'arrivent qu'à la première utilisation de chaque fonction, jamais au lancement ; noter l'écran qui déclenche chacune.
+
+**Capture et agendas réels (20 min)**
+
+31. **Scan et dictée (CAP-IOS-01, Q-03, Q-04, J07 / M7).** Photographier une courte liste manuscrite, corriger une ligne, valider → rien créé avant l'accord, lignes créées une fois ; dicter une tâche avec une heure en lettres → relecture puis création à la bonne heure.
+32. **Google depuis l'iPhone (K-TECH-01, J08 / M8).** Sur le calendrier de test : connexion native si nécessaire, retour à l'app, lecture d'un événement connu à la bonne heure ; sans jeton dans les notes.
+33. **Rappels Apple (K-05, K-06, K-07).** Rappels Apple listés dans CircleTasks ; cocher dans l'un → coché dans l'autre ; les mêmes rappels visibles sur le PC après synchro.
+
+**Thèmes et roues, puis clôture (10 min)**
+
+34. **Thème et roue des jours (régression 14).** En sombre puis clair : bandeau Annuler, bouton principal des projets, trois états d'interrupteur ; roue de date positionnée sur la date choisie.
+35. **Détails des deux appareils** cohérents avec ce qui a été observé ; **exporter le journal** depuis l'app (iCloud Drive) et le joindre aux résultats.
+36. **PC, écrans 08 et 09.** Aujourd'hui en deux colonnes (barre nommée, colonne 660 px, seconde colonne « Demain / Cette semaine / Raccourcis », « Ajouter » met le focus) ; Réglages : sommaire à gauche, chevrons, « Général » en six lignes, « Tous les raccourcis · Ctrl / » ; fenêtre à 1 024 px : rien ne se recouvre, sommaire collant.
+
+Après la séance : chaque ligne verte ferme sa référence (backlog « en attente de vérification appareil » → fait, critères physiques de C-FIX-01 et Y-IOS-06, N-IOS-CHK-01, rendu natif de UI-REFONTE-01 à 07) ; chaque écart devient une story de correction avec sa preuve rouge. Reste pour REL-03 : I-06 A3 / A7 / A10 avec l'IPA publiée N+1.
+
 ## Refontes 02 à 09 — lot des huit refontes, compilation unique du 2026-10-28
 
 Source `main` **a17c9ada** (#99 à #107 fusionnées, schéma inchangé : 19), bundle de départ **337 895 octets normalisés**, marge 20 505. [Compilation iPhone](https://github.com/doncivo/circletasks/actions/runs/40750480780) lancée à la main sur `main` (pas de tag, pas de publication) : verte, artefact `CircleTasks-ipa` : **CircleTasks.ipa, 7 383 017 octets**, SHA-256 `e85a4e1f64f6b294ae050d67c9d985872b8f50a8574d80cedcb9aed15587c8ec`, version de l'app inchangée (1.0.2, pas de tag). **Une seule compilation pour tout le lot** (règle d'AGENTS.md) ; la publication par tag `ios-v*` et la mise à jour SideStore N → N+1 viennent avec REL-01 à REL-03.
