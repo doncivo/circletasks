@@ -1,0 +1,101 @@
+/* Seconde colonne d'Aujourd'hui sur PC (UI-REFONTE-08, PC-Jour.html) : « Demain », « Cette semaine », « Raccourcis ». */
+.ct-today__side {
+  flex-grow: 1;
+  max-width: 420px;
+  min-width: 0;
+  padding-left: 40px;
+  border-left: 1px solid var(--ct-color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.ct-today-side__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ct-today-side__title {
+  margin: 0 0 6px;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.02em;
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-today-side__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-today-side__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-today-side__row:last-child {
+  border-bottom: 0;
+}
+
+.ct-today-side__lead {
+  flex-shrink: 0;
+  width: 46px;
+  color: var(--ct-color-agenda-hour);
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-today-side__lead[data-kind='none'] {
+  color: var(--ct-color-agenda-past);
+}
+
+.ct-today-side__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ct-today-side__countdown {
+  color: var(--ct-color-agenda-hour);
+  font-weight: var(--ct-font-weight-medium);
+}
+
+.ct-today-side__empty {
+  margin: 0;
+  padding: 6px 0;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-agenda-past);
+}
+
+.ct-today-side__hints {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-today-side__hintButton {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-today-side__hintButton:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

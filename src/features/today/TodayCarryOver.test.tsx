@@ -60,7 +60,7 @@ describe('TodayScreen : badge « reportée » (T-06)', () => {
     renderToday();
     const late = (await screen.findByRole('button', { name: 'Mettre à jour le budget' })).closest('.ct-list-row') as HTMLElement;
     expect(within(late).getByText('reportée')).toBeInTheDocument();
-    expect(late).toHaveTextContent('09:00 · reportée · Pro');
+    expect(late).toHaveTextContent(/09:00.*reportée · Pro/); // UI-REFONTE-08 : agenda sur PC, « En retard de … » précède
     const normal = screen.getByRole('button', { name: 'Tâche du jour' }).closest('.ct-list-row') as HTMLElement;
     expect(within(normal).queryByText('reportée')).toBeNull();
   });

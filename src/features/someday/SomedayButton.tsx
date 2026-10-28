@@ -9,6 +9,8 @@ export interface SomedayButtonProps {
   readonly onToggle?: () => void;
   /** Panneau affiché (avec `onToggle`). */
   readonly pressed?: boolean;
+  /** UI-REFONTE-08 (barre PC) : l'icône porte son nom (« Un jour ») ; le libellé accessible et le badge ne changent pas. */
+  readonly showLabel?: boolean;
 }
 
 /**
@@ -16,7 +18,7 @@ export interface SomedayButtonProps {
  * Dans l'en-tête de la Semaine PC (S-06), elle affiche ou masque le panneau à droite de la grille.
  * Badge du nombre de tâches non terminées du filtre actif (critère 6), absent à 0 ; libellé accessible « Un jour, 6 tâches ».
  */
-export function SomedayButton({ onToggle, pressed }: SomedayButtonProps = {}) {
+export function SomedayButton({ onToggle, pressed, showLabel = false }: SomedayButtonProps = {}) {
   const layout = useLayout();
   const navigate = useNavigationStore((s) => s.navigate);
   const closeDetail = useNavigationStore((s) => s.closeDetail);
@@ -25,7 +27,7 @@ export function SomedayButton({ onToggle, pressed }: SomedayButtonProps = {}) {
   return (
     <button
       type="button"
-      className="ct-someday-button"
+      className={showLabel ? 'ct-someday-button ct-someday-button--named' : 'ct-someday-button'}
       aria-label={label}
       {...(onToggle ? { 'aria-pressed': pressed ?? false } : {})}
       onClick={() => {
@@ -37,7 +39,8 @@ export function SomedayButton({ onToggle, pressed }: SomedayButtonProps = {}) {
         navigate({ tab: 'tasks', screen: 'someday' });
       }}
     >
-      <SomedayIcon size={layout === 'pc' ? 24 : 26} />
+      <SomedayIcon size={showLabel ? 18 : layout === 'pc' ? 24 : 26} />
+      {showLabel && <span className="ct-someday-button__text">{t('someday.open')}</span>}
       {count > 0 && (
         <span className="ct-someday-button__badge" aria-hidden="true">
           {count > 99 ? '99+' : count}

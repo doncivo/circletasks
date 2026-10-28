@@ -243,16 +243,16 @@ describe('Aujourd’hui iPhone : l’agenda du jour (UI-REFONTE-02)', () => {
     expect(screen.getByLabelText('Nouvelle tâche')).toBeInTheDocument();
   });
 
-  it('PC : en-tête avec badge, cartes et bascule inchangés ; aucun agenda (critère 13)', async () => {
+  it('PC (UI-REFONTE-08) : le même agenda, sans badge ; les bascules sont nommées dans la barre, pas de menu « Plus d’options »', async () => {
     await seedTask(h, { title: 'Sur PC', time: shift(now, -60) });
     mockViewport(1440);
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Sur PC' });
-    expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mode édition' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Vue compacte' })).toBeInTheDocument();
+    expect(screen.queryByText('Aujourd’hui')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mode édition' })).toHaveTextContent('Édition');
+    expect(screen.getByRole('button', { name: 'Vue compacte' })).toHaveTextContent('Compacte');
     expect(screen.queryByRole('button', { name: 'Plus d’options' })).toBeNull();
-    expect(document.querySelector('.ct-agenda__line')).toBeNull();
-    expect(document.querySelector('.ct-agenda__now')).toBeNull();
+    expect(document.querySelector('.ct-agenda__line[data-phase="due"]')).not.toBeNull();
+    expect(document.querySelector('.ct-agenda__now')).not.toBeNull();
   });
 });
