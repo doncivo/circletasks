@@ -57,7 +57,8 @@ test.describe('Q-01 — capture rapide', () => {
     await page.getByRole('button', { name: 'Jour suivant' }).click();
     const row = rowOf(page, 'Appeler le notaire');
     await expect(row).toBeVisible();
-    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('10:00 · Pro');
+    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/); // UI-REFONTE-08 : l'heure est dans la colonne de l'agenda
+    await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('10:00');
     // Ctrl+Z annule (T-13).
     await page.keyboard.press('Control+z');
     await expect(row).toHaveCount(0);

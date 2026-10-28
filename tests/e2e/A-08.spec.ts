@@ -67,7 +67,9 @@ test.describe('A-08 — fiche détail', () => {
     await page.keyboard.press('Enter');
     await fiche.getByRole('button', { name: 'Espace de la tâche : Pro' }).click();
     await fiche.getByRole('group', { name: 'Espace de la tâche' }).getByRole('button', { name: 'Perso' }).click();
-    await expect(rowOf(page, 'Seconde (modifiée)').locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('10:30 · Perso');
+    // UI-REFONTE-08 : agenda sur PC, l'heure est dans la colonne et la sous-ligne porte l'espace.
+    await expect(rowOf(page, 'Seconde (modifiée)').locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Perso$/);
+    await expect(rowOf(page, 'Seconde (modifiée)').locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('10:30');
   });
 
   test('un titre vidé est refusé et la valeur précédente est rétablie (critère 10)', async ({ page }, testInfo) => {

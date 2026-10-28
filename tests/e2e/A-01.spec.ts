@@ -20,9 +20,8 @@ test.describe('A-01 — liste du jour', () => {
 
   test('l’app démarre sur l’onglet Tâches avec le jour et le badge AUJOURD’HUI (critères 1, 2)', async ({ page }) => {
     await expect(todayTab(page)).toHaveAttribute('aria-current', 'page');
-    // UI-REFONTE-02 : sur iPhone le badge a disparu, la ligne « maintenant » de l'agenda marque le jour courant.
-    if (test.info().project.name === 'iphone') await expect(page.locator('.ct-agenda__now')).toBeVisible();
-    else await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    // UI-REFONTE-02 (iPhone) puis UI-REFONTE-08 (PC) : le badge a disparu, la ligne « maintenant » de l'agenda marque le jour courant.
+    await expect(page.locator('.ct-agenda__now')).toBeVisible();
     // Jour de Paris (fuseau du navigateur de test), jamais celui du processus de test (UTC en CI : un jour d'écart de 22:00 à minuit UTC).
     const today = new Date();
     const timeZone = 'Europe/Paris';
@@ -42,14 +41,9 @@ test.describe('A-01 — liste du jour', () => {
     const title = `Facture ${testInfo.project.name}`;
     await createTask(page, testInfo, { title, time: '09:00' });
     const row = rowOf(page, title);
-    if (test.info().project.name === 'iphone') {
-      // UI-REFONTE-02 : l'heure est dans la colonne de l'agenda ; la sous-ligne porte l'espace (précédé du retard si l'heure est passée).
-      await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('09:00');
-      await expect(row.locator('.ct-list-row__subtitle')).toHaveText(/Pro$/);
-    } else {
-      await expect(row).toContainText('09:00');
-      await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
-    }
+    // UI-REFONTE-02 (iPhone) puis UI-REFONTE-08 (PC) : l'heure est dans la colonne de l'agenda ; la sous-ligne porte l'espace (précédé du retard si l'heure est passée).
+    await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('09:00');
+    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/);
     await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toHaveCount(0);
   });
 
@@ -77,13 +71,13 @@ test.describe('A-01 — liste du jour', () => {
     const todayText = (await heading.textContent()) ?? '';
     await page.getByRole('button', { name: 'Jour suivant' }).click();
     await expect(heading).not.toHaveText(todayText);
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.ct-agenda__now')).toHaveCount(0); // UI-REFONTE-08 : plus de badge sur PC, la ligne « maintenant » dit le jour courant
     await page.getByRole('button', { name: 'Jour précédent' }).click();
     await page.getByRole('button', { name: 'Jour précédent' }).click();
     await expect(heading).not.toHaveText(todayText);
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.ct-agenda__now')).toHaveCount(0);
     await todayTab(page).click();
     await expect(heading).toHaveText(todayText);
-    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    await expect(page.locator('.ct-agenda__now')).toBeVisible();
   });
 });

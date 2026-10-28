@@ -155,7 +155,9 @@ describe('TodayScreen (T-01)', () => {
 
   it('affiche un message d’erreur si le chargement de la liste échoue, sans rejet non géré', async () => {
     mockViewport(1440);
-    vi.spyOn(container.data.repos.tasks, 'listForDay').mockRejectedValueOnce(new Error('boom'));
+    // UI-REFONTE-08 : la seconde colonne lit aussi les jours suivants ; seul le jour affiché échoue.
+    const original = container.data.repos.tasks.listForDay.bind(container.data.repos.tasks);
+    vi.spyOn(container.data.repos.tasks, 'listForDay').mockImplementation((date, filter) => (date === todayLocal(container.clock) ? Promise.reject(new Error('boom')) : original(date, filter)));
     renderToday(container);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de charger les tâches du jour.');
@@ -325,7 +327,7 @@ describe('TodayScreen (T-01)', () => {
     expect(persisted[0]?.icon).toBeNull();
   });
 
-  it('la ligne Aujourd’hui reflète aussitôt un changement d’icône ou de note fait dans le panneau (bloquant revue T-03)', async () => {
+  it('la ligne Aujourd’hui reflète aussitôt un changement fait dans le panneau (bloquant revue T-03 ; UI-REFONTE-08 : l’agenda n’affiche plus l’icône, le titre fait foi)', async () => {
     mockViewport(1440);
     renderToday(container);
 
@@ -338,12 +340,15 @@ describe('TodayScreen (T-01)', () => {
     const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Icône' }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Icône document' }));
-
-    // La ligne de la liste (pas seulement la base) affiche la nouvelle icône sans
-    // recharger ni rouvrir l'écran : todayStore.setTaskInPlace est appelé par
-    // TaskDetail après l'écriture réussie.
-    await waitFor(() => expect(row.querySelector('svg')).not.toBeNull());
-    expect(row.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Changer l’icône' })).toBeInTheDocument());
+    // L'agenda ne montre pas l'icône (écart T-03 noté depuis UI-REFONTE-02) ; la ligne suit la base sans recharger : le titre modifié
+    // dans le panneau apparaît aussitôt (todayStore.setTaskInPlace, appelé par TaskDetail après l'écriture réussie).
+    expect(row.querySelector('svg')).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Envoyer la facture' }));
+    const field = screen.getByLabelText('Titre de la tâche');
+    fireEvent.change(field, { target: { value: 'Envoyer la facture signée' } });
+    fireEvent.submit(field.closest('form') as HTMLFormElement);
+    await waitFor(() => expect(within(row).getByRole('button', { name: 'Envoyer la facture signée' })).toBeInTheDocument());
   });
 
   it('enregistre une note multi-lignes à la perte de focus, conservée au réaffichage (critères 7 à 9, 11)', async () => {

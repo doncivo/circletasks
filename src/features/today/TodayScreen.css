@@ -825,3 +825,104 @@
 .ct-agenda__add .ct-today__addLine {
   align-items: center;
 }
+
+/* ---------- UI-REFONTE-08 : Aujourd'hui PC (docs/maquettes-refonte/PC-Jour.html) ---------- */
+
+/* Barre fixe en haut : pastilles, Rechercher, puis les commandes nommées. */
+.ct-today__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -28px -40px 0;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--ct-color-border);
+  background: var(--ct-color-surface);
+}
+
+.ct-today__topbarSpacer {
+  flex-grow: 1;
+}
+
+/* Les pastilles gardent leur largeur ; « Rechercher » se réduit avant elles (F-03, P-06 : un clic intercepté par la recherche). */
+.ct-today__topbar .ct-filter-bar {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  width: auto;
+}
+
+.ct-today__topbar .ct-search-field-button {
+  flex-shrink: 1;
+  min-width: 160px;
+}
+
+.ct-today__barButton,
+.ct-today__topbar .ct-someday-button--named {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: 17px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+  width: auto;
+}
+
+.ct-today__barButton[aria-pressed='true'] {
+  border-color: var(--ct-color-text);
+  background: var(--ct-color-row-selected);
+}
+
+.ct-today__barButton:focus-visible,
+.ct-today__topbar .ct-someday-button--named:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-today__topbar .ct-search-field-button {
+  max-width: 420px;
+  flex-grow: 1;
+  margin-left: 10px;
+}
+
+/* Deux colonnes : le jour borné à 660 px, « ce qui arrive » à droite. */
+.ct-today[data-layout='pc'] .ct-today__columns {
+  display: flex;
+  gap: 48px;
+  flex-grow: 1;
+  min-height: 0;
+  padding-top: 24px;
+}
+
+.ct-today__dayColumn {
+  width: 660px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-4);
+  min-height: 0;
+}
+
+.ct-today[data-layout='pc'] .ct-today__day {
+  font-size: 2.75rem;
+}
+
+/* L'agenda sur PC : mêmes lignes qu'iPhone, le champ d'ajout reste en bas de la colonne. */
+.ct-today[data-layout='pc'] .ct-today__list--agenda {
+  flex-grow: 0;
+}
+
+.ct-today[data-layout='pc'] .ct-today__dayColumn > .ct-today__addBlock {
+  margin-top: auto;
+  padding: 14px 0 20px;
+}

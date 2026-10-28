@@ -33,7 +33,7 @@ test.describe('Q-03 — dictée', () => {
     await page.getByRole('button', { name: 'Jour suivant' }).click();
     const row = rowOf(page, 'appeler le notaire');
     await expect(row).toBeVisible();
-    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toContainText('10:00');
+    await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('10:00'); // UI-REFONTE-08 : agenda sur PC
   });
 
   test('PC : le micro est atteignable au clavier juste après le champ', async ({ page }, testInfo) => {

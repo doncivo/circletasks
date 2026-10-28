@@ -18,13 +18,15 @@ export interface TodayHeaderProps {
   actions?: ReactNode;
   /** Agenda iPhone (UI-REFONTE-02, Jour.html) : plus de badge « AUJOURD'HUI » ; la ligne « maintenant » dit le jour courant. */
   hideBadge?: boolean;
+  /** PC (UI-REFONTE-08, PC-Jour.html) : plus de filet décoratif sous la date. */
+  hideRule?: boolean;
 }
 
 /**
  * En-tête d'Aujourd'hui (A-01, Main.html / PC-Aujourdhui.html) : mois, jour en grand (Fraunces), badge
  * « AUJOURD'HUI » sur le jour courant seulement, flèches de jour sur PC, filet décoratif.
  */
-export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, actions, hideBadge = false }: TodayHeaderProps) {
+export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, actions, hideBadge = false, hideRule = false }: TodayHeaderProps) {
   const header = formatTodayHeader(date, layout === 'pc' ? 'long' : 'short');
   const rowRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -57,10 +59,12 @@ export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, act
           {actions}
         </div>
       </div>
-      <div className="ct-today__rule" aria-hidden="true">
-        <div className="ct-today__ruleAccent" />
-        <div className="ct-today__ruleLine" />
-      </div>
+      {!hideRule && (
+        <div className="ct-today__rule" aria-hidden="true">
+          <div className="ct-today__ruleAccent" />
+          <div className="ct-today__ruleLine" />
+        </div>
+      )}
     </>
   );
 }

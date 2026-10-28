@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import type { Routine } from '../../domain/model';
@@ -11,7 +11,8 @@ import { registerTodaySource } from './todaySources';
 
 const alt = (key: 'ArrowUp' | 'ArrowDown'): KeyInput => ({ key, code: key, ctrlKey: false, altKey: true, shiftKey: false, metaKey: false, editable: false });
 
-const titles = (): string[] => screen.getAllByRole('listitem').map((item) => item.querySelector('.ct-list-row__title')?.textContent ?? '');
+// UI-REFONTE-08 : l'agenda du jour (PC aussi) a une ligne « maintenant » sans titre ; seules les lignes de tâches comptent.
+const titles = (): string[] => screen.getAllByRole('listitem').map((item) => item.querySelector('.ct-list-row__title')?.textContent ?? '').filter((title) => title !== '');
 
 function pointer(target: EventTarget, type: string, clientY: number, button = 0): void {
   const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY, button });
@@ -149,7 +150,7 @@ describe('Aujourd’hui : réordonner la liste (A-02)', () => {
     await seedTask(h, { title: 'C' });
     renderToday(h.container);
     await screen.findByRole('button', { name: 'A' });
-    const items = screen.getAllByRole('listitem');
+    const items = screen.getAllByRole('listitem').filter((item) => item.querySelector('.ct-list-row__title') !== null); // UI-REFONTE-08
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       const index = items.indexOf(this);
       const top = index * 60;
@@ -179,13 +180,15 @@ describe('Aujourd’hui : réordonner la liste (A-02)', () => {
     off.push(registerTodaySource({ id: 'routines', load: () => Promise.resolve({ routines: [{ routine, done: false }] }) }));
     await seedTask(h, { title: 'A' });
     renderToday(h.container);
-    await screen.findByText('Boire de l’eau');
-    const items = screen.getAllByRole('listitem');
+    // UI-REFONTE-08 : la routine du jour revient aussi dans la colonne « Demain » (PC) ; on vise la colonne du jour.
+    await screen.findAllByText('Boire de l’eau');
+    const day = document.querySelector('.ct-today__dayColumn') as HTMLElement;
+    const items = within(day).getAllByRole('listitem').filter((item) => item.querySelector('.ct-list-row__title') !== null); // sans la ligne « maintenant »
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       const index = items.indexOf(this);
       return { top: index * 60, bottom: index * 60 + 60, left: 0, right: 100, width: 100, height: 60, x: 0, y: index * 60, toJSON: () => ({}) };
     });
-    pointer(screen.getByText('Boire de l’eau'), 'pointerdown', 30);
+    pointer(within(day).getByText('Boire de l’eau'), 'pointerdown', 30);
     pointer(window, 'pointermove', 100);
     pointer(window, 'pointerup', 100);
     expect(titles()).toEqual(['Boire de l’eau', 'A']);
