@@ -5,7 +5,7 @@ import { createFakeHaptics, type FakeHaptics } from '../../platform/haptics';
 import { useNavigationStore } from '../app/navigation';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import { swipeLeft, swipeRight, swipeRowOf, touch } from '../tasks/gestureTestKit';
-import { mockViewport, renderToday, seedTask, setupToday, teardownToday, type TodayHarness } from './testKit';
+import { mockViewport, renderToday, seedTask, setupToday, teardownToday, type TodayHarness, toggleViaMenu } from './testKit';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 
 /** A-07 sur Aujourd'hui (iPhone) : critères 1 à 6, 8, 9, 12, 14, 16 à 18. Les gestes appellent les cas d'usage existants. */
@@ -172,15 +172,15 @@ describe('Aujourd’hui : gestes de ligne (A-07)', () => {
     renderToday(harness.container);
     await screen.findByText('Courses');
     expect(screen.getByRole('group', { name: 'Actions : Courses' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mode édition' }));
+    await toggleViaMenu('Mode édition');
     expect(screen.queryByRole('group', { name: 'Actions : Courses' })).toBeNull();
     const row = swipeRowOf(task.id);
     touch(row, 'pointerdown', 20, 30, 0);
     touch(row, 'pointermove', 250, 30, 100);
     touch(row, 'pointerup', 250, 30, 150);
     expect((await taskOf(task.id))?.status).toBe('todo');
-    fireEvent.click(screen.getByRole('button', { name: 'Mode édition' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Vue compacte' }));
+    await toggleViaMenu('Mode édition');
+    await toggleViaMenu('Vue compacte');
     await waitFor(() => expect(screen.getByRole('group', { name: 'Actions : Courses' })).toBeInTheDocument());
   });
 

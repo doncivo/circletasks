@@ -78,6 +78,12 @@ export async function insertEvents(page: Page, events: readonly DirectEvent[]): 
 }
 
 /** Ligne de la liste Événements portant ce titre. */
+/** UI-REFONTE-02 : événement d'Aujourd'hui, bandeau sur PC (`.ct-today-event`) ou ligne de l'agenda sur iPhone (rond au trait, source en sous-ligne). */
+export const todayEventBand = (page: Page, title: string): Locator => page.locator('.ct-today-event, .ct-agenda__line:has(.ct-agenda__eventMark)').filter({ hasText: title });
+
+/** Étiquette de compte à rebours (E-04) d'un bandeau PC ou d'une ligne d'agenda iPhone. */
+export const todayEventTag = (band: Locator): Locator => band.locator('.ct-today-event__tag, .ct-agenda__countdown');
+
 export const eventRow = (page: Page, title: string): Locator => page.locator('.ct-event-row').filter({ has: page.locator('.ct-event-row__title', { hasText: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) });
 
 /** Bouton « + » de l'onglet Événements (le bouton flottant ; l'état vide P-06 porte un autre bouton « Ajouter un événement »). */

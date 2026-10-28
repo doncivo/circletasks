@@ -1,0 +1,48 @@
+/* Menu « Plus d’options » d'Aujourd'hui (UI-REFONTE-02) : feuille d'actions, une ligne par commande, coche sur les interrupteurs. */
+.ct-today-menu {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--ct-space-2);
+}
+
+.ct-today-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  min-height: 52px;
+  padding: 0 var(--ct-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-today-menu__item > span {
+  flex-grow: 1;
+}
+
+.ct-today-menu__item:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: -2px;
+  border-radius: var(--ct-radius-md);
+}
+
+.ct-today-menu__check {
+  color: var(--ct-color-accent);
+}
+
+.ct-today-menu__separator {
+  height: 1px;
+  margin: var(--ct-space-2) 0;
+  background: var(--ct-color-border);
+}
+
+.ct-today-menu__item--close {
+  justify-content: center;
+  margin-top: var(--ct-space-2);
+  color: var(--ct-color-text-secondary);
+}

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { closeSomeday, insertSomeday, openSomeday, somedayButton, somedayTitles } from './helpers/someday';
+import { closeSomeday, insertSomeday, openSomeday, somedayLabel, somedayTitles } from './helpers/someday';
 import { detailOf } from './helpers/spaces';
 import { browserToday } from './helpers/schedule';
 import { createTask, isPhone, openToday, rowOf } from './helpers/today';
@@ -39,7 +39,7 @@ test.describe('SD-03 — renvoyer une tâche datée vers « Un jour »', () => {
     await openSomeday(page, testInfo);
     await expect.poll(() => somedayTitles(page)).toEqual(['Appeler le notaire', 'Ancienne tâche']);
     await closeSomeday(page, testInfo);
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 2 tâches');
+    expect(await somedayLabel(page)).toBe('Un jour, 2 tâches');
   });
 
   test('depuis la Semaine : même effet, la carte quitte la colonne (critère 1)', async ({ page }) => {

@@ -235,9 +235,9 @@ describe('TodayScreen (T-01)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Icône téléphone' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ajouter la tâche' }));
 
+    // UI-REFONTE-02 : l'agenda iPhone n'affiche plus d'icône décorative à droite de la ligne ; l'icône choisie est enregistrée (Détail, PC).
     const row = (await screen.findByText('Appeler le notaire')).closest('.ct-list-row') as HTMLElement;
-    const icon = row.querySelector('svg');
-    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(row.querySelector(':scope > svg')).toBeNull();
 
     const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
     expect(persisted[0]?.icon).toEqual({ kind: 'lucide', name: 'phone' });

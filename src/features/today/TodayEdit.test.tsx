@@ -5,13 +5,16 @@ import type { Routine } from '../../domain/model';
 import { asEntityId, asLocalTime, type RoutineId } from '../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import type { KeyInput } from '../app/shortcuts';
-import { mockViewport, renderToday, seedTask, setupToday, teardownToday, type TodayHarness } from './testKit';
+import { menuToggleState, mockViewport, renderToday, seedTask, setupToday, teardownToday, toggleViaMenu, type TodayHarness } from './testKit';
 import { registerTodaySource } from './todaySources';
 import { todayStore } from './todayStore';
 
 const keyInput = (key: string, over: Partial<KeyInput> = {}): KeyInput => ({ key, code: key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, editable: false, ...over });
-const titles = (): string[] => screen.getAllByRole('listitem').map((item) => item.querySelector('.ct-list-row__title')?.textContent ?? '');
-const toggle = () => screen.getByRole('button', { name: 'Mode édition' });
+// UI-REFONTE-02 : la ligne « maintenant » de l'agenda est un élément de liste sans titre, ignorée ici.
+const titles = (): string[] => screen.getAllByRole('listitem').map((item) => item.querySelector('.ct-list-row__title')?.textContent ?? '').filter((title) => title !== '');
+// UI-REFONTE-02 : sur iPhone l'interrupteur est une entrée du menu « Plus d’options » ; sur PC le bouton de l'écran (voir testKit).
+const toggle = () => toggleViaMenu('Mode édition');
+const toggled = () => menuToggleState('Mode édition');
 const select = (title: string) => fireEvent.click(screen.getByRole('button', { name: `Sélectionner : ${title}` }));
 
 describe('Aujourd’hui : mode édition (A-05)', () => {
@@ -31,24 +34,24 @@ describe('Aujourd’hui : mode édition (A-05)', () => {
     for (const title of names) await seedTask(h, { title, time: '09:00' });
     renderToday(h.container);
     await screen.findByRole('button', { name: names[0] as string });
-    fireEvent.click(toggle());
+    await toggle();
   }
 
   it('l’interrupteur est annoncé, et le mode édition affiche rond, « − » et poignée à la place de la case (critères 1, 12)', async () => {
     await seedTask(h, { title: 'Envoyer la facture', time: '09:00' });
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Envoyer la facture' });
-    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(await toggled()).toBe(false);
     expect(screen.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' })).toBeInTheDocument();
 
-    fireEvent.click(toggle());
-    expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+    await toggle();
+    expect(await toggled()).toBe(true);
     expect(screen.queryByRole('checkbox', { name: 'Terminer : Envoyer la facture' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Sélectionner : Envoyer la facture' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: 'Supprimer : Envoyer la facture' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Déplacer : Envoyer la facture' })).toBeInTheDocument();
 
-    fireEvent.click(toggle());
+    await toggle();
     expect(screen.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Sélectionner/ })).toBeNull();
   });
@@ -58,7 +61,7 @@ describe('Aujourd’hui : mode édition (A-05)', () => {
     renderToday(h.container);
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Terminer : Faire mon lit' }));
     await screen.findByRole('checkbox', { name: 'Rouvrir : Faire mon lit' });
-    fireEvent.click(toggle());
+    await toggle();
     const row = screen.getByRole('button', { name: 'Faire mon lit' }).closest('.ct-list-row') as HTMLElement;
     expect(row).toHaveTextContent('Fait');
     expect(within(row).getByRole('button', { name: 'Sélectionner : Faire mon lit' })).toBeInTheDocument();
@@ -156,9 +159,9 @@ describe('Aujourd’hui : mode édition (A-05)', () => {
   it('désactiver l’interrupteur vide la sélection ; le mode n’est pas mémorisé quand l’écran se ferme (critère 9)', async () => {
     await openEditMode('A', 'B');
     select('A');
-    fireEvent.click(toggle());
+    await toggle();
     expect(screen.queryByRole('toolbar')).toBeNull();
-    fireEvent.click(toggle());
+    await toggle();
     expect(screen.queryByRole('toolbar')).toBeNull();
     expect(screen.getByRole('button', { name: 'Sélectionner : A' })).toHaveAttribute('aria-pressed', 'false');
 
@@ -168,7 +171,7 @@ describe('Aujourd’hui : mode édition (A-05)', () => {
     expect(todayStore.get(h.container).getState().selection.size).toBe(0);
     renderToday(h.container);
     await screen.findByRole('button', { name: 'A' });
-    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(await toggled()).toBe(false);
   });
 
   it('Échap quitte le mode édition ; Ctrl+clic et Maj+clic étendent la sélection ; Suppr supprime la sélection (critère 10)', async () => {
@@ -195,7 +198,7 @@ describe('Aujourd’hui : mode édition (A-05)', () => {
     act(() => {
       h.container.shortcuts.handle(keyInput('Escape', { editable: true }));
     });
-    await waitFor(() => expect(toggle()).toHaveAttribute('aria-pressed', 'false'));
+    await waitFor(() => expect(todayStore.get(h.container).getState().editMode).toBe(false));
     expect(screen.queryByRole('toolbar')).toBeNull();
   });
 

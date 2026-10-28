@@ -7,6 +7,14 @@ import { renderToday, seedTask } from '../today/testKit';
 import { somedayStore } from './somedayStore';
 import { mockViewport, renderSomeday, seedSomeday, setupSomeday, teardownSomeday, type SomedayHarness } from './testKit';
 
+// UI-REFONTE-02 : sur iPhone, « Un jour » est une entrée du menu « Plus d’options » (même libellé que l'icône, sans badge).
+async function somedayEntry(name: string): Promise<HTMLElement> {
+  const pc = screen.queryByRole('button', { name: /^Un jour(,|$)/ }); // l'icône PC, pas les actions de ligne « Un jour : … »
+  if (pc) return screen.findByRole('button', { name }); // PC : l'icône de l'en-tête
+  if (!screen.queryByRole('dialog', { name: 'Plus d’options' })) fireEvent.click(await screen.findByRole('button', { name: 'Plus d’options' }));
+  return screen.findByRole('menuitem', { name });
+}
+
 describe('Accès à « Un jour » depuis Aujourd’hui (SD-01 critères 1, 2, 5, 6, 7)', () => {
   let h: SomedayHarness;
 
@@ -18,27 +26,25 @@ describe('Accès à « Un jour » depuis Aujourd’hui (SD-01 critères 1, 2, 5,
   it('l’icône horloge porte le nombre de tâches non terminées du filtre actif, sans badge à 0 (critère 6)', async () => {
     mockViewport(440);
     renderToday(h.container);
-    expect(await screen.findByRole('button', { name: 'Un jour' })).toBeInTheDocument();
+    expect(await somedayEntry('Un jour')).toBeInTheDocument();
     for (let n = 1; n <= 6; n += 1) await seedSomeday(h, { title: `Tâche ${String(n)}`, ...(n <= 2 ? { spaceId: SPACE_PERSO_ID } : {}) });
-    const button = await screen.findByRole('button', { name: 'Un jour, 6 tâches' });
-    expect(within(button).getByText('6')).toBeInTheDocument();
+    expect(await somedayEntry('Un jour, 6 tâches')).toBeInTheDocument();
     // Le compteur suit le filtre d'espace global.
     act(() => useAppStore.getState().setSpaceFilter(SPACE_PERSO_ID));
-    expect(await screen.findByRole('button', { name: 'Un jour, 2 tâches' })).toBeInTheDocument();
+    expect(await somedayEntry('Un jour, 2 tâches')).toBeInTheDocument();
   });
 
   it('au singulier, et sans badge à zéro', async () => {
     mockViewport(440);
     renderToday(h.container);
-    const empty = await screen.findByRole('button', { name: 'Un jour' });
+    const empty = await somedayEntry('Un jour');
     expect(empty.querySelector('.ct-someday-button__badge')).toBeNull();
     await seedSomeday(h, { title: 'Seule' });
     // La liste est lue au premier affichage : on republie la tâche pour le test sans rouvrir l'écran.
     await act(async () => {
       await somedayStore.get(h.container).getState().load();
     });
-    const one = await screen.findByRole('button', { name: 'Un jour, 1 tâche' });
-    expect(within(one).getByText('1')).toBeInTheDocument();
+    expect(await somedayEntry('Un jour, 1 tâche')).toBeInTheDocument();
   });
 
   it('les tâches « Un jour » n’apparaissent pas dans Aujourd’hui (critère 7)', async () => {
@@ -48,13 +54,13 @@ describe('Accès à « Un jour » depuis Aujourd’hui (SD-01 critères 1, 2, 5,
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Du jour' });
     expect(screen.queryByRole('button', { name: 'Sans date' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Un jour, 1 tâche' })).toBeInTheDocument();
+    expect(await somedayEntry('Un jour, 1 tâche')).toBeInTheDocument();
   });
 
   it('iPhone : toucher l’icône ouvre l’écran plein, « Retour » revient à Aujourd’hui (critère 1)', async () => {
     mockViewport(440);
     renderToday(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Un jour' }));
+    fireEvent.click(await somedayEntry('Un jour'));
     expect(useNavigationStore.getState().route).toMatchObject({ tab: 'tasks', screen: 'someday' });
     renderSomeday(h.container);
     fireEvent.click(await screen.findByRole('button', { name: 'Retour' }));
@@ -64,7 +70,7 @@ describe('Accès à « Un jour » depuis Aujourd’hui (SD-01 critères 1, 2, 5,
   it('PC : le panneau s’ouvre à droite, « Fermer le panneau » et Échap le ferment (critère 2)', async () => {
     mockViewport(1280);
     renderToday(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Un jour' }));
+    fireEvent.click(await somedayEntry('Un jour'));
     expect(useNavigationStore.getState().route).toMatchObject({ screen: 'someday' });
     renderSomeday(h.container);
     const panel = await screen.findByRole('complementary', { name: 'Un jour' });

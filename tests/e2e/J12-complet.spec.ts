@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { closeGoalScreen, goalCards, goalTitleField, openGoalScreen } from './helpers/goals';
 import { addIsoDays } from './helpers/schedule';
-import { closeSomeday, openSomeday, somedayButton } from './helpers/someday';
+import { closeSomeday, openSomeday, somedayLabel } from './helpers/someday';
 import { detailOf } from './helpers/spaces';
 import { createTask, isPhone, rowOf, todayTab } from './helpers/today';
 import { browserMonday, dayOf, openWeek } from './helpers/week';
@@ -42,7 +42,7 @@ test('parcours 12 complet : objectif, tâche rattachée envoyée dans « Un jour
   await expect(page.getByRole('status')).toContainText('« Déposer le dossier » mise dans « Un jour »');
   await page.keyboard.press('Escape');
   await expect(rowOf(page, 'Déposer le dossier')).toHaveCount(0);
-  await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+  expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
   await expect(goalCards(page).first()).toContainText('0/1');
 
   // Planification.

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { filterPill } from './helpers/spaces';
-import { addToSomeday, closeSomeday, insertSomeday, openSomeday, somedayButton, somedayList, somedayTitles } from './helpers/someday';
+import { addToSomeday, closeSomeday, insertSomeday, openSomeday, somedayLabel, somedayList, somedayTitles } from './helpers/someday';
 import { isPhone, openToday, todayTab } from './helpers/today';
 
 /**
@@ -13,7 +13,7 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
   });
 
   test('l’icône horloge ouvre « Un jour » ; « Retour » / « Fermer le panneau » le ferme (critères 1 et 2)', async ({ page }, testInfo) => {
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour');
+    expect(await somedayLabel(page)).toBe('Un jour');
     await openSomeday(page, testInfo);
     if (isPhone(testInfo)) await expect(page.getByText('Aucune tâche sans date')).toBeVisible();
     await closeSomeday(page, testInfo);
@@ -30,7 +30,7 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
     if (isPhone(testInfo)) await expect(page.getByText('2 tâches sans date, à planifier plus tard')).toBeVisible();
 
     await closeSomeday(page, testInfo);
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 2 tâches');
+    expect(await somedayLabel(page)).toBe('Un jour, 2 tâches');
     await expect(page.getByRole('button', { name: 'Renouveler le passeport', exact: true })).toHaveCount(0);
 
     // Elles n'apparaissent pas non plus dans la Semaine.
@@ -53,14 +53,14 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
     // La base du navigateur de développement est en mémoire : pas de rechargement ; Aujourd'hui relit la liste en se remontant.
     await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
     await todayTab(page).click();
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 2 tâches');
+    expect(await somedayLabel(page)).toBe('Un jour, 2 tâches');
     await openSomeday(page, testInfo);
     await expect(somedayList(page).getByText('Pro', { exact: true })).toBeVisible();
     await page.getByRole('checkbox', { name: 'Terminer : Renouveler le passeport' }).click();
     await expect(somedayList(page).getByRole('button', { name: 'Renouveler le passeport' })).toHaveCount(0);
     await expect(page.getByRole('status')).toContainText('« Renouveler le passeport » terminée');
     await closeSomeday(page, testInfo);
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+    expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
   });
 
   test('le compteur et la liste suivent le filtre d’espace global (critère 6)', async ({ page }, testInfo) => {
@@ -72,7 +72,7 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
     await filterPill(page, 'Perso').click();
     await expect.poll(() => somedayTitles(page)).toEqual(['Tâche Perso']);
     await closeSomeday(page, testInfo);
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+    expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
   });
 
   test('iPhone : le bouton « + » ouvre la feuille avec « Un jour » présélectionné (critère 5)', async ({ page }, testInfo) => {

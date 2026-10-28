@@ -78,7 +78,7 @@ describe('source des événements externes d’Aujourd’hui (K-03 critère 9)',
     const band = (await screen.findByText('Point client')).closest('div,li,section,article') as HTMLElement;
     expect(within(band).getByText('Google Agenda')).toBeInTheDocument();
     expect(within(band).queryByRole('checkbox')).toBeNull();
-    expect(screen.getByText('10:00')).toBeInTheDocument();
+    expect(screen.getAllByText('10:00').length).toBeGreaterThan(0); // UI-REFONTE-02 : heure dans la colonne de l'agenda
     await seed({ id: 'e2', title: 'Appel', startUtc: '2026-09-23T13:00:00Z', endUtc: '2026-09-23T13:30:00Z' });
     await act(async () => {
       emitEventsChanged(h.container.data);

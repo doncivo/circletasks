@@ -67,7 +67,7 @@ test.describe('ES-03 — filtre Pro / Perso / Tout', () => {
   test('« Tout » écrit l’espace en couleur, Pro et Perso non (critère 5)', async ({ page }) => {
     await seed(page);
     const row = rowOf(page, 'Facture client');
-    await expect(row).toContainText('09:00 · Pro');
+    await expect(row).toContainText(/09:00.*Pro/); // UI-REFONTE-02 : heure dans la colonne, espace en sous-ligne
     await expect(row.getByText('Pro', { exact: true })).toHaveCSS('color', /^color\(srgb 0\.18\d* 0\.41\d* 0\.47\d*\)$/);
     const routine = page.locator('.ct-list-row').filter({ hasText: 'Faire mon lit' });
     await expect(routine).toContainText('Routine · Perso');

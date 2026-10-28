@@ -12,7 +12,7 @@ import { RoutinesScreen } from '../routines/RoutinesScreen';
 import { seedLog, seedRoutine } from '../routines/testKit';
 import { TaskDetail } from '../tasks/TaskDetail';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
-import { mockViewport, renderToday, seedTask, setupToday, teardownToday, type TodayHarness } from '../today/testKit';
+import { mockViewport, renderToday, seedTask, setupToday, teardownToday, toggleViaMenu, type TodayHarness } from '../today/testKit';
 import { seedProject } from './testKit';
 
 const CTRL_Z: KeyInput = { key: 'z', code: 'KeyZ', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, editable: false };
@@ -40,7 +40,7 @@ describe('Déplacer un élément d’un espace ou projet à l’autre (ES-05)', 
       await h.container.data.repos.tasks.update(a.id, { projectId: mission.id });
       renderToday(h.container);
       await screen.findByRole('button', { name: 'A' });
-      fireEvent.click(screen.getByRole('button', { name: 'Mode édition' }));
+      await toggleViaMenu('Mode édition'); // UI-REFONTE-02 : entrée du menu « Plus d’options » sur iPhone, bouton sur PC
       select('A');
       select('B');
       fireEvent.click(screen.getByRole('button', { name: 'Déplacer' }));
@@ -92,7 +92,7 @@ describe('Déplacer un élément d’un espace ou projet à l’autre (ES-05)', 
       act(() => useAppStore.getState().setSpaceFilter(SPACE_PRO_ID));
       renderToday(h.container);
       await screen.findByRole('button', { name: 'A' });
-      fireEvent.click(screen.getByRole('button', { name: 'Mode édition' }));
+      await toggleViaMenu('Mode édition'); // UI-REFONTE-02 : entrée du menu « Plus d’options » sur iPhone, bouton sur PC
       select('A');
       fireEvent.click(screen.getByRole('button', { name: 'Déplacer' }));
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Perso · aucun projet' }));

@@ -52,14 +52,14 @@ describe('Filtre Pro / Perso / Tout (ES-03)', () => {
     await seedRoutine(h, { title: 'Faire mon lit', spaceId: SPACE_PERSO_ID, time: '07:30' as never });
     renderToday(h.container);
     const taskRow = (await screen.findByText('Appeler maman')).closest('.ct-list-row') as HTMLElement;
-    expect(taskRow).toHaveTextContent('09:00 · Perso');
+    expect(taskRow).toHaveTextContent(/09:00.*Perso/); // UI-REFONTE-02 : heure dans la colonne, espace en sous-ligne
     const routineRow = (await screen.findByText('Faire mon lit')).closest('.ct-list-row') as HTMLElement;
-    expect(routineRow).toHaveTextContent('07:30 · Routine · Perso');
+    expect(routineRow).toHaveTextContent(/07:30.*Routine · Perso/);
     expect(within(routineRow).getByText('Perso')).toHaveStyle({ color: 'color-mix(in srgb, #b5483b, #ffffff var(--ct-space-white, 0%))' });
 
     fireEvent.click(pill('Perso'));
     await waitFor(() => expect(screen.getByText('Appeler maman').closest('.ct-list-row')).not.toHaveTextContent('Perso'));
-    expect(screen.getByText('Faire mon lit').closest('.ct-list-row')).toHaveTextContent('07:30 · Routine');
+    expect(screen.getByText('Faire mon lit').closest('.ct-list-row')).toHaveTextContent(/07:30.*Routine/);
     expect(screen.getByText('Faire mon lit').closest('.ct-list-row')).not.toHaveTextContent('Perso');
   });
 

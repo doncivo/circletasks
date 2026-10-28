@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { clickTodayHeaderAction } from './today';
 import { REPORT_FONT_FACES, REPORT_FONT_SAMPLE } from '../../../src/features/stats/reportFonts';
 import { APP_READY_TIMEOUT_MS, waitForScreenLoaded } from './app';
 
@@ -78,7 +79,7 @@ export const reportButton = (page: Page): Locator => page.getByRole('button', { 
 /** Ouvre le rapport depuis Aujourd'hui et attend son titre. */
 export async function openReport(page: Page, month: string): Promise<void> {
   await waitForScreenLoaded(page, 'reportscreen');
-  await reportButton(page).click();
+  await clickTodayHeaderAction(page, 'Rapport mensuel'); // UI-REFONTE-02 : entrée du menu sur iPhone, bouton sur PC
   await expect(page.getByRole('heading', { level: 1, name: month, exact: true })).toBeVisible();
 }
 

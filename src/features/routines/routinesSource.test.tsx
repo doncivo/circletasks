@@ -31,9 +31,10 @@ describe('Source des routines dans Aujourd’hui (R-01 critère 11, R-03 critèr
     renderToday(h.container);
     await screen.findByRole('button', { name: 'Réunion' });
     const titles = Array.from(document.querySelectorAll('.ct-today__list .ct-list-row__title')).map((node) => node.textContent);
-    expect(titles).toEqual(['Réunion', 'Boire de l’eau', 'Appeler le notaire']);
-    // En « Tout », l'espace est écrit après « Routine » (ES-03).
-    expect(screen.getByText('Boire de l’eau').closest('.ct-list-row')).toHaveTextContent('08:30 · Routine · Pro');
+    // UI-REFONTE-02 (agenda iPhone, heure de test 12:00) : la routine de 08:30 est « passée », les deux tâches à l'heure dépassée sont « dues » et viennent juste avant « maintenant ».
+    expect(titles).toEqual(['Boire de l’eau', 'Réunion', 'Appeler le notaire']);
+    // En « Tout », l'espace est écrit après « Routine » (ES-03) ; l'heure est dans la colonne de la ligne.
+    expect(screen.getByText('Boire de l’eau').closest('.ct-list-row')).toHaveTextContent(/08:30.*Routine · Pro/);
   });
 
   it('une routine sans heure vient après les éléments horodatés, sans heure affichée (R-02 critère 3)', async () => {

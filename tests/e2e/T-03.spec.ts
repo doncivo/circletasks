@@ -69,10 +69,14 @@ test.describe('T-03 — note et icône', () => {
     await dialog.getByRole('button', { name: 'Ajouter la tâche' }).click();
     await expect(dialog).not.toBeVisible();
 
+    // UI-REFONTE-02 : la ligne de l'agenda n'affiche plus d'icône décorative (écart PRD T-03 noté dans la fiche) ; l'icône choisie est dans la fiche.
     const row = page.locator('.ct-list-row', { hasText: title });
-    const icon = row.locator('svg');
+    await expect(row).toBeVisible();
+    await expect(row.locator('.ct-list-row__body ~ svg, .ct-list-row__body ~ span > svg')).toHaveCount(0);
+    await row.getByRole('button', { name: title, exact: true }).click();
+    const detail = page.getByRole('dialog', { name: 'Détail de la tâche' });
+    const icon = detail.locator('span[aria-hidden="true"] > svg').first();
     await expect(icon).toBeVisible();
-    await expect(icon).toHaveAttribute('aria-hidden', 'true');
   });
 
   test('iPhone : choisir un emoji remplace l’icône Lucide choisie (un seul champ icon, critère 2)', async ({ page }, testInfo) => {

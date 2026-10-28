@@ -20,7 +20,7 @@ test.describe('OB-02 — épingler l’objectif en tête d’Aujourd’hui', () 
 
     await closeGoalScreen(page, testInfo);
     await expect(goalCards(page)).toHaveCount(1);
-    await expect(goalCards(page).first()).toContainText('Objectif de la semaine');
+    await expect(goalCards(page).first()).toContainText(testInfo.project.name === 'iphone' ? 'Objectif' : 'Objectif de la semaine'); // iPhone : ligne « Objectif · titre » (UI-REFONTE-02)
     await expect(goalCards(page).first()).toContainText('Finaliser le PRD CircleTasks');
 
     // Désépingler : l'encadré disparaît d'Aujourd'hui, l'objectif reste dans l'écran Objectif.

@@ -1,5 +1,5 @@
-import { cleanup, render } from '@testing-library/react';
-import { vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { expect, vi } from 'vitest';
 import { todayLocal } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
 import type { Task } from '../../domain/model';
@@ -83,4 +83,31 @@ export async function seedTask(harness: TodayHarness, seed: SeedTask): Promise<T
   });
   if (!result.ok) throw new Error(`création impossible : ${result.error}`);
   return result.value;
+}
+
+/**
+ * UI-REFONTE-02 : sur iPhone, « Mode édition » et « Vue compacte » sont des interrupteurs du menu « Plus d’options » ; sur PC, des boutons
+ * de l'écran. Ces aides commandent l'un ou l'autre selon ce qui est rendu, pour les tests A-05 et A-06 écrits avant la refonte.
+ */
+export async function toggleViaMenu(name: 'Mode édition' | 'Vue compacte'): Promise<void> {
+  const direct = screen.queryByRole('button', { name });
+  if (direct) {
+    fireEvent.click(direct);
+    return;
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Plus d’options' }));
+  fireEvent.click(await screen.findByRole('menuitemcheckbox', { name }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Plus d’options' })).toBeNull());
+}
+
+/** État de l'interrupteur (bouton `aria-pressed` sur PC, entrée `aria-checked` du menu sur iPhone, menu refermé ensuite). */
+export async function menuToggleState(name: 'Mode édition' | 'Vue compacte'): Promise<boolean> {
+  const direct = screen.queryByRole('button', { name });
+  if (direct) return direct.getAttribute('aria-pressed') === 'true';
+  fireEvent.click(screen.getByRole('button', { name: 'Plus d’options' }));
+  const item = await screen.findByRole('menuitemcheckbox', { name });
+  const checked = item.getAttribute('aria-checked') === 'true';
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Plus d’options' })).getByRole('button', { name: 'Fermer' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Plus d’options' })).toBeNull());
+  return checked;
 }

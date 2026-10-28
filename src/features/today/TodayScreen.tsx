@@ -1,7 +1,8 @@
 import { useDefaultReminderOffsets } from '../reminders';
-import { ChartColumn, Target } from 'lucide-react';
+import { ChartColumn, EllipsisVertical, Target } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { todayLocal } from '../../domain/clock';
+import { nowLocalTime, todayLocal } from '../../domain/clock';
+import { buildTodayAgenda } from '../../domain/todayAgenda';
 import type { CaptureInput } from '../capture';
 import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
@@ -20,14 +21,15 @@ import { useRowGestureFeedback } from '../app/rowGestureFeedback';
 import { SearchButton } from '../search';
 import { SomedayButton, useSomedayTasks } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
-import { TaskDetail } from '../app/lazyScreens';
+import { lazyScreen, TaskDetail } from '../app/lazyScreens';
 import { TodayAddRow } from './TodayCreate';
+import type { TodayMoreMenuProps } from './TodayMoreMenu';
 import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';
 import { TodayHeader } from './TodayHeader';
 import { TodayListView, type TodayGestures } from './TodayListView';
 import { GoalReviewCards } from '../goals/GoalReviewCards';
-import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
+import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard, TodayGoalLine } from './TodayParts';
 import { useTodayRowActions } from './TodayRowActions';
 import { canToggleRoutines, subscribeToTodaySources } from './todaySources';
 import { selectTodayTasks, todayStore } from './todayStore';
@@ -42,6 +44,9 @@ import './TodayScreen.css';
  */
 /** Liste du jour (D-04) : cible de ↑ / ↓ et d'Entrée. */
 const todayListRoot = (): HTMLElement | null => document.querySelector<HTMLElement>('.ct-today__list');
+
+/** Menu « Plus d’options » de l'iPhone (UI-REFONTE-02) : feuille et catalogue chargés à la demande, hors du départ. */
+const LazyTodayMoreMenu = lazyScreen<TodayMoreMenuProps>(() => import('./TodayMoreMenu').then((m) => ({ default: m.TodayMoreMenu })), undefined, { onDemand: true });
 
 export function TodayScreen() {
   const container = useAppContainer();
@@ -108,6 +113,19 @@ export function TodayScreen() {
       }),
     [dayTasks, extras, hideRoutines, projectFilter, viewDate, viewedDate, viewFilter],
   );
+
+  // UI-REFONTE-02 (iPhone) : agenda du jour sur la colonne des heures ; la ligne « maintenant » suit l'horloge à la minute, le jour courant seulement.
+  const agendaMode = layout === 'mobile';
+  const [now, setNow] = useState(() => nowLocalTime(container.clock));
+  useEffect(() => {
+    if (!agendaMode) return undefined;
+    const tick = (): void => setNow(nowLocalTime(container.clock));
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, [agendaMode, container, appDay]);
+  const agendaLines = useMemo(() => (agendaMode ? buildTodayAgenda(list, viewedDate === today ? now : null) : null), [agendaMode, list, viewedDate, today, now]);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const edit = useTodayEditMode(list);
   const rowActions = useTodayRowActions(edit);
@@ -252,20 +270,34 @@ export function TodayScreen() {
         {/* PC (PC-Aujourdhui.html) : pastilles à gauche de la rangée du haut, icônes à droite ; iPhone (Main.html) : icônes en haut,
             pastilles sous le filet. L'icône « Un jour » (SD-01) est la première des icônes ; la recherche (RC-01) est le champ « Rechercher  Ctrl K » sur
             PC et la dernière icône sur iPhone. */}
-        <div className="ct-today__quickIcons" data-layout={layout}>
-          {layout === 'pc' && pills}
-          {layout === 'pc' ? <SearchButton /> : <span className="ct-today__quickSpacer" />}
-          <SomedayButton />
-          {goalButton}
-          {reportButton}
-          {layout === 'mobile' && <SearchButton iconClassName="ct-today__iconButton" />}
-        </div>
+        {/* iPhone (Jour.html, UI-REFONTE-02) : plus de rangée d'icônes ; Rechercher et « Plus d’options » sont à droite de la date. */}
+        {layout === 'pc' && (
+          <div className="ct-today__quickIcons" data-layout={layout}>
+            {pills}
+            <SearchButton />
+            <SomedayButton />
+            {goalButton}
+            {reportButton}
+          </div>
+        )}
 
         <TodayHeader
           date={viewedDate}
           today={today}
           layout={layout}
-          actions={<CompactToggle active={compact} onChange={(value) => void setCompact(value)} label={t('today.compactView')} />}
+          hideBadge={agendaMode}
+          actions={
+            agendaMode ? (
+              <>
+                <SearchButton iconClassName="ct-today__iconButton" />
+                <button type="button" className="ct-today__iconButton" aria-label={t('today.moreOptions')} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => openNow(() => setMoreOpen(true))}>
+                  <Icon icon={EllipsisVertical} size={26} />
+                </button>
+              </>
+            ) : (
+              <CompactToggle active={compact} onChange={(value) => void setCompact(value)} label={t('today.compactView')} />
+            )
+          }
           {...(layout === 'pc' ? { onPreviousDay: () => goToDay(addDays(viewedDate, -1)), onNextDay: () => goToDay(addDays(viewedDate, 1)) } : {})}
         />
 
@@ -281,14 +313,17 @@ export function TodayScreen() {
           <>
             {/* OB-05 : propositions « Reconduire / Clore » des objectifs non atteints, en tête de liste. */}
             <GoalReviewCards hidden={projectFilter !== null} />
-            {(list.goals.length > 0 || list.events.length > 0) && (
-              <div className="ct-today-banners" data-layout={layout}>
-                {list.goals.map((entry) => (
-                  <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
-                ))}
-                <TodayEventBands events={list.events} compact={compact} date={viewDate ?? viewedDate} today={today} onOpen={(entry) => entry.calendarName === null && openDetail({ type: 'event', id: entry.id as EventId })} />
-              </div>
-            )}
+            {/* iPhone (UI-REFONTE-02) : objectif en une ligne, événements dans l'agenda ; PC : encadré et bandeaux (PC-Aujourdhui.html). */}
+            {agendaMode
+              ? list.goals.map((entry) => <TodayGoalLine key={entry.goal.id} entry={entry} onOpen={openGoals} />)
+              : (list.goals.length > 0 || list.events.length > 0) && (
+                  <div className="ct-today-banners" data-layout={layout}>
+                    {list.goals.map((entry) => (
+                      <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
+                    ))}
+                    <TodayEventBands events={list.events} compact={compact} date={viewDate ?? viewedDate} today={today} onOpen={(entry) => entry.calendarName === null && openDetail({ type: 'event', id: entry.id as EventId })} />
+                  </div>
+                )}
             {status === 'ready' && list.isEmpty && (
               <TodayEmpty
                 message={emptyMessage}
@@ -319,6 +354,7 @@ export function TodayScreen() {
               onToggleRoutine={(id) => void toggleRoutine(id)}
               onOpen={(id) => openDetail({ type: 'task', id })}
               gestures={gestures}
+              agenda={agendaLines ? { lines: agendaLines, date: viewDate ?? viewedDate, today, onOpenEvent: (id) => openDetail({ type: 'event', id }) } : null}
             />
             <TodayChecklists
               items={list.checklists}
@@ -335,8 +371,34 @@ export function TodayScreen() {
 
         <TodaySelectionBar edit={edit} />
 
-        <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} />
+        {agendaMode ? (
+          /* Jour.html : champ « Ajouter une tâche », Scanner et « + » sur une seule rangée, au-dessus de la zone de sécurité ; la bascule édition est dans le menu. */
+          <div className="ct-agenda__add">
+            <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} scanInline />
+            <Fab onClick={openCreate} label={t('common.add')} />
+          </div>
+        ) : (
+          <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} />
+        )}
 
+        {moreOpen && (
+          <LazyTodayMoreMenu
+            somedayCount={somedayCount}
+            compact={compact}
+            editMode={edit.editMode}
+            onSomeday={() => {
+              closeDetail();
+              navigate({ tab: 'tasks', screen: 'someday' });
+            }}
+            onGoals={openGoals}
+            onReport={() => navigate({ tab: 'tasks', screen: 'report' })}
+            onCompact={(value) => void setCompact(value)}
+            onEditMode={edit.setEditMode}
+            onClose={() => setMoreOpen(false)}
+          />
+        )}
+
+        {!agendaMode && (
         <div className="ct-today__bottomRow">
           <EditModeSwitch active={edit.editMode} onChange={edit.setEditMode} label={t('today.editMode')} />
           {layout === 'pc' && (
@@ -355,6 +417,7 @@ export function TodayScreen() {
           )}
           <Fab onClick={openCreate} label={t('common.add')} />
         </div>
+        )}
 
         {sheetOpen && (
           <AddSheet

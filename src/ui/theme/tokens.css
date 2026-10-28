@@ -110,6 +110,10 @@
   --ct-color-warning-border: #d9a441;
   --ct-color-warning-text: #8a5a00;
   --ct-color-today-badge: #1f6698;
+  --ct-color-agenda-hour: #5e557a;
+  --ct-color-agenda-past: #6e6589;
+  --ct-color-agenda-late: #b5483b;
+  --ct-color-agenda-event: #1f6698;
   --ct-space-white: 0%;
   --ct-color-event-bg: #eef4f7;
   --ct-color-event-text: #1f6698;
@@ -200,6 +204,10 @@
     --ct-color-warning-border: #b8892f;
     --ct-color-warning-text: #f0c674;
     --ct-color-today-badge: #8fc4ea;
+    --ct-color-agenda-hour: #b7aecd;
+    --ct-color-agenda-past: #9d95b8;
+    --ct-color-agenda-late: #e4857a;
+    --ct-color-agenda-event: #8db8ec;
     --ct-space-white: 55%;
   --ct-color-event-bg: #22334a;
     --ct-color-event-text: #8db8ec;
@@ -251,6 +259,10 @@
   --ct-color-danger-bg: #4a2420;
   --ct-color-danger: #f3a79a;
   --ct-color-today-badge: #8fc4ea;
+  --ct-color-agenda-hour: #b7aecd;
+  --ct-color-agenda-past: #9d95b8;
+  --ct-color-agenda-late: #e4857a;
+  --ct-color-agenda-event: #8db8ec;
   --ct-space-white: 55%;
   --ct-color-event-bg: #22334a;
   --ct-color-event-text: #8db8ec;
@@ -297,6 +309,10 @@
   --ct-color-danger-bg: #f8e4e1;
   --ct-color-danger: #a1271c;
   --ct-color-today-badge: #1f6698;
+  --ct-color-agenda-hour: #5e557a;
+  --ct-color-agenda-past: #6e6589;
+  --ct-color-agenda-late: #b5483b;
+  --ct-color-agenda-event: #1f6698;
   --ct-space-white: 0%;
   --ct-color-event-bg: #eef4f7;
   --ct-color-event-text: #1f6698;
