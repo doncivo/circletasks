@@ -10,6 +10,8 @@ Leçons des passages CI : (1) une aide e2e non adaptée (bouton flottant des Év
 
 Deux annulations de runner (`cargo test (Windows)` à 35 min sur #105) : relance du job seul, pas de test touché.
 
+**Blocage de #107** : la garde du bundle refuse le build à jour de `main` sur le critère 4 de BUNDLE-01 (écart normalisé / brut 143 octets, borne 100 ; plafond intact, marge 20 486). La fiche BUNDLE-01 impose l'arrêt et la remontée à Ali ; options dans la passe QA de UI-REFONTE-09. Aucun test modifié.
+
 ## 2026-10-28 — Règle : tests unitaires et DOM en local, e2e Playwright en CI seulement
 
 Constat : pendant la vérification locale de UI-REFONTE-02 (PR #99), le passage de fond DOM + e2e a été arrêté par Claude Code pour manque de mémoire ; ses 135 échecs e2e étaient tous des plantages de navigateur (« Target crashed », « worker process exited unexpectedly »), pas des tests rouges. Le PC (16 Go) manquait déjà de mémoire la veille avec deux builds en parallèle.
