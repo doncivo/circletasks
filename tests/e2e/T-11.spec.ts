@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectTimeZone } from './helpers/settings';
 import { setWheels, typeDate } from './helpers/schedule';
 import { openApp } from './helpers/app';
 
@@ -61,7 +62,7 @@ test.describe('T-11 — heures flottantes et fuseau', () => {
     await expect(page.getByRole('navigation')).toBeVisible();
     await openSettings(page);
     await expect(page.getByText('Fuseau horaire', { exact: true })).toBeVisible();
-    await expect(page.getByText('Europe/Paris (automatique)')).toBeVisible();
+    await expectTimeZone(page, test.info(), 'Europe/Paris'); // UI-REFONTE-09 : sur PC, « Suit celui de Windows » sous l'étiquette
   });
 
   test.describe('appareil à Tunis', () => {
@@ -70,7 +71,7 @@ test.describe('T-11 — heures flottantes et fuseau', () => {
       await openApp(page);
       await expect(page.getByRole('navigation')).toBeVisible();
       await openSettings(page);
-      await expect(page.getByText('Africa/Tunis (automatique)')).toBeVisible();
+      await expectTimeZone(page, test.info(), 'Africa/Tunis');
     });
   });
 
@@ -89,7 +90,7 @@ test.describe('T-11 — heures flottantes et fuseau', () => {
     });
 
     await openSettings(page);
-    await expect(page.getByText('Africa/Tunis (automatique)')).toBeVisible();
+    await expectTimeZone(page, test.info(), 'Africa/Tunis');
     await openTasks(page);
     await expect(row).toContainText('10:00');
     await expect(page.locator('.ct-list-row', { hasText: title })).toHaveCount(1);

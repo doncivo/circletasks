@@ -1,5 +1,5 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
@@ -11,6 +11,16 @@ import { createAppContainer, type AppContainer } from '../app/container';
 import { SettingsScreen } from './SettingsScreen';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000007');
+
+// UI-REFONTE-09 : l'écran de Reglages.html est celui de l'iPhone ; le PC a son sommaire et ses titres en minuscules (SettingsPc.test).
+function mockViewport(width: number): void {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: width >= 1024 && query.includes('min-width: 1024px'),
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
 
 describe('SettingsScreen (T-06)', () => {
   let db: TestDb;
@@ -32,6 +42,7 @@ describe('SettingsScreen (T-06)', () => {
   const toggle = () => screen.getByRole('switch', { name: 'Reporter les tâches non faites' });
 
   beforeEach(async () => {
+    mockViewport(440);
     db = await openTestDb(DEVICE);
     container = containerWith(db.data);
   });
@@ -40,6 +51,7 @@ describe('SettingsScreen (T-06)', () => {
     cleanup();
     useNavigationStore.setState(INITIAL_NAVIGATION);
     useAppStore.setState({ timeZone: null });
+    vi.unstubAllGlobals();
     await db.close();
   });
 

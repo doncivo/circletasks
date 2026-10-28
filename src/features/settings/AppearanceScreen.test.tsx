@@ -133,9 +133,11 @@ describe('Apparence et formats (P-03)', () => {
     expect(getTimeFormat()).toBe('12h');
   });
 
-  it('la ligne de Réglages affiche « lundi · 24 h » puis « dimanche · 12 h » (critère 9)', async () => {
+  it('les lignes de Réglages (PC, UI-REFONTE-09 : Thème, Début de semaine, Format de l’heure) affichent « Lundi » et « 24 h » puis « Dimanche » et « 12 h » (critère 9)', async () => {
     renderIn(<SettingsScreen />);
-    expect(await screen.findByRole('button', { name: 'Thème · semaine · heure : Système · lundi · 24 h' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Thème : Système' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Début de semaine : Lundi' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Format de l’heure : 24 h' })).toBeInTheDocument();
     await container.data.repos.settings.set('general.firstWeekday', 'sunday');
     await container.data.repos.settings.set('general.timeFormat', '12h');
     cleanup();
@@ -143,6 +145,7 @@ describe('Apparence et formats (P-03)', () => {
     fireEvent.click(await screen.findByRole('radio', { name: 'Dimanche' }));
     cleanup();
     renderIn(<SettingsScreen />);
-    expect(await screen.findByRole('button', { name: /Système · dimanche · 12 h/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Début de semaine : Dimanche' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Format de l’heure : 12 h' })).toBeInTheDocument();
   });
 });

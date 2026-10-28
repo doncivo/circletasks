@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { t } from '../../i18n';
-import { Button, Switch } from '../../ui';
+import { Button, Switch, useLayout } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -16,6 +16,7 @@ import { BackupRow } from './BackupRow';
 import { ImportRow } from './ImportRow';
 import { SampleDataRow } from './SampleDataRow';
 import { SecuritySection } from './SecuritySection';
+import { SettingsScreenPc } from './SettingsScreenPc';
 import { formatAppearanceParts } from './AppearanceScreen';
 import { formatTabsSummary, useVisibleTabCount } from './TabsScreen';
 import { settingsStore } from './settingsStore';
@@ -29,6 +30,12 @@ import './SettingsScreen.css';
  * simulé : ils arrivent avec M12.
  */
 export function SettingsScreen() {
+  const layout = useLayout();
+  return layout === 'pc' ? <SettingsScreenPc /> : <SettingsScreenMobile />;
+}
+
+/** Réglages sur iPhone (Reglages.html) : une colonne, titres en capitales ; inchangé par UI-REFONTE-09. */
+function SettingsScreenMobile() {
   const load = useFeatureStore(settingsStore, (s) => s.load);
   const carryOverUndone = useFeatureStore(settingsStore, (s) => s.carryOverUndone);
   const status = useFeatureStore(settingsStore, (s) => s.status);

@@ -506,6 +506,17 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // UI-REFONTE-09 : Réglages sur PC, sommaire à gauche et colonne bornée (PC-Reglages.html).
+    name: 'PC-Reglages',
+    mockup: '../maquettes-refonte/PC-Reglages.html',
+    viewport: PC,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('navigation', { name: 'Navigation principale' }).getByText('Réglages', { exact: true }).click();
+      await expect(page.getByRole('navigation', { name: 'Sections des réglages' })).toBeVisible();
+    },
+  },
+  {
     // Apparence et formats (P-02, P-03) : écran non dessiné, comparé aux motifs de Reglages.html (titre, filet, sections, lignes).
     name: 'Apparence',
     mockup: 'Reglages.html',

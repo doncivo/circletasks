@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { settingsSectionHeading } from './helpers/settings';
 import { openApp } from './helpers/app';
 
 /**
@@ -21,7 +22,7 @@ test("Réglages hors app PC : ni « Démarrer avec Windows » ni ligne de mise �
 
   await expect(page.getByRole('switch', { name: 'Démarrer avec Windows' })).toHaveCount(0);
   // P-05 : « À PROPOS » existe partout (Revoir le guide de bienvenue) ; seules les lignes de mise à jour restent propres au PC.
-  await expect(page.getByRole('heading', { name: 'À PROPOS' })).toHaveCount(1);
+  await expect(settingsSectionHeading(page, test.info(), 'about')).toHaveCount(1); // UI-REFONTE-09
   await expect(page.getByRole('button', { name: 'Rechercher une mise à jour' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Mise à jour de CircleTasks' })).toHaveCount(0);
   expect(errors).toEqual([]);

@@ -1,6 +1,7 @@
 import { useEffect, type KeyboardEvent } from 'react';
 import { t } from '../../i18n';
-import { Button, Switch, useLayout } from '../../ui';
+import { tSettingsRefonte } from '../../i18n/settingsRefonteText';
+import { Button, Kbd, Switch, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { formatChord } from '../app/shortcutsHelp';
@@ -10,25 +11,29 @@ import { DEFAULT_QUICK_CAPTURE_KEYS } from './quickCaptureUseCases';
 import './ShortcutsSettingsSection.css';
 
 /**
- * Section « CLAVIER » de Réglages (PC seulement, D-04 et P-08) : la ligne « Raccourcis clavier » (ouvre la liste, Ctrl+/) et, dans
- * l'app installée, la ligne « Capture rapide » (combinaison globale configurable). Aucune maquette : lignes dans le style
- * des autres réglages (docs/decisions.md). Absente sur iPhone : pas de clavier.
+ * Section « Clavier » de Réglages (PC seulement, D-04 et P-08 ; UI-REFONTE-09, PC-Reglages.html) : dans l'app installée, la ligne
+ * « Capture rapide » (combinaison globale configurable ; une combinaison prise par une autre application s'explique en une phrase sous
+ * l'étiquette, touche en ambre), puis la ligne cliquable « Tous les raccourcis · Ctrl / » (ouvre la liste). Le titre reste au sommaire
+ * du PC (`heading={false}`). Absente sur iPhone : pas de clavier.
  */
-export function ShortcutsSettingsSection() {
+export function ShortcutsSettingsSection({ heading = true }: { readonly heading?: boolean } = {}) {
   const layout = useLayout();
   const container = useAppContainer();
   const openOverlay = useNavigationStore((s) => s.openOverlay);
   if (layout !== 'pc') return null;
   return (
     <>
-      <h2 className="ct-settings__section">{t('shortcutsUi.settings.section')}</h2>
+      {heading && <h2 className="ct-settings__section">{t('shortcutsUi.settings.section')}</h2>}
       {container.desktop && <QuickCaptureRow />}
-      <div className="ct-settings__row">
-        <span>{t('shortcutsUi.settings.helpRow')}</span>
-        <Button variant="secondary" ariaLabel={t('shortcutsUi.openHelpLabel')} onClick={() => openOverlay({ kind: 'shortcutsHelp' })} className="ct-settings__link">
-          {t('shortcutsUi.settings.helpOpen')}
-        </Button>
-      </div>
+      <button
+        type="button"
+        className="ct-settings__row ct-settings__rowButton"
+        aria-label={t('shortcutsUi.openHelpLabel')}
+        onClick={() => openOverlay({ kind: 'shortcutsHelp' })}
+      >
+        <span>{tSettingsRefonte('allShortcuts')}</span>
+        <Kbd keys="Ctrl+/" separator=" " className="ct-settings__kbd" />
+      </button>
     </>
   );
 }
@@ -73,10 +78,18 @@ function QuickCaptureRow() {
 
   const shown = formatChord(keys);
   const off = status === 'off';
+  const taken = loaded && status === 'unavailable' && !errorKey;
   return (
     <>
       <div className="ct-settings__row">
-        <span>{t('shortcutsUi.settings.quickCapture')}</span>
+        <span className="ct-settings__stack">
+          <span>{t('shortcutsUi.settings.quickCapture')}</span>
+          {taken && (
+            <span className="ct-settings__hint" data-tone="warning">
+              {tSettingsRefonte('quickCaptureTaken', { keys: shown })}
+            </span>
+          )}
+        </span>
         <span className="ct-quickcapture">
           {loaded && (
             <button
@@ -109,7 +122,6 @@ function QuickCaptureRow() {
           </Button>
         </div>
       )}
-      {status === 'unavailable' && !errorKey && <p className="ct-quickcapture__note">{t('shortcutsUi.settings.unavailableNote')}</p>}
       {errorKey && (
         <p className="ct-quickcapture__note" role="alert">
           {t(errorKey)}

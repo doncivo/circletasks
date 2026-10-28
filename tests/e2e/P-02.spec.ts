@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openToday } from './helpers/today';
+import { appearanceRow } from './helpers/settings';
 
 /**
  * P-02 — Je choisis clair, sombre ou système.
@@ -13,7 +14,7 @@ const background = (page: Page) => page.evaluate(() => getComputedStyle(document
 async function openAppearance(page: Page): Promise<void> {
   await openToday(page);
   await tab(page, 'Réglages').click();
-  await page.getByRole('button', { name: /^Thème · semaine · heure/ }).click();
+  await appearanceRow(page, test.info()).click(); // UI-REFONTE-09 : trois lignes sur PC
   await expect(page.getByRole('heading', { name: 'Apparence et formats' })).toBeVisible();
 }
 

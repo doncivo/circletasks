@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * T-08 : Je supprime une tâche.
@@ -39,7 +40,7 @@ async function openDetail(page: Page, testInfo: Info, title: string) {
 
 async function openTrash(page: Page): Promise<void> {
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'DONNÉES ET SÉCURITÉ' })).toBeVisible();
+  await expect(settingsSectionHeading(page, test.info(), 'data')).toBeVisible(); // UI-REFONTE-09
   await page.getByRole('button', { name: 'Ouvrir la corbeille' }).click();
   await expect(page.getByRole('heading', { name: 'Corbeille', level: 1 })).toBeVisible();
 }

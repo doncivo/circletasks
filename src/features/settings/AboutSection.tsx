@@ -17,7 +17,7 @@ import { onboardingStore } from './onboardingStore';
  * jour par SideStore (I-06) : il n'y a pas de ligne de mise à jour, mais la version y est lue (vérifier qu'une mise à jour a pris).
  * I-06 : la version vient du conteneur (`platform/appVersion.ts`, lue une fois au démarrage, PC et iPhone) ; illisible : « Version inconnue ».
  */
-export function AboutSection() {
+export function AboutSection({ heading = true }: { readonly heading?: boolean } = {}) {
   const container = useAppContainer();
   const desktop = container.desktop;
   const status = useFeatureStore(updaterStore, (s) => s.status);
@@ -50,7 +50,7 @@ export function AboutSection() {
 
   return (
     <>
-      <h2 className="ct-settings__section">{t('settings.sectionAbout')}</h2>
+      {heading && <h2 className="ct-settings__section">{t('settings.sectionAbout')}</h2>}
       <div className="ct-settings__row">
         <span className="ct-settings__stack">
           {version ? t('app.version', { version }) : t('app.versionUnknown')}
