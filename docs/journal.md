@@ -1,8 +1,15 @@
 # Journal de développement CircleTasks
 
+## 2026-10-28 — Règle : tests unitaires et DOM en local, e2e Playwright en CI seulement
+
+Constat : pendant la vérification locale de UI-REFONTE-02 (PR #99), le passage de fond DOM + e2e a été arrêté par Claude Code pour manque de mémoire ; ses 135 échecs e2e étaient tous des plantages de navigateur (« Target crashed », « worker process exited unexpectedly »), pas des tests rouges. Le PC (16 Go) manquait déjà de mémoire la veille avec deux builds en parallèle.
+
+Décision d’Ali (2026-10-28), écrite dans `AGENTS.md` : sur son PC, seuls les tests légers tournent (unitaires et DOM, Vitest) ; les e2e Playwright tournent dans la CI, jamais en local ; un résultat obtenu en manquant de mémoire n’est pas un résultat. Si un e2e local est indispensable pour un diagnostic, prévenir Ali avant, il ferme ce qu’il faut. La variable `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP` est interdite : elle masque le problème au lieu de le résoudre. Conséquence immédiate : #99 poussée telle quelle (77d1442b), la CI tranche.
+
 ## 2026-10-27 — UI-REFONTE-02 : Aujourd'hui sur iPhone devient l'agenda du jour (Jour.html, Jour-Sombre.html)
 
 Première des huit refontes de l'ordre d'Ali. Preuve rouge 8fa29992 (domaine absent, écran 10 échecs / 2 verts), code 83f2c695 puis correctifs e2e. Domaine `todayAgenda` (allDay, passé, dû, « maintenant », à venir, sans heure ; faits à leur heure), en-tête sans badge avec Rechercher et « Plus d’options », menu à la demande (Un jour, Objectif de la semaine, Rapport mensuel, Vue compacte, Mode édition), objectif en une ligne, événements dans l'agenda, rangée champ + Scanner + « + », quatre jetons par thème au seuil de contraste. PC inchangé. Deux défauts trouvés par les e2e et corrigés : lignes compactes à 67 px (spécificité CSS) et message « Annuler » (z-index 300) recouvrant le bas d'une feuille modale (`Sheet` passe à 350). Écarts assumés : gris du recul et bleu du rond relevés pour UI-FIX-01, fréquence des routines absente de la sous-ligne (formateur hors du départ), PRD A-05 / A-06 / OB-01 / OB-02 / SD-01 à faire évoluer par Ali (PRD-02). Première CI (PR #99) rouge sur cinq jobs : dix-sept tests DOM d'autres modules et une trentaine d'e2e iPhone lisaient l'écran d'avant (bandeaux, encadré, icônes de l'en-tête, heure dans `.ct-list-row`, faits « en bas ») ; l'heure revient dans la ligne (`ListRow` `prefix`) pour garder les sélecteurs historiques valides, le reste est adapté avec trace ; l'essai de feuille au-dessus du message « Annuler » (z-index 350) est retiré, il cassait les dialogues de confirmation ; les interrupteurs passent en tête du menu. Garde du bundle 64/64 avec deux modules justifiés (`todayAgenda.ts`, `formatAgenda.ts`) ; détail, mesures et passes dans `docs/stories/UI-REFONTE-02.md`.
+
 
 ## 2026-10-27 — Q-05 instable en CI : Entrée ignorée tant que le bloc des options n'est pas chargé (cause trouvée, correctif à planifier)
 
