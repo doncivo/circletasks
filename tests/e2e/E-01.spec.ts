@@ -119,7 +119,7 @@ test.describe('E-01 — événements datés', () => {
     await insertEvents(page, [{ title: 'Réunion', date: today }, { title: 'Dîner', date: today, space: 'perso' }]);
     await reopenEvents(page);
     if (isPhone(testInfo)) {
-      await page.getByRole('button', { name: 'Calendrier', exact: true }).click();
+      await page.getByRole('button', { name: 'Vue calendrier', exact: true }).click(); // UI-REFONTE-07
       const sheet = page.getByRole('dialog', { name: 'Calendrier' });
       await expect(sheet.getByTestId('event-dot')).toHaveCount(2);
       await sheet.getByRole('button', { name: /avec des événements/ }).click();

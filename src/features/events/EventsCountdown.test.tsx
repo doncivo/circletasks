@@ -62,7 +62,7 @@ describe('Compte à rebours dans la liste Événements (E-04), iPhone', () => {
     ]);
   });
 
-  it('un événement d’un agenda externe affiche « J-n » dans la liste ; un jour férié garde son tag « Férié » (critère 8)', async () => {
+  it('un événement d’un agenda externe affiche « J-n » dans la liste ; un jour férié n’a aucun compte à rebours (critère 8 ; UI-REFONTE-07 : plus d’étiquette sur iPhone)', async () => {
     useAppStore.getState().setTimeZone('Europe/Paris');
     await insertCalendarAccount(h.db.driver, { id: 'acc', provider: 'google', label: 'Google Agenda', calendars: [{ id: 'pro', name: 'Travail', spaceId: SPACE_PRO_ID, shown: true }] });
     await insertExternalEvent(h.db.driver, { id: 'ext-1', accountId: 'acc', calendarId: 'pro', title: 'Point externe', startUtc: '2026-10-09T08:00:00Z', endUtc: '2026-10-09T09:00:00Z' });
@@ -70,8 +70,9 @@ describe('Compte à rebours dans la liste Événements (E-04), iPhone', () => {
     renderEvents(h.container);
     await screen.findByText('Point externe');
     expect(tagOf('Point externe')).toHaveTextContent('J-7dans 7 jours');
-    expect(tagOf('Fête de l’Évacuation')).toHaveTextContent('Férié TN');
-    expect(tagOf('Fête de l’Évacuation')).not.toHaveTextContent('J-');
+    // UI-REFONTE-07 : la ligne d'un férié n'a plus d'étiquette sur iPhone (le pays est dans la sous-ligne) ; jamais de compte à rebours.
+    expect(tagOf('Fête de l’Évacuation')).toBeNull();
+    expect(rowOf('Fête de l’Évacuation')).not.toHaveTextContent('J-');
   });
 
   it('minuit passé : les tags se mettent à jour sans relancer l’app (horloge injectable, critère 3)', async () => {

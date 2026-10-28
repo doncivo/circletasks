@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { buildEventList, dayDots, firstUpcomingEntry, groupByMonth, holidayEntries, isPastEntry } from '../../domain/eventList';
@@ -6,6 +6,7 @@ import { holidaysInRange, uncoveredLunarYears } from '../../domain/holidays';
 import { makeLocalDate, parseLocalDate } from '../../domain/localDate';
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
+import { tEventsRefonte } from '../../i18n/eventsRefonteText';
 import { sourceNames } from '../calendars/sourceNames';
 import { detectTimeZone } from '../../platform';
 import { EmptyState, Fab, Icon, Sheet, SpacePills, openNow, useLayout } from '../../ui';
@@ -59,6 +60,8 @@ export function EventsScreen() {
   const [selected, setSelected] = useState<LocalDate | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // UI-REFONTE-07 (iPhone, critère 3) : fériés masqués le temps de la consultation ; les calendriers restent réglés dans Réglages (E-03).
+  const [hideHolidays, setHideHolidays] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef<string | null>(null);
   const taskSheet = useStandaloneTaskSheet(selected ?? today);
@@ -77,10 +80,11 @@ export function EventsScreen() {
     [year, holidayCountries, holidayRows],
   );
   // Sous un filtre projet, aucun événement (E-01 critère 10).
-  const entries = useMemo(
+  const allEntries = useMemo(
     () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter, holidays, untitled: t('calendars.untitled'), sources: sourceNames() })),
     [year, events, externalEvents, accounts, timeZone, spaceFilter, projectFilter, holidays],
   );
+  const entries = useMemo(() => (layout === 'mobile' && hideHolidays ? allEntries.filter((entry) => !entry.holiday) : allEntries), [allEntries, layout, hideHolidays]);
   const uncovered = projectFilter ? [] : uncoveredLunarYears([year], holidayCountries);
   const holidayCountriesText = enabledCountriesLabel(holidayCountries);
   const groups = useMemo(() => groupByMonth(entries), [entries]);
@@ -163,7 +167,7 @@ export function EventsScreen() {
                   today={today}
                   past={isPastEntry(entry, today)}
                   spaceName={entry.source === 'local' || (entry.source === 'external' && layout === 'pc') ? spaceNameOf(entry.spaceId) : null}
-                  tag={entryTag(entry, today)}
+                  tag={layout === 'mobile' && entry.holiday ? null : entryTag(entry, today)}
                   selected={selected !== null && entry.date === selected}
                   {...(entry.holiday ? { subtitle: holidaySubtitle(entry.holiday) } : {})}
                   {...(local ? { onOpen: () => openDetail({ type: 'event', id: local.id }) } : {})}
@@ -193,11 +197,20 @@ export function EventsScreen() {
           </button>
         </div>
       </div>
-      <div className="ct-events__rule" aria-hidden="true">
-        <div className="ct-events__ruleAccent" />
-        <div className="ct-events__ruleLine" />
+      {layout === 'pc' && (
+        <div className="ct-events__rule" aria-hidden="true">
+          <div className="ct-events__ruleAccent" />
+          <div className="ct-events__ruleLine" />
+        </div>
+      )}
+      <div className="ct-events__pillsRow">
+        <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />
+        {layout === 'mobile' && holidayCountriesText && !projectFilter && (
+          <button type="button" className="ct-events__holidaysToggle" aria-pressed={hideHolidays} onClick={() => setHideHolidays((value) => !value)}>
+            {tEventsRefonte(hideHolidays ? 'showHolidays' : 'hideHolidays')}
+          </button>
+        )}
       </div>
-      <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />
       {status === 'error' && errorKey && (
         <p className="ct-events__error" role="alert">
           {t(errorKey)}
@@ -209,13 +222,21 @@ export function EventsScreen() {
         </p>
       ))}
       {list}
+      {/* UI-REFONTE-07 (iPhone) : rangée du bas « Vue calendrier » + « Événement » ; PC : bouton flottant. */}
       <div className="ct-events__bottomRow">
-        {layout === 'mobile' && (
-          <button type="button" className="ct-events__calendarButton" onClick={() => setCalendarOpen(true)}>
-            {t('events.calendarButton')}
-          </button>
+        {layout === 'mobile' ? (
+          <>
+            <button type="button" className="ct-events__calendarButton" onClick={() => setCalendarOpen(true)}>
+              {tEventsRefonte('calendarView')}
+            </button>
+            <button type="button" className="ct-events__addButton" aria-label={t('events.add')} onClick={openAdd}>
+              <Icon icon={Plus} size={22} />
+              <span>{tEventsRefonte('addEvent')}</span>
+            </button>
+          </>
+        ) : (
+          <Fab onClick={openAdd} label={t('events.addPc')} />
         )}
-        <Fab onClick={openAdd} label={layout === 'pc' ? t('events.addPc') : t('events.add')} />
       </div>
     </div>
   );

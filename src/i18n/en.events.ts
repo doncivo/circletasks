@@ -46,7 +46,7 @@ export const eventsEn: Messages['events'] = {
   },
   holidayTag: { FR: 'Holiday FR', TN: 'Holiday TN' },
   holidayCountry: { FR: 'France', TN: 'Tunisia' },
-  holidaySubtitle: 'Public holiday · {country}',
+  holidaySubtitle: 'Public holiday in {country}',
   holidayEstimated: 'estimated date',
   holidaysLine: 'Public holidays {countries}',
   holidayDetail: {

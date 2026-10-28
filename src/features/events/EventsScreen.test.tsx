@@ -214,10 +214,10 @@ describe('Événements : feuille « Nouvel événement » (E-01), iPhone', () =>
     expect(await screen.findByText('Ajouté dans Pro')).toBeInTheDocument();
   });
 
-  it('« Calendrier » ouvre la grille du mois en feuille ; toucher un jour ferme la feuille (critère 8)', async () => {
+  it('« Vue calendrier » ouvre la grille du mois en feuille ; toucher un jour ferme la feuille (critère 8 ; UI-REFONTE-07)', async () => {
     await seedEvent(h, { title: 'Réunion', date: '2026-10-10' });
     renderEvents(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Calendrier' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Vue calendrier' }));
     const sheet = await screen.findByRole('dialog', { name: 'Calendrier' });
     expect(within(sheet).getByRole('heading', { name: 'Octobre 2026' })).toBeInTheDocument();
     expect(within(sheet).getAllByTestId('event-dot')).toHaveLength(1);
