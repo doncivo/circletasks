@@ -139,7 +139,7 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
   await expect(onPc.getByRole('status')).toHaveText(`Valeur rétablie : ${TITLE}, heure prévue`);
   await expect(onPc).toContainText(/Rétablie le \d{1,2} /);
   await expect(onPc).toBeFocused();
-  await expect(pc.page.getByText('Valeur restaurée', { exact: true })).toBeVisible();
+  await expect(pc.page.getByText('Valeur rétablie', { exact: true })).toBeVisible();
   await expect(pc.page.getByRole('dialog')).toHaveCount(0);
 
   // Cycle suivant : l'iPhone a la même valeur et n'inscrit aucun nouveau conflit.
