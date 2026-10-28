@@ -19,7 +19,7 @@ Sur iPhone, la Semaine garde ses sept sections empilées mais les aligne sur la 
 | S-04 | « Champ d'ajout rapide en bas de chaque jour » | une seule rangée d'ajout en bas, « Ajouter à jeudi 24 » | sur iPhone, un champ unique visant le **jour sélectionné** (aujourd'hui par défaut, un toucher sur l'en-tête d'un jour le sélectionne) ; PC inchangé (champ par colonne) |
 | S-01 | « jour courant mis en évidence » | trait d'encre et jour en gras, pas de fond | la mise en évidence reste, sa forme change |
 | S-03 | « retour « Cette semaine » » | absent de la maquette | la pastille « Cette semaine » reste, affichée seulement hors de la semaine courante (règle 3 : aucune commande qui ne peut rien faire) |
-| OB-03 critère 3, T-03 | marque « objectif » et icône décorative dans la ligne iPhone de la Semaine | heure, case, titre ; rien d'autre | la ligne iPhone ne porte ni marque d'objectif ni icône (comme l'agenda du jour, UI-REFONTE-02) ; la fiche Détail et la carte PC les gardent ; `GoalAttach.test` adapté avec trace |
+| OB-03 critère 3, T-03 | marque « objectif » et icône décorative dans la ligne iPhone de la Semaine | heure, case, titre ; rien d'autre | **Révisé le 2026-10-28 (PRD-02, lot C, réserve d'Ali ; UI-FIX-07)** : la marque d'objectif revient sur la ligne iPhone (c'est de l'information) ; l'icône décorative reste retirée. Avant UI-FIX-07 : la ligne iPhone ne portait ni marque d'objectif ni icône (comme l'agenda du jour, UI-REFONTE-02) ; la fiche Détail et la carte PC les gardent ; `GoalAttach.test` adapté avec trace |
 
 ### Critères
 
