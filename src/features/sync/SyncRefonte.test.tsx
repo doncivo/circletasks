@@ -179,9 +179,12 @@ describe('UI-REFONTE-04 — Synchronisation', () => {
     expect(old.querySelector('.ct-sync__deviceState')).toHaveTextContent('Oublié');
     expect(old.querySelector('.ct-sync__deviceState')).toHaveAttribute('data-tone', 'muted');
     expect(within(phone).getByText(/^Dernière modification lue : /)).toBeInTheDocument();
-    // Aucune valeur interne (règle 4) : pas d'identifiant d'appareil dans le texte de la liste.
+    // Aucune valeur interne (règle 4) : pas d'identifiant complet dans la liste ; les autres appareils gardent 8 caractères (audit Y-10 :
+    // les mêmes que la boîte native « Oublier cet appareil »), cet appareil aucun.
     const list = document.querySelector('.ct-sync__devices') as HTMLElement;
     expect(list.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}/);
+    expect(self.textContent).not.toContain(SELF.slice(0, 8));
+    expect(within(phone).getByText(IPHONE.slice(0, 8))).toBeInTheDocument();
     // L'aide est sous la liste.
     const hint = screen.getByText(/^Touchez un nom pour le modifier/);
     expect(list.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -196,7 +199,7 @@ describe('UI-REFONTE-04 — Synchronisation', () => {
     expect(phone.querySelector('.ct-sync__deviceState')).toHaveAttribute('data-tone', 'danger');
   });
 
-  it('conflits : phrase d’aide, compte, conflit nommé « Heure prévue de « Envoyer la facture » », « Appliquée · iPhone, 18:04 », « Rétablir » (critère 5)', async () => {
+  it('conflits : phrase d’aide, compte, conflit nommé « Heure prévue de « Envoyer la facture » », « Appliquée · iPhone · … », « Rétablir » (critère 5)', async () => {
     sync.setStatus({ conflictsThisWeek: 1 });
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
@@ -209,8 +212,9 @@ describe('UI-REFONTE-04 — Synchronisation', () => {
     expect(item.querySelector('.ct-conflicts__title')).toHaveTextContent('Heure prévue de « Envoyer la facture »');
     expect(item.textContent).not.toContain('gardée');
     expect(item.textContent).not.toContain('écartée');
-    expect(item.querySelector('.ct-conflicts__value--kept')).toHaveTextContent(/09:00.*Appliquée · iPhone, 18:04/);
-    expect(item.querySelector('.ct-conflicts__value--discarded')).toHaveTextContent(/10:00.*PC, 17:58/);
+    // Heures au format existant de la synchro (« le 22 sept. à 18:04 » hors du jour même).
+    expect(item.querySelector('.ct-conflicts__value--kept')).toHaveTextContent(/^09:00Appliquée · iPhone · le 22 sept\. à 18:04$/);
+    expect(item.querySelector('.ct-conflicts__value--discarded')).toHaveTextContent(/^10:00PC 1 · le 22 sept\. à 17:58Rétablir$/);
     const button = within(item).getByRole('button', { name: 'Rétablir la valeur écartée : Envoyer la facture, heure prévue' });
     expect(button).toHaveTextContent('Rétablir');
     expect(item).toHaveAccessibleName('Conflit : Envoyer la facture, heure prévue');

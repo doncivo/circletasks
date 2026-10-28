@@ -6,17 +6,16 @@ export const syncConflictsFr = {
   listLabel: 'Journal des conflits',
   /** Nom accessible d'une ligne de la liste (critère 14). */
   itemLabel: 'Conflit : {title}, {field}',
-  heading: '{title} · {field}',
+  /** « Heure prévue de « Envoyer la facture » » : champ (initiale en capitale) puis titre entre guillemets (UI-REFONTE-04). */
+  heading: '{field} de {title}',
   deletedItem: 'Élément supprimé',
-  kept: '{value} gardée',
-  discarded: '{value} écartée',
   side: '{device} · {time}',
   otherDevice: 'Autre appareil',
   appleReminders: 'Rappels Apple',
-  restore: 'Restaurer',
-  restoreLabel: 'Restaurer la valeur écartée : {title}, {field}',
-  restoring: 'Restauration…',
-  restoredOn: 'Restaurée le {date}',
+  restore: 'Rétablir',
+  restoreLabel: 'Rétablir la valeur écartée : {title}, {field}',
+  restoring: 'Rétablissement…',
+  restoredOn: 'Rétablie le {date}',
   showMore: 'Afficher plus',
   /** Valeur texte entre guillemets (Synchro.html) ; `{text}` déjà tronqué. */
   quoted: '« {text} »',
@@ -24,9 +23,9 @@ export const syncConflictsFr = {
   unreadableMany: '{count} conflits du journal sont illisibles et ne sont pas affichés',
   loadFailed: 'Le journal des conflits n’a pas pu être lu. Rouvrez cet écran pour réessayer.',
   /** Message « Annuler » (T-13, 5 s). */
-  undoLabel: 'Valeur restaurée',
+  undoLabel: 'Valeur rétablie',
   result: {
-    restored: 'Valeur restaurée : {title}, {field}',
+    restored: 'Valeur rétablie : {title}, {field}',
     already: 'Cette valeur est déjà en place : conflit marqué résolu',
     rowGone: 'Cet élément n’existe plus : la valeur ne peut pas être restaurée',
     parentGone: 'L’élément lié n’existe plus : la valeur ne peut pas être restaurée',

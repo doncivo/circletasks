@@ -5,10 +5,9 @@
  * de chemin ni de contenu.
  */
 export const syncResetFr = {
-  section: 'RÉINITIALISATION',
+  section: 'Repartir de zéro',
   action: 'Réinitialiser la synchronisation',
   actionLabel: 'Réinitialiser la synchronisation avec une nouvelle clé',
-  actionHint: 'Nouvelle clé et nouvelle clé de secours : l’ancienne clé ne lit plus rien de ce qui est écrit après',
   dialogTitle: 'Réinitialiser la synchronisation ?',
   dialogBody:
     'Une nouvelle clé et une nouvelle clé de secours seront créées. Tous vos autres appareils devront être associés de nouveau (QR ou clé de secours) ou oubliés. Les données de chaque appareil sont conservées et fusionnées. L’ancienne clé de secours ne servira plus. L’ancienne clé ne lira plus rien de ce qui sera écrit après, mais elle lit encore ce qui est déjà chiffré avec elle : la copie gardée par un appareil perdu, et les fichiers de l’ancienne clé tant qu’ils existent (au plus 30 jours dans « Supprimés récemment » d’iCloud).',
@@ -44,12 +43,12 @@ export const syncResetFr = {
     required: 'association',
     done: 'fin',
   },
-  waitingTitle: 'APPAREILS À ASSOCIER DE NOUVEAU',
+  waitingTitle: 'Appareils à associer de nouveau',
   waitingHint: 'Associez chaque appareil avec la nouvelle clé (QR ou clé de secours), ou oubliez-le. Aucun appareil n’est oublié sans votre choix.',
   waitingLastSync: 'Dernière synchronisation {time}',
   waitingNever: 'Jamais synchronisé',
   reminder: 'Réinitialisation commencée il y a plus de 30 jours : {devices} pas encore associé(s)',
-  recoveryTitle: 'NOUVELLE CLÉ DE SECOURS',
+  recoveryTitle: 'Nouvelle clé de secours',
   recoveryBody: 'L’ancienne clé de secours ne sert plus. Affichez la nouvelle, imprimez-la, puis détruisez l’ancienne feuille.',
   recoveryAction: 'Afficher la nouvelle clé de secours',
   recoveryActionLabel: 'Afficher et imprimer la nouvelle clé de secours',

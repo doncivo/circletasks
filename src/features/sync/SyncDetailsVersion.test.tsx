@@ -59,7 +59,7 @@ describe('emplacement « version » (Y-07 critère 10)', () => {
   it('version de schéma plus récente : « iPhone utilise une version plus récente de l’app (0.5.0) », annoncé, sans numéro de migration', () => {
     sync.setStatus({ devices: [self, iphone({ newer: 'schema', appVersion: '0.5.0' })] });
     renderIn(<SyncDetailsVersion />);
-    expect(screen.getByText('VERSION')).toBeTruthy();
+    expect(screen.getByText('Version')).toBeTruthy(); // UI-REFONTE-04 : titres en bas de casse
     const region = screen.getByRole('status');
     expect(region.textContent).toBe('iPhone utilise une version plus récente de l’app (0.5.0)');
     expect(region.textContent).not.toMatch(/\b1[78]\b/);
@@ -89,12 +89,13 @@ describe('emplacement « version » (Y-07 critère 10)', () => {
     expect(lines).toEqual(['iPhone 1 utilise une version plus récente de l’app (0.5.0)', 'PC 2 utilise une version plus récente de l’app (0.6.0)']);
   });
 
-  it('dans l’écran de détails, à sa place (entre l’état et APPAREILS)', () => {
+  it('dans l’écran de détails, à sa place (après la carte d’état, avant Appareils)', () => {
     sync.setStatus({ devices: [self, iphone({ newer: 'schema', appVersion: '0.5.0' })] });
     renderIn(<SyncDetailsScreen />);
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(headings.indexOf('VERSION')).toBeGreaterThan(headings.indexOf('ÉTAT'));
-    expect(headings.indexOf('VERSION')).toBeLessThan(headings.indexOf('APPAREILS'));
+    // UI-REFONTE-04 : plus de titre « ÉTAT » (la carte d'état n'a pas de titre) ; « Version » précède « Appareils ».
+    expect(headings.indexOf('Version')).toBeGreaterThanOrEqual(0);
+    expect(headings.indexOf('Version')).toBeLessThan(headings.indexOf('Appareils'));
   });
 });
 
@@ -242,10 +243,10 @@ describe('échec de réintégration visible (exigence d’Ali, 2026-10-05)', () 
     expect(screen.getByTestId('sync-status-text').textContent).toContain('Dossier de synchro introuvable');
   });
 
-  it('Détails, section VERSION : nombre, type d’élément, date du dernier essai, l’app réessaie à chaque démarrage ; annoncé, sans boîte', () => {
+  it('Détails, section Version : nombre, type d’élément, date du dernier essai, l’app réessaie à chaque démarrage ; annoncé, sans boîte', () => {
     sync.setStatus({ reintegrationFailure: failure });
     renderIn(<SyncDetailsVersion />);
-    expect(screen.getByText('VERSION')).toBeTruthy();
+    expect(screen.getByText('Version')).toBeTruthy(); // UI-REFONTE-04 : titres en bas de casse
     const region = screen.getByRole('status');
     expect(region.textContent).toContain('3 éléments non intégrés (tâches, événements)');
     expect(region.textContent).toContain(`Dernier essai : ${formatSyncTime(failure.at, db.clock.nowMs())}`);

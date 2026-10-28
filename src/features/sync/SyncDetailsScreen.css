@@ -203,3 +203,151 @@
     justify-content: center;
   }
 }
+
+/* ---------- UI-REFONTE-04 : Synchronisation (docs/maquettes-refonte/Synchro-v4.html) ---------- */
+
+/* Retour texte « Réglages » à gauche, flèche puis mot. */
+.ct-sync__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+  padding: 4px 0;
+}
+
+/* Titres de section en bas de casse, en encre ; « Repartir de zéro » en rouge. */
+.ct-sync .ct-settings__section {
+  margin-top: 22px;
+  font-size: 1.0625rem;
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ct-color-text);
+}
+
+.ct-sync .ct-settings__section[data-tone='danger'] {
+  color: var(--ct-color-danger);
+}
+
+/* Carte d'état : rond et bordure au ton de l'état ; le vert ne vient qu'avec `success` (règle 5). */
+.ct-sync__stateCard {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 16px;
+  border: 2px solid var(--ct-color-border-strong);
+  border-radius: 18px;
+}
+
+.ct-sync__stateCard .ct-sync__lineText {
+  flex-grow: 1;
+}
+
+.ct-sync__stateCard .ct-sync__sub {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text);
+}
+
+.ct-sync__stateCard .ct-sync__folder {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-sync__stateMark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-surface-input);
+  flex-shrink: 0;
+}
+
+.ct-sync__stateCard[data-tone='success'] {
+  border-color: var(--ct-color-achieved-text);
+}
+
+.ct-sync__stateCard[data-tone='success'] .ct-sync__stateMark {
+  background: var(--ct-color-achieved-bg);
+  box-shadow: inset 0 0 0 2px var(--ct-color-achieved-text);
+}
+
+.ct-sync__stateCard[data-tone='danger'] {
+  border-color: var(--ct-color-danger);
+}
+
+.ct-sync__stateCard[data-tone='danger'] .ct-sync__stateMark {
+  background: var(--ct-color-danger-bg);
+  box-shadow: inset 0 0 0 2px var(--ct-color-danger);
+}
+
+.ct-sync__stateCard .ct-sync__sub[data-tone='success'] {
+  color: var(--ct-color-text);
+}
+
+/* Appareils : un gabarit, pastille de statut alignée à droite. */
+.ct-sync__deviceSelf {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-sync .ct-sync__deviceState {
+  width: auto;
+  justify-self: end;
+  align-self: center;
+  min-height: 0;
+  padding: 4px 10px;
+  border-radius: var(--ct-radius-pill);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  text-align: center;
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+}
+
+.ct-sync .ct-sync__deviceState[data-tone='success'] {
+  background: var(--ct-color-achieved-bg);
+  color: var(--ct-color-achieved-text);
+}
+
+.ct-sync .ct-sync__deviceState[data-tone='muted'] {
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-sync__namesHint,
+.ct-sync__conflictsHelp {
+  margin: 6px 0 0;
+}
+
+/* Repartir de zéro : bloc qui annonce le coût, bouton rouge au trait pleine largeur. */
+.ct-sync__resetCard {
+  margin-top: 8px;
+  padding: 15px 16px;
+  border: 1.5px solid var(--ct-color-danger);
+  border-radius: 16px;
+  background: var(--ct-color-danger-bg);
+}
+
+.ct-sync__resetBody {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+  line-height: 1.45;
+  color: var(--ct-color-text);
+}
+
+.ct-sync .ct-sync__resetButton {
+  margin-top: 13px;
+  width: 100%;
+  min-height: var(--ct-hit-target-min);
+  border: 1.5px solid var(--ct-color-danger);
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-bold);
+}
