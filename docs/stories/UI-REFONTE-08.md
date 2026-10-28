@@ -46,7 +46,18 @@ La dernière refonte (Réglages PC) ; le PRD ; l'agenda iPhone ; la fiche détai
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit 469a2afd (tests seuls) : `src/features/today/TodayPc.test.tsx` (5 tests, 4 rouges ; « iPhone inchangé » vert dès le départ, attendu), `tests/e2e/UI-REFONTE-08.spec.ts` (2 tests sur `pc`, clair et sombre, joués par la CI seule).
+- **Vert ensuite** : commit d13c4d44.
+- **Écran** (`src/features/today/TodayScreen.tsx`) : l'agenda du jour (`buildTodayAgenda`, UI-REFONTE-02) sert les deux mises en page ; sur PC, barre fixe `.ct-today__topbar` (pastilles, « Rechercher », puis boutons nommés `.ct-today__barButton` : « Objectif », « Rapport », « Un jour » par `SomedayButton showLabel`, « Ajouter » qui ouvre la feuille « Nouvelle tâche », bascules « Édition » et « Compacte » avec `aria-pressed`) ; `.ct-today__columns` > `.ct-today__dayColumn` (660 px) + bloc à la demande `LazyTodaySide`. `Fab`, `EditModeSwitch`, `CompactToggle`, `TodayGoalCard`, `TodayEventBands` et la liste à cartes PC quittent l'écran ; l'iPhone garde son bouton flottant (rendu en ligne) et le menu « Plus d'options ».
+- **Seconde colonne** (`TodaySide.tsx`, `TodaySide.css`, catalogue `src/i18n/todaySideText.ts`) : « Demain » et « Cette semaine » lisent `repos.tasks.listForDay` et `loadTodayExtras` par jour puis `buildTodayList` (même tri que le jour) ; compte à rebours des événements par `bandCountdownTag` ; « Rien de prévu » si vide ; « Raccourcis » (Ctrl N, Ctrl K, Ctrl T). Région `aside` nommée.
+- **En-tête** (`TodayHeader.tsx`, `hideRule`) et format (`src/i18n/format.ts`) : « vendredi 2 » (jour en lettres d'abord) sur PC, plus de badge ni de filet ; iPhone inchangé (« 23 mer. »).
+- **Textes** : `today.barGoals/barReport/barEdit/barCompact` (fr, en) dans le départ (la barre s'affiche au premier écran) ; le reste dans le catalogue à la demande.
+- **Tests adaptés, avec trace « UI-REFONTE-08 »** : `TodayList.test` (« vendredi 2 », « samedi 3 », « jeudi 1 », badge remplacé par la ligne « maintenant »), `TodayAgenda.test` (le PC a l'agenda ; bascules nommées), `TodayReorder.test` (lignes de tâches seules, colonne du jour : la routine du jour revient dans « Demain »), `TodayCarryOver.test` (« En retard de … » précède), `TodayScreen.test` (échec de chargement limité au jour affiché ; la ligne suit le titre modifié dans le panneau, l'agenda n'affichant pas l'icône), `src/i18n/formatToday.test.ts` (ordre du jour).
+- **Local** : suites `today` (192), `goals`, `events`, `spaces`, `someday`, `tasks`, `calendars`, `app`, `search` (1 464), `i18n`, `ui`, `domain`, `tests/unit` (4 009) vertes ; lint ; typage. E2e en CI seulement (règle du 2026-10-28).
+
+### Mesure du bundle de départ
+
+Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 544 octets normalisés** (brute 337 547), **marge 20 856** ; **+84** face à `main` 337 460 (barre PC et ses quatre textes ; la seconde colonne et son catalogue sont à la demande ; `CompactToggle` quitte le départ, ligne retirée de `tests/bundle/start-modules.json` sur demande de la garde). Projection annoncée +1 000 à +2 500 : tenue. Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 
