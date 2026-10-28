@@ -126,7 +126,7 @@ describe('Routines : heure et rappel (R-02), PC', () => {
     const routine = await seedRoutine(h, { title: 'Sport', time: '18:00' as LocalTime });
     await seedReminders(h, routine.id as RoutineId, [0, 30]);
     renderRoutines(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Sport' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Sport' }));
     await screen.findByRole('form', { name: 'Modifier la routine' });
     expect(box('À l’heure')).toHaveAttribute('aria-checked', 'true');
     expect(box('30 min')).toHaveAttribute('aria-checked', 'true');
@@ -145,7 +145,7 @@ describe('Routines : heure et rappel (R-02), PC', () => {
     const routine = await seedRoutine(h, { title: 'Sport', time: '18:00' as LocalTime });
     await seedReminders(h, routine.id as RoutineId, [0, 15]);
     renderRoutines(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Sport' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Sport' }));
     await screen.findByRole('form', { name: 'Modifier la routine' });
     // 15 min n'est pas un rappel rapide : la liste est dépliée d'office.
     expect(box('15 min')).toHaveAttribute('aria-checked', 'true');
@@ -161,7 +161,7 @@ describe('Routines : heure et rappel (R-02), PC', () => {
     const routine = await seedRoutine(h, { title: 'Sport', time: '18:00' as LocalTime });
     await seedReminders(h, routine.id as RoutineId, [30, 15]);
     renderRoutines(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Sport' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Sport' }));
     await screen.findByRole('form', { name: 'Modifier la routine' });
     fireEvent.click(timeButton());
     fireEvent.change(screen.getByLabelText('Heure (HH:MM)'), { target: { value: '19:00' } });

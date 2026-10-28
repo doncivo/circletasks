@@ -162,3 +162,33 @@
 .ct-routine-card {
   cursor: pointer;
 }
+
+/* ---------- UI-REFONTE-05 : carte iPhone (Routines-v2.html) : titre 19 px, « Modifier » au trait, pastilles, phrase d'informations. ---------- */
+.ct-routine-card[data-layout='mobile'] {
+  gap: 9px;
+  padding: 15px 0;
+}
+
+.ct-routine-card[data-layout='mobile'] .ct-routine-card__title {
+  font-size: 1.1875rem;
+}
+
+.ct-routine-card[data-layout='mobile'] .ct-routine-card__edit {
+  height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: 17px;
+  background: var(--ct-color-surface);
+}
+
+.ct-routine-card[data-layout='mobile'] .ct-routine-card__info {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-routine-card[data-layout='mobile'] .ct-routine-card__info .ct-routine-card__counter {
+  margin-left: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}

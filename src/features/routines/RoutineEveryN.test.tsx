@@ -85,7 +85,7 @@ describe('Routines : « Tous les N jours / semaines » (R-07)', () => {
       const [stored] = await h.container.data.repos.routines.listForFilter('all');
       expect(stored).toMatchObject({ scheduleType: 'every_n_weeks', interval: 2, weekdays: [1, 4], startDate: '2026-10-02', timesPerWeek: null });
       const card = screen.getByRole('heading', { name: 'Séance d’étirements' }).closest('article') as HTMLElement;
-      expect(card).toHaveTextContent('toutes les 2 semaines : lun., jeu.');
+      expect(card).toHaveTextContent('toutes les 2 semaines, le lundi et le jeudi'); // UI-REFONTE-05 : fréquence en toutes lettres sur iPhone
     });
 
     it('enregistre « Tous les 3 jours » ; la carte compte les occurrences de la semaine et grise les jours non prévus (critère 6)', async () => {
@@ -99,7 +99,7 @@ describe('Routines : « Tous les N jours / semaines » (R-07)', () => {
       const card = screen.getByRole('heading', { name: 'Séance d’étirements' }).closest('article') as HTMLElement;
       // Semaine du 28 sept. au 4 oct. : départ le ven. 2 -> ven. 2 seulement (dim. 5 est dans la semaine suivante).
       expect(within(card).getAllByRole('checkbox').map((round) => round.getAttribute('data-state'))).toEqual(['off', 'off', 'off', 'off', 'planned', 'off', 'off']);
-      expect(card).toHaveTextContent('0/1');
+      expect(card).toHaveTextContent('0 sur 1 cette semaine'); // UI-REFONTE-05
       expect(card).toHaveTextContent('tous les 3 jours');
     });
 
@@ -108,7 +108,7 @@ describe('Routines : « Tous les N jours / semaines » (R-07)', () => {
       await seedLog(h, routine, '2026-09-21');
       await seedLog(h, routine, '2026-09-24');
       renderRoutines(h.container);
-      fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Arroser' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Arroser' }));
       await screen.findByRole('form', { name: 'Modifier la routine' });
       expect(frequency()).toHaveValue('every_n');
       expect(interval()).toHaveTextContent('3');

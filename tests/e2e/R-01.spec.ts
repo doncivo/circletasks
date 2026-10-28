@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { cardOf, createRoutine, insertRoutines, openRoutines, routineForm } from './helpers/routines';
+import { cardOf, counterText, createRoutine, insertRoutines, openRoutines, routineForm } from './helpers/routines';
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { isPhone, todayTab } from './helpers/today';
 import { mondayOf } from './helpers/week';
@@ -20,7 +20,7 @@ test.describe('R-01 — créer une routine', () => {
 
   test('« + » ouvre le formulaire ; Enregistrer grisé sans nom ou sans jour (critères 1, 2, 3)', async ({ page }, testInfo) => {
     await openRoutines(page);
-    await expect(page.getByText('Gérez vos routines ici', { exact: false })).toBeVisible({ visible: isPhone(testInfo) });
+    await expect(page.getByText('Gérez vos routines ici', { exact: false })).toHaveCount(0); // UI-REFONTE-05 : l'aide a quitté l'écran iPhone (jamais sur PC)
     await page.getByRole('button', { name: isPhone(testInfo) ? 'Ajouter une routine' : 'Ajouter', exact: true }).click();
     const form = routineForm(page, 'Nouvelle routine');
     await expect(form).toBeVisible();
@@ -76,8 +76,8 @@ test.describe('R-01 — créer une routine', () => {
     });
     expect(states).toEqual(expected);
     const planned = expected.filter((state) => state === 'planned').length;
-    await expect(card.locator('.ct-routine-card__counter')).toHaveText(`0/${String(planned)}`);
-    await expect(card).toContainText('Pro · lun., mer., ven., dim.');
+    await expect(card.locator('.ct-routine-card__counter')).toHaveText(counterText(testInfo, 0, planned));
+    await expect(card).toContainText(isPhone(testInfo) ? 'Pro · lundi, mercredi, vendredi et dimanche' : 'Pro · lun., mer., ven., dim.'); // UI-REFONTE-05 : fréquence en toutes lettres sur iPhone
   });
 
   test('« X fois par semaine » : compteur de 1 à 7, aucun jour à choisir ; la carte affiche le quota (critères 4, 5, 8)', async ({ page }, testInfo) => {
@@ -97,7 +97,7 @@ test.describe('R-01 — créer une routine', () => {
     await form.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(form).not.toBeVisible();
     const card = cardOf(page, 'Courir');
-    await expect(card.locator('.ct-routine-card__counter')).toHaveText('0/3');
+    await expect(card.locator('.ct-routine-card__counter')).toHaveText(counterText(testInfo, 0, 3));
     await expect(card).toContainText('3 fois par semaine');
   });
 

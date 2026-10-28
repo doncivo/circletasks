@@ -37,8 +37,9 @@ test.describe('UI-REFONTE-05 — Routines iPhone', () => {
       await expect(water.locator('svg')).toHaveCount(0);
       await expect(water.locator('.ct-routine-card__week [role="checkbox"]')).toHaveCount(7);
       await expect(water.locator('.ct-routine-card__week .ct-routine-card__counter')).toHaveCount(0);
-      await expect(water.locator('.ct-routine-card__info')).toHaveText('08:30 · Perso · tous les jours · 2 sur 7 cette semaine');
-      await expect(cardOf(page, 'Sport').locator('.ct-routine-card__info')).toHaveText('18:00 · Perso · mardi et vendredi · 1 sur 2 cette semaine');
+      // Les séries en cours (R-04) restent dans la ligne : lundi et mardi validés, « série 2 jours » ; Sport mardi, « série 1 séance ».
+      await expect(water.locator('.ct-routine-card__info')).toHaveText('08:30 · Perso · tous les jours · série 2 jours · 2 sur 7 cette semaine');
+      await expect(cardOf(page, 'Sport').locator('.ct-routine-card__info')).toHaveText('18:00 · Perso · mardi et vendredi · série 1 séance · 1 sur 2 cette semaine');
       // Valider mercredi (aujourd'hui) : la phrase et la synthèse suivent.
       await water.getByRole('checkbox', { name: 'Mercredi', exact: true }).click();
       await expect(water.locator('.ct-routine-card__counter')).toHaveText('3 sur 7 cette semaine');

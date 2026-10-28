@@ -56,9 +56,9 @@ describe('UI-REFONTE-05 — Routines iPhone', () => {
     expect(summary()).toHaveTextContent('Semaine du 28 sept. au 4 oct. · 1 sur 1 faite');
   });
 
-  it('en-tête : des routines mais aucun jour prévu (toutes en pause) : « Aucune routine prévue cette semaine » (critère 1)', async () => {
+  it('en-tête : des routines mais aucun jour prévu (départ la semaine prochaine) : « Aucune routine prévue cette semaine » (critère 1)', async () => {
     await start('358');
-    await seedRoutine(h, { title: 'Méditer', paused: true });
+    await seedRoutine(h, { title: 'Méditer', startDate: '2026-10-05' as never });
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Méditer' });
     expect(summary()).toHaveTextContent('Aucune routine prévue cette semaine');
@@ -89,7 +89,8 @@ describe('UI-REFONTE-05 — Routines iPhone', () => {
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Sport' });
     expect(card('Boire de l’eau').querySelector('.ct-routine-card__info')).toHaveTextContent('08:30 · Perso · tous les jours · 2 sur 7 cette semaine');
-    expect(card('Sport').querySelector('.ct-routine-card__info')).toHaveTextContent('18:00 · Perso · mardi et vendredi · 1 sur 2 cette semaine');
+    // La série en cours (R-04) reste dans la ligne, avant le compteur.
+    expect(card('Sport').querySelector('.ct-routine-card__info')).toHaveTextContent('18:00 · Perso · mardi et vendredi · série 1 séance · 1 sur 2 cette semaine');
     // Le compteur garde son libellé accessible et vit dans la ligne d'informations.
     const counter = within(card('Sport')).getByLabelText('1 sur 2 cette semaine');
     expect(counter).toHaveTextContent('1 sur 2 cette semaine');
@@ -106,11 +107,12 @@ describe('UI-REFONTE-05 — Routines iPhone', () => {
     await seedRoutine(h, { title: 'Ménage', scheduleType: 'every_n_weeks', interval: 2, weekdays: weekdays(2, 4), startDate: '2026-09-28' as never });
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Ménage' });
-    expect(card('Aller au lit').querySelector('.ct-routine-card__info')).toHaveTextContent(/^du lundi au vendredi · /);
-    expect(card('Courir').querySelector('.ct-routine-card__info')).toHaveTextContent(/^lundi, mercredi et vendredi · /);
-    expect(card('Lire').querySelector('.ct-routine-card__info')).toHaveTextContent(/^3 fois par semaine · /);
-    expect(card('Arroser').querySelector('.ct-routine-card__info')).toHaveTextContent(/^tous les 3 jours · /);
-    expect(card('Ménage').querySelector('.ct-routine-card__info')).toHaveTextContent(/^toutes les 2 semaines, le mardi et le jeudi · /);
+    // Sous « Tout », l'espace précède la fréquence (« Pro · du lundi au vendredi · … »).
+    expect(card('Aller au lit').querySelector('.ct-routine-card__info')).toHaveTextContent(/^Pro · du lundi au vendredi · /);
+    expect(card('Courir').querySelector('.ct-routine-card__info')).toHaveTextContent(/^Pro · lundi, mercredi et vendredi · /);
+    expect(card('Lire').querySelector('.ct-routine-card__info')).toHaveTextContent(/^Pro · 3 fois par semaine · /);
+    expect(card('Arroser').querySelector('.ct-routine-card__info')).toHaveTextContent(/^Pro · tous les 3 jours · /);
+    expect(card('Ménage').querySelector('.ct-routine-card__info')).toHaveTextContent(/^Pro · toutes les 2 semaines, le mardi et le jeudi · /);
   });
 
   it('aide retirée, rangée du bas « Rapport du mois » + « Routine » (libellé « Ajouter une routine »), plus de bouton flottant (critères 4 et 5)', async () => {

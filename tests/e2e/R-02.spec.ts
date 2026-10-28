@@ -106,7 +106,7 @@ test.describe('R-02 — heure optionnelle d’une routine', () => {
   test('effacer l’heure d’une routine existante la rend sans heure', async ({ page }, testInfo) => {
     await insertRoutines(page, [{ title: 'Sport', time: '18:00' }]);
     await reopenRoutines(page);
-    await cardOf(page, 'Sport').getByRole('button', { name: 'Éditer la routine Sport' }).click();
+    await cardOf(page, 'Sport').getByRole('button', { name: 'Modifier la routine Sport' }).click();
     const form = routineForm(page, 'Modifier la routine');
     await expect(form.getByRole('button', { name: 'Heure de la routine : 18:00' })).toBeVisible();
     await setRoutineTime(page, form, testInfo, null);

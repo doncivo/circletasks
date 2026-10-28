@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { cardOf, insertRoutines, openRoutines, reopenRoutines, routineForm } from './helpers/routines';
+import { cardOf, counterText, insertRoutines, openRoutines, reopenRoutines, routineForm } from './helpers/routines';
 import { isPhone, todayTab } from './helpers/today';
 
 /**
@@ -89,10 +89,10 @@ test.describe('R-07 — tous les N jours / semaines', () => {
     // Semaine du lun. 21 au dim. 27 sept., départ mer. 23 : jeu. 24 seulement de prévu (le lun. 21 précède le départ).
     const states = await card.getByRole('checkbox').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-state')));
     expect(states).toEqual(['off', 'off', 'off', 'planned', 'off', 'off', 'off']);
-    await expect(card.locator('.ct-routine-card__counter')).toHaveText('0/1');
+    await expect(card.locator('.ct-routine-card__counter')).toHaveText(counterText(testInfo, 0, 1));
   });
 
-  test('tous les 3 jours : visible dans Aujourd’hui aux seules dates prévues ; compteur de la semaine (critères 4, 6)', async ({ page }) => {
+  test('tous les 3 jours : visible dans Aujourd’hui aux seules dates prévues ; compteur de la semaine (critères 4, 6)', async ({ page }, testInfo) => {
     await insertRoutines(page, [
       { title: 'Arroser', scheduleType: 'every_n_days', interval: 3, startDate: '2026-09-21', done: ['2026-09-21'] },
       { title: 'Autre rythme', scheduleType: 'every_n_days', interval: 3, startDate: '2026-09-22' },
@@ -100,7 +100,7 @@ test.describe('R-07 — tous les N jours / semaines', () => {
     await reopenRoutines(page);
     const card = cardOf(page, 'Arroser');
     // Semaine 21-27 sept. : 21, 24, 27 prévus ; 21 validé.
-    await expect(card.locator('.ct-routine-card__counter')).toHaveText('1/3');
+    await expect(card.locator('.ct-routine-card__counter')).toHaveText(counterText(testInfo, 1, 3));
     const states = await card.getByRole('checkbox').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-state')));
     expect(states).toEqual(['done', 'off', 'off', 'planned', 'off', 'off', 'planned']);
     // Mercredi 23 : « Arroser » n'est pas prévu, « Autre rythme » (22, 25, 28…) non plus.
@@ -112,7 +112,7 @@ test.describe('R-07 — tous les N jours / semaines', () => {
   test('les validations passées sont conservées quand N change (critère 8)', async ({ page }) => {
     await insertRoutines(page, [{ title: 'Arroser', scheduleType: 'every_n_days', interval: 3, startDate: '2026-09-21', done: ['2026-09-21'] }]);
     await reopenRoutines(page);
-    await cardOf(page, 'Arroser').getByRole('button', { name: 'Éditer la routine Arroser' }).click();
+    await cardOf(page, 'Arroser').getByRole('button', { name: 'Modifier la routine Arroser' }).click();
     const form = routineForm(page, 'Modifier la routine');
     await expect(form.getByTestId('interval-value')).toHaveText('3');
     await form.getByRole('button', { name: 'Augmenter' }).click();

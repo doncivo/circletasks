@@ -75,7 +75,7 @@ test.describe('R-04 — série en cours et meilleure série', () => {
       { title: 'Sport', scheduleType: 'weekdays', weekdays: [1, 3, 5], startDate: '2026-06-01', done: [...best, '2026-09-14', '2026-09-16', '2026-09-18', '2026-09-21'] },
     ]);
     await reopenRoutines(page);
-    await cardOf(page, 'Sport').getByRole('button', { name: 'Éditer la routine Sport' }).click();
+    await cardOf(page, 'Sport').getByRole('button', { name: 'Modifier la routine Sport' }).click();
     const form = routineForm(page, 'Modifier la routine');
     await expect(form).toContainText('Série en cours 4 séances');
     await expect(form.getByLabel('Meilleure série 11 séances')).toContainText('Meilleure 11');
