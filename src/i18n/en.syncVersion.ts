@@ -5,7 +5,7 @@ type Shape<T> = { readonly [K in keyof T]: T[K] extends string ? string : Shape<
 /** `sync.version` texts (Y-07), English. Same shape as `fr.syncVersion.ts`. */
 export const syncVersionEn: Shape<typeof syncVersionFr> = {
   banner: 'Update the app: one of your devices uses a newer version',
-  section: 'VERSION',
+  section: 'Version',
   newer: '{device} uses a newer version of the app',
   newerWithVersion: '{device} uses a newer version of the app ({version})',
   unknownVersion: 'unknown version',

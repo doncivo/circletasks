@@ -2,17 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
-import { conflictDate, conflictSideMeta, conflictTitle, conflictValueText, fieldLabel, refusalText, restoreResultText, restoredOnText } from './conflictText';
+import { tSyncRefonte } from '../../i18n/syncRefonteText';
+import { conflictDate, conflictHeading, conflictSideMeta, conflictTitle, conflictValueText, fieldLabel, refusalText, restoreResultText, restoredOnText } from './conflictText';
 import { createSyncConflictUseCases, subscribeConflictChanges, type ConflictPage, type ConflictView, type RestoreResult } from './syncConflictUseCases';
 import { syncStore } from './syncStore';
 import './ConflictList.css';
-
-/** Sépare un texte traduit autour de sa valeur (« {value} gardée ») pour mettre la valeur en gras, dans l'ordre de la langue. */
-function aroundValue(text: (value: string) => string): readonly [string, string] {
-  const marker = '\u0000';
-  const [before = '', after = ''] = text(marker).split(marker);
-  return [before, after];
-}
 
 interface RowMessage {
   readonly text: string;
@@ -128,8 +122,6 @@ export function ConflictList() {
           const title = conflictTitle(view);
           const field = fieldLabel(view.table, view.column);
           const names = { title, field };
-          const [keptBefore, keptAfter] = aroundValue((value) => t('sync.conflicts.kept', { value }));
-          const [discardedBefore, discardedAfter] = aroundValue((value) => t('sync.conflicts.discarded', { value }));
           // Blocage recalculé à la lecture : il prime sur tout message gardé (critère 8, exigence d'Ali).
           const message = !view.restored && view.blocked ? { text: refusalText(view.blocked), trouble: true } : (messages.get(view.id) ?? null);
           const statusId = `ct-conflict-status-${String(view.id)}`;
@@ -145,24 +137,17 @@ export function ConflictList() {
               tabIndex={-1}
               data-restored={view.restored ? 'true' : undefined}
             >
+              {/* UI-REFONTE-04 (Synchro-v4.html) : « Heure prévue de « Envoyer la facture » », valeur appliquée en gras, valeur écartée en retrait. */}
               <div className="ct-conflicts__head">
-                <span className="ct-conflicts__title">{t('sync.conflicts.heading', names)}</span>
+                <span className="ct-conflicts__title">{conflictHeading(view, names)}</span>
                 <span className="ct-conflicts__date">{conflictDate(view.detectedAt)}</span>
               </div>
               <div className="ct-conflicts__value ct-conflicts__value--kept">
-                <span>
-                  {keptBefore}
-                  <b>{conflictValueText(view.table, view.column, view.kept, nowMs)}</b>
-                  {keptAfter}
-                </span>
-                <span className="ct-conflicts__meta ct-conflicts__meta--kept">{conflictSideMeta(view.kept, devices, nowMs)}</span>
+                <b>{conflictValueText(view.table, view.column, view.kept, nowMs)}</b>
+                <span className="ct-conflicts__meta ct-conflicts__meta--kept">{tSyncRefonte('applied', { side: conflictSideMeta(view.kept, devices, nowMs) })}</span>
               </div>
               <div className="ct-conflicts__value ct-conflicts__value--discarded">
-                <span>
-                  {discardedBefore}
-                  <b>{conflictValueText(view.table, view.column, view.discarded, nowMs)}</b>
-                  {discardedAfter}
-                </span>
+                <span className="ct-conflicts__discardedValue">{conflictValueText(view.table, view.column, view.discarded, nowMs)}</span>
                 <span className="ct-conflicts__actions">
                   <span className="ct-conflicts__meta">{conflictSideMeta(view.discarded, devices, nowMs)}</span>
                   {view.restored ? (

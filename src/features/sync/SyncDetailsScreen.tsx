@@ -3,6 +3,8 @@ import { useEffect, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { pendingFileCount } from '../../domain/sync/pendingFiles';
 import { isPublishBlockedCause, publishCauseText } from '../../i18n/syncPublishCauseText';
+import { tSyncRefonte } from '../../i18n/syncRefonteText';
+import type { SyncDeviceStatus } from '../../platform/sync/types';
 import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
@@ -42,12 +44,18 @@ export interface SyncDetailsSlots {
   readonly carryReport?: ReactNode;
 }
 
+/** Ton de la pastille de statut d'un appareil (UI-REFONTE-04) : vert pour actif, gris pour oublié ou jamais vu, rouge pour le reste. */
+function deviceTone(device: Pick<SyncDeviceStatus, 'status' | 'seen'>): 'success' | 'muted' | 'danger' {
+  if (device.seen === false || device.status === 'forgotten') return 'muted';
+  return device.status === 'active' ? 'success' : 'danger';
+}
+
 /**
- * Réglages › Synchronisation, détails (Y-02 critère 17, Y-03 critère 1, Y-09 critère 10) : sans maquette PC, composé avec les lignes
- * de Réglages d'après Synchro.html (iPhone) : état et « Synchroniser », APPAREILS (dernière lecture et statut), fichiers en attente
- * d'iCloud, nombre de conflits de la semaine. Emplacements (étape 0 du lot Y3) : `SyncDetailsPairing` (Y-06), `SyncDetailsVersion` (Y-07),
- * `SyncDetailsConflicts` (Y-04), chacun dans son fichier. Étape 0 du lot Y4 : `SyncDetailsForget` et l'action de ligne
- * `SyncDeviceForgetAction` (Y-10), `SyncDetailsReset` (Y-11) ; plus aucune story ne modifie ce fichier.
+ * Réglages › Synchronisation, détails (Y-02 critère 17, Y-03 critère 1, Y-09 critère 10 ; UI-REFONTE-04, Synchro-v4.html) : retour texte
+ * « Réglages », carte d'état en une phrase (verte seulement quand tout est parti) avec « Synchroniser », titres de section en bas de casse,
+ * APPAREILS sur un gabarit (nom, lecture, pastille de statut), fichiers en attente, « Conflits de cette semaine » avec sa phrase d'aide,
+ * « Repartir de zéro ». Emplacements (étape 0 du lot Y3) : `SyncDetailsPairing` (Y-06), `SyncDetailsVersion` (Y-07), `SyncDetailsConflicts`
+ * (Y-04) ; lot Y4 : `SyncDetailsForget` et `SyncDeviceForgetAction` (Y-10), `SyncDetailsReset` (Y-11). Aucune logique ici : présentation.
  */
 export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetailsSlots }) {
   const container = useAppContainer();
@@ -60,21 +68,21 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
   const pendingCount = pendingFileCount(status.pendingFiles);
   const key = useKeyInfo();
   // `carry-report` est montré par sa propre ligne (compte rendu du changement d'époque), pas dans cette liste ; il lève pourtant le titre
-  // AVERTISSEMENTS, vers lequel renvoie la ligne d'état « Synchro incomplète : voir les avertissements » (contre-revue, point 3).
+  // Avertissements, vers lequel renvoie la ligne d'état « Synchro incomplète : voir les avertissements » (contre-revue, point 3).
   const carryRaised = (status.warnings ?? []).includes('carry-report');
   const shownWarnings = (status.warnings ?? []).filter((code) => code !== 'carry-report' && code !== 'own-delete-failed');
   return (
     <div className="ct-settings ct-sync">
       <div className="ct-sync__topRow">
+        {/* UI-FIX-04 / UI-REFONTE-04 : retour à gauche, en texte (« Réglages »), libellé accessible inchangé. */}
         <button type="button" className="ct-sync__back" aria-label={t('sync.status.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
-          <Icon icon={ArrowLeft} size={26} />
+          <Icon icon={ArrowLeft} size={20} />
+          <span>{tSyncRefonte('back')}</span>
         </button>
       </div>
       <h1 className="ct-settings__title">{t('sync.status.title')}</h1>
-      <h2 className="ct-settings__section">{t('sync.status.sectionState')}</h2>
-      <div className="ct-settings__row ct-sync__stateRow">
-        <SyncStatusLine showDetailsLink={false} />
-      </div>
+      {/* Carte d'état (critère 2) : la phrase de la ligne de Réglages, verte seulement quand tout est effectivement parti (règle 5). */}
+      <SyncStatusLine showDetailsLink={false} variant="card" />
       {status.progress && (
         <p className="ct-sync__progress" role="status">
           {t('sync.status.progress', { done: status.progress.done, total: status.progress.total })}
@@ -93,16 +101,18 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
       {slots.pairing ?? <SyncDetailsPairing />}
       {slots.version ?? <SyncDetailsVersion />}
       <h2 className="ct-settings__section">{t('sync.status.sectionDevices')}</h2>
-      <p className="ct-settings__hint">{t('sync.status.namesLocal')}</p>
       {nameError && <p role="alert" className="ct-settings__error">{t(nameError)} {nameError === 'sync.status.nameReadFailed' && <button type="button" onClick={() => void loadNames()}>{t('common.retry')}</button>}</p>}
       <ul className="ct-sync__devices">
         {status.devices.map((device) => (
-          <li key={device.deviceId} className="ct-settings__row ct-sync__device" data-status={device.status}>
+          <li key={device.deviceId} className="ct-settings__row ct-sync__device" data-status={device.status} data-device-id={device.deviceId}>
             <div className="ct-sync__deviceIdentity">
               <SyncDeviceName device={device} devices={status.devices} />
               <span className="ct-sync__deviceRead">{device.lastReadAt ? t(device.self ? 'sync.status.lastSync' : 'sync.status.lastRead', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.status.neverRead')}</span>
             </div>
-            <span className="ct-settings__value ct-sync__deviceState">{device.seen === false ? t('sync.forget.unseenState') : deviceStatusText(device)}</span>
+            {/* Pastille de statut alignée à droite (critère 4) : un seul gabarit pour tous les appareils. */}
+            <span className="ct-settings__value ct-sync__deviceState" data-tone={deviceTone(device)}>
+              {device.seen === false ? t('sync.forget.unseenState') : deviceStatusText(device)}
+            </span>
             {!device.self && <SyncDeviceForgetAction device={device} />}
           </li>
         ))}
@@ -119,6 +129,8 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
           </p>
         )
       )}
+      {/* L'aide sort de la zone de contenu : sous la liste (règle du README des refontes). */}
+      {status.devices.length > 0 && <p className="ct-settings__hint ct-sync__namesHint">{t('sync.status.namesLocal')}</p>}
       {slots.forget ?? <SyncDetailsForget />}
       {(status.stateUnreadable === true || shownWarnings.length > 0 || carryRaised) && (
         <>
@@ -141,7 +153,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
           <SyncDetailsRescue />
         </>
       )}
-      {/* Ligne du compte rendu : toujours à cette place, sous AVERTISSEMENTS quand `carry-report` est levé (même position dans l'arbre quand il
+      {/* Ligne du compte rendu : toujours à cette place, sous Avertissements quand `carry-report` est levé (même position dans l'arbre quand il
           retombe : la feuille ouverte ne se referme pas). */}
       <SyncDetailsDedup />
       {slots.carryReport === undefined ? <SyncDetailsCarryReportHost /> : slots.carryReport}
@@ -154,6 +166,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         </>
       )}
       <h2 className="ct-settings__section">{t('sync.status.sectionConflicts')}</h2>
+      <p className="ct-settings__hint ct-sync__conflictsHelp">{tSyncRefonte('conflictsHelp')}</p>
       <div className="ct-settings__row">
         <span>
           {status.conflictsThisWeek === 0

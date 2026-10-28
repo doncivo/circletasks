@@ -24,7 +24,7 @@ export const syncForgetFr = {
   deletionNoSnapshot: 'Oublié · aucun instantané à jour : ouvrez un autre appareil associé',
   deletionFinalizing: 'Oublié · finalisation en attente de {device}',
   deletionFinalizingUnknown: 'Oublié · finalisation en attente',
-  section: 'OUBLI D’UN APPAREIL',
+  section: 'Oubli d’un appareil',
   failedDeclare: 'L’oubli de {device} a échoué : {reason}',
   failedDelete: 'La suppression des fichiers de {device} a échoué : {reason}',
   failedRejoin: 'L’association de cet appareil a échoué : {reason}',

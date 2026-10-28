@@ -6,10 +6,8 @@ type Shape<T> = { readonly [K in keyof T]: T[K] extends string ? string : Shape<
 export const syncConflictsEn: Shape<typeof syncConflictsFr> = {
   listLabel: 'Conflict log',
   itemLabel: 'Conflict: {title}, {field}',
-  heading: '{title} · {field}',
+  heading: '{field} of {title}',
   deletedItem: 'Deleted item',
-  kept: '{value} kept',
-  discarded: '{value} discarded',
   side: '{device} · {time}',
   otherDevice: 'Other device',
   appleReminders: 'Apple Reminders',

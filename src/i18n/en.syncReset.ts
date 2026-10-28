@@ -4,10 +4,9 @@ type Shape<T> = { readonly [K in keyof T]: T[K] extends string ? string : Shape<
 
 /** `sync.reset` texts (Y-11), English. Same shape as `fr.syncReset.ts`. */
 export const syncResetEn: Shape<typeof syncResetFr> = {
-  section: 'RESET',
+  section: 'Start over',
   action: 'Reset synchronization',
   actionLabel: 'Reset synchronization with a new key',
-  actionHint: 'New key and new recovery key: the old key can no longer read anything written afterwards',
   dialogTitle: 'Reset synchronization?',
   dialogBody:
     'A new key and a new recovery key will be created. All your other devices will have to be paired again (QR code or recovery key) or forgotten. Each device keeps its data, and everything is merged. The old recovery key will no longer work. The old key will not read anything written afterwards, but it can still read what is already encrypted with it: the copy kept by a lost device, and the old key’s files while they exist (at most 30 days in iCloud’s “Recently Deleted”).',
@@ -43,12 +42,12 @@ export const syncResetEn: Shape<typeof syncResetFr> = {
     required: 'pairing',
     done: 'end',
   },
-  waitingTitle: 'DEVICES TO PAIR AGAIN',
+  waitingTitle: 'Devices to pair again',
   waitingHint: 'Pair each device with the new key (QR code or recovery key), or forget it. No device is forgotten without your choice.',
   waitingLastSync: 'Last synchronized {time}',
   waitingNever: 'Never synchronized',
   reminder: 'Reset started more than 30 days ago: {devices} not paired yet',
-  recoveryTitle: 'NEW RECOVERY KEY',
+  recoveryTitle: 'New recovery key',
   recoveryBody: 'The old recovery key no longer works. Show the new one, print it, then destroy the old sheet.',
   recoveryAction: 'Show the new recovery key',
   recoveryActionLabel: 'Show and print the new recovery key',

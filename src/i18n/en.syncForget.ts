@@ -23,7 +23,7 @@ export const syncForgetEn: Shape<typeof syncForgetFr> = {
   deletionNoSnapshot: 'Forgotten · no up-to-date snapshot: open another paired device',
   deletionFinalizing: 'Forgotten · finishing, waiting for {device}',
   deletionFinalizingUnknown: 'Forgotten · finishing, pending',
-  section: 'FORGETTING A DEVICE',
+  section: 'Forgetting a device',
   failedDeclare: 'Forgetting {device} failed: {reason}',
   failedDelete: 'Deleting the files of {device} failed: {reason}',
   failedRejoin: 'Pairing this device again failed: {reason}',

@@ -112,6 +112,16 @@ export function conflictTitle(view: Pick<ConflictView, 'title' | 'itemState' | '
   return t('sync.conflicts.kinds.other');
 }
 
+/**
+ * Titre d'un conflit (UI-REFONTE-04, Synchro-v4.html) : « Heure prévue de « Envoyer la facture » » : champ (initiale en capitale) puis titre
+ * entre guillemets, tronqué à 80 caractères ; élément disparu : « Date de « Élément supprimé » ».
+ */
+export function conflictHeading(view: Pick<ConflictView, 'title' | 'itemState' | 'table'>, names: { readonly title: string; readonly field: string }): string {
+  const field = names.field.charAt(0).toLocaleUpperCase(getLocale() === 'fr' ? 'fr-FR' : 'en-US') + names.field.slice(1);
+  const title = view.itemState === 'live' && view.title !== null ? quoted(names.title) : names.title;
+  return t('sync.conflicts.heading', { field, title });
+}
+
 /** Date de détection (« 22 sept. »). */
 export const conflictDate = (iso: string): string => formatDayMonth(localDate(iso));
 

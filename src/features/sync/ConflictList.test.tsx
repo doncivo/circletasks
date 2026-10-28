@@ -11,8 +11,8 @@ import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
 
 /**
- * Bloc « JOURNAL DES CONFLITS » (Y-04 critères 1, 3, 4, 8 et 14 ; Synchro.html) : absent sans conflit, une ligne par conflit (titre ·
- * champ, date, valeur gardée et écartée avec appareil et heure, « Restaurer »), résultat annoncé dans la ligne, focus gardé, refus
+ * Bloc « Conflits de cette semaine » (Y-04 critères 1, 3, 4, 8 et 14 ; Synchro.html, puis Synchro-v4.html pour UI-REFONTE-04) : absent sans conflit,
+ * une ligne par conflit (« Heure prévue de « Envoyer la facture » », date, valeur appliquée et valeur écartée avec appareil et heure, « Rétablir »), résultat annoncé dans la ligne, focus gardé, refus
  * affiché en permanence, lecture impossible dite, « Afficher plus », annulation par le bandeau T-13.
  *
  * Attentes (Y-TECH-02, consigne d'Ali : aucun sondage) : une transaction est attendue par sa propre promesse (`trackTransaction`) ; un
@@ -119,23 +119,25 @@ describe('journal des conflits (critères 1, 3 et 4)', () => {
     await act(async () => {
       await db.data.repos.sync.listConflicts('2020-01-01T00:00:00.000Z' as IsoDateTime, 1);
     });
-    expect(screen.getAllByText('JOURNAL DES CONFLITS')).toHaveLength(1);
+    expect(screen.getAllByText('Conflits de cette semaine')).toHaveLength(1);
     expect(screen.queryByRole('list', { name: 'Journal des conflits' })).toBeNull();
   });
 
-  it('une ligne par conflit d’après Synchro.html : « Envoyer la facture · heure prévue », « 22 sept. », 09:00 gardée · iPhone · 18:04, 10:00 écartée · PC · 17:58, « Restaurer »', async () => {
+  it('une ligne par conflit d’après Synchro.html : « Envoyer la facture · heure prévue », « 22 sept. », 09:00 Appliquée · iPhone · 18:04, 10:00 PC · 17:58, « Rétablir » (UI-REFONTE-04)', async () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
-    expect(screen.getAllByText('JOURNAL DES CONFLITS')).toHaveLength(1);
+    expect(screen.getAllByText('Conflits de cette semaine')).toHaveLength(1);
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
-    expect(within(item).getByText('Envoyer la facture · heure prévue')).toBeTruthy();
+    expect(within(item).getByText('Heure prévue de « Envoyer la facture »')).toBeTruthy(); // UI-REFONTE-04 : le conflit nomme ce qui a changé
     expect(within(item).getByText('22 sept.')).toBeTruthy();
-    expect(item.textContent).toContain('09:00 gardée');
-    expect(item.textContent).toContain('10:00 écartée');
-    expect(within(item).getByText(/^iPhone · /).textContent).toMatch(/18:04/);
+    // UI-REFONTE-04 : valeur appliquée en gras avec « Appliquée · appareil · heure », valeur écartée avec son appareil ; plus de « gardée / écartée ».
+    expect(within(item).getByText('09:00').tagName).toBe('B');
+    expect(item.textContent).toContain('10:00');
+    expect(item.textContent).not.toContain('gardée');
+    expect(within(item).getByText(/^Appliquée · iPhone · /).textContent).toMatch(/18:04/);
     expect(within(item).getByText(/^PC · /).textContent).toMatch(/17:58/);
-    expect(within(item).getByRole('button', { name: 'Restaurer la valeur écartée : Envoyer la facture, heure prévue' }).textContent).toBe('Restaurer');
+    expect(within(item).getByRole('button', { name: 'Rétablir la valeur écartée : Envoyer la facture, heure prévue' }).textContent).toBe('Rétablir');
   });
 
   it('texte entre « » ; élément supprimé ; « Afficher plus » au-delà de 50', async () => {
@@ -154,29 +156,29 @@ describe('journal des conflits (critères 1, 3 et 4)', () => {
     expect(within(ul).getAllByRole('listitem')).toHaveLength(52);
     expect(screen.queryByRole('button', { name: 'Afficher plus' })).toBeNull();
     const notes = within(ul).getByRole('listitem', { name: 'Conflit : Courses, note' });
-    expect(notes.textContent).toContain('« lait, œufs, café » gardée');
+    expect(notes.textContent).toContain('« lait, œufs, café »Appliquée'); // UI-REFONTE-04
     expect(within(ul).getByRole('listitem', { name: 'Conflit : Élément supprimé, titre' })).toBeTruthy();
   });
 });
 
 describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
-  it('« Restaurer » : valeur restaurée annoncée dans la ligne, focus sur la ligne, « Restaurée le … », puis « Annuler »', async () => {
+  it('« Rétablir » : valeur restaurée annoncée dans la ligne, focus sur la ligne, « Restaurée le … », puis « Annuler »', async () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
-    const button = within(item).getByRole('button', { name: /Restaurer la valeur écartée/ });
+    const button = within(item).getByRole('button', { name: /Rétablir la valeur écartée/ });
     button.focus();
     fireEvent.click(button);
-    await within(item).findByText('Restaurée le 5 oct.');
-    expect(within(item).getByRole('status').textContent).toBe('Valeur restaurée : Envoyer la facture, heure prévue');
+    await within(item).findByText('Rétablie le 5 oct.');
+    expect(within(item).getByRole('status').textContent).toBe('Valeur rétablie : Envoyer la facture, heure prévue');
     expect(within(item).queryByRole('button')).toBeNull();
     expect(document.activeElement).toBe(item);
     expect((await db.data.repos.tasks.getById(id))?.time).toBe('10:00');
-    // Bandeau T-13 « Valeur restaurée · Annuler ».
-    expect(screen.getByText('Valeur restaurée')).toBeTruthy();
+    // Bandeau T-13 « Valeur rétablie · Annuler ».
+    expect(screen.getByText('Valeur rétablie')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    await within(item).findByRole('button', { name: /Restaurer la valeur écartée/ });
+    await within(item).findByRole('button', { name: /Rétablir la valeur écartée/ });
     expect((await db.data.repos.tasks.getById(id))?.time).toBe('09:00');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -190,7 +192,7 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Élément supprimé, titre' });
     const refusal = 'Cet élément n’existe plus : la valeur ne peut pas être restaurée';
     expect(within(item).getByRole('status').textContent).toBe(refusal);
-    const button = within(item).getByRole('button', { name: /Restaurer/ });
+    const button = within(item).getByRole('button', { name: /Rétablir/ });
     expect(button.getAttribute('aria-describedby')).toBe(within(item).getByRole('status').id);
     // La restauration passe par une transaction : on attend sa fin, par sa propre promesse (aucun délai, aucun sondage).
     const transaction = trackTransaction();
@@ -214,7 +216,7 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
     const real = db.driver.transaction.bind(db.driver);
     db.driver.transaction = (() => Promise.reject(new Error('base verrouillée'))) as typeof db.driver.transaction;
-    fireEvent.click(within(item).getByRole('button', { name: /Restaurer/ }));
+    fireEvent.click(within(item).getByRole('button', { name: /Rétablir/ }));
     await within(item).findByText('La restauration a échoué. Rien n’a été modifié : réessayez.');
     expect(within(item).getByRole('status').getAttribute('data-trouble')).toBe('true');
     db.driver.transaction = real as typeof db.driver.transaction;
@@ -233,15 +235,15 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
 });
 
 describe('messages de la ligne (revue 3) et lignes illisibles', () => {
-  it('après « Annuler », le message « Valeur restaurée » disparaît de la ligne', async () => {
+  it('après « Annuler », le message « Valeur rétablie » disparaît de la ligne', async () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
-    fireEvent.click(within(item).getByRole('button', { name: /Restaurer la valeur écartée/ }));
-    await within(item).findByText('Valeur restaurée : Envoyer la facture, heure prévue');
+    fireEvent.click(within(item).getByRole('button', { name: /Rétablir la valeur écartée/ }));
+    await within(item).findByText('Valeur rétablie : Envoyer la facture, heure prévue');
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    await within(item).findByRole('button', { name: /Restaurer la valeur écartée/ });
+    await within(item).findByRole('button', { name: /Rétablir la valeur écartée/ });
     expect(within(item).getByRole('status').textContent).toBe('');
   });
 
@@ -256,10 +258,10 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
     renderScreen();
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Relancer, projet' });
     expect(within(item).getByRole('status').textContent).toBe('');
-    // Le projet part à la corbeille sans que l'écran l'ait relu : « Restaurer » est refusé (parent disparu).
+    // Le projet part à la corbeille sans que l'écran l'ait relu : « Rétablir » est refusé (parent disparu).
     await db.driver.execute('UPDATE project SET deleted_at = ? WHERE id = ?', [NOW, project]);
     const transaction = trackTransaction();
-    fireEvent.click(within(item).getByRole('button', { name: /Restaurer/ }));
+    fireEvent.click(within(item).getByRole('button', { name: /Rétablir/ }));
     await act(async () => {
       await transaction.finished;
     });
@@ -281,11 +283,11 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure prévue' });
-    const button = within(item).getByRole('button', { name: /Restaurer la valeur écartée/ });
+    const button = within(item).getByRole('button', { name: /Rétablir la valeur écartée/ });
     fireEvent.click(button);
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    await within(item).findByText('Restaurée le 5 oct.');
+    await within(item).findByText('Rétablie le 5 oct.');
   });
 
   it('une ligne du journal illisible n’empêche pas d’afficher les autres ; elle est signalée', async () => {
