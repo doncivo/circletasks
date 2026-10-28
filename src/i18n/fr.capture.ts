@@ -11,6 +11,8 @@ export const captureFr = {
   // Feuille « Nouvelle tâche » de l'iPhone (Q-05) : base occupée ou création refusée, texte conservé.
   sheetNotReady: 'La base n’est pas prête. Votre texte est conservé ; il ne peut pas être modifié pendant l’attente. Touchez « Réessayer » pour relancer l’enregistrement.',
   sheetRetry: 'Réessayer',
+  // Q-05-FIX-01 : le bouton de soumission ne dépend plus du bloc des options chargé à la demande.
+  sheetAdd: 'Ajouter la tâche',
   // Écriture qui se termine après la fermeture de la feuille, jamais de fin muette.
   lateSaved: 'La tâche « {title} » a été enregistrée après la fermeture de la feuille.',
   lateFailed: 'La tâche « {title} » n’a pas pu être enregistrée. Touchez « + » pour la saisir de nouveau.',
