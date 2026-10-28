@@ -1,5 +1,15 @@
 # Journal de développement CircleTasks
 
+## 2026-10-28 — Refontes 02 à 09 : sept fusionnées, la huitième en CI
+
+Dans l'ordre d'Ali, chaque refonte a eu sa branche, sa fiche, son commit de tests rouges avant le code, ses quatre passes et sa mesure du bundle avant push et sur `main` après fusion. Fusions : #99 (02, 9e97ee21), #101 (03, c9507aa1), #102 (04, 9f010ec5), #103 (05, de6d486a), #104 (06, c5a8ac20), #105 (07, e9d094b4), #106 (08, e4fb9e9a). UI-REFONTE-09 (Réglages PC) est en PR #107.
+
+Bundle de départ : `main` passe de 337 581 (après 02) à 337 922 (après 08), marge 20 478 ; la seule hausse notable est Aujourd'hui PC (+458 : barre fixe et ses textes). Les écrans et catalogues des refontes sont à la demande ; `CompactToggle` quitte le départ ; trois textes de raccourcis en sortent avec 09 (−28). Projection annoncée à Ali pour les six derniers écrans : +1 000 à +2 500 pour Aujourd'hui PC, le reste à ± 0 ; tenue.
+
+Leçons des passages CI : (1) une aide e2e non adaptée (bouton flottant des Événements) coûte un passage entier ; relire `tests/e2e/helpers` avant le premier push d'une refonte. (2) `openToday` recharge la page : toute insertion directe en base doit venir après. (3) Un second repère `navigation` casse toute la suite PC (`page.getByRole('navigation')`) : le sommaire des Réglages est un groupe. (4) La règle « iPhone inchangé » se prouve par un test qui rend l'écran iPhone (le `Fab` 64 px avait disparu sans qu'aucun test iPhone de la story ne le voie ; `QuickCaptureIphone.test` l'a attrapé en CI). (5) Les branches doivent être à jour de `main` pour fusionner : `gh api -X PUT …/update-branch` dès qu'une PR voisine est fusionnée, pour ne payer qu'un passage.
+
+Deux annulations de runner (`cargo test (Windows)` à 35 min sur #105) : relance du job seul, pas de test touché.
+
 ## 2026-10-28 — Règle : tests unitaires et DOM en local, e2e Playwright en CI seulement
 
 Constat : pendant la vérification locale de UI-REFONTE-02 (PR #99), le passage de fond DOM + e2e a été arrêté par Claude Code pour manque de mémoire ; ses 135 échecs e2e étaient tous des plantages de navigateur (« Target crashed », « worker process exited unexpectedly »), pas des tests rouges. Le PC (16 Go) manquait déjà de mémoire la veille avec deux builds en parallèle.

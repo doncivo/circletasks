@@ -2,6 +2,29 @@
 
 Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et les décisions applicables, rien d'autre. Chaque jalon remplace la section « État au … » au lieu d'empiler un nouveau « point prioritaire ». L'historique du 19 au 27 octobre 2026, tel qu'il a été écrit au fil des reprises, est archivé dans `docs/reprise-historique-2026-10.md` ; en cas de désaccord entre les deux fichiers, celui-ci l'emporte. Règles de travail : `AGENTS.md`. Stack et architecture : `CLAUDE.md`.
 
+## État au 2026-10-28, soir (Claude Code)
+
+### Fusionné le 28 octobre dans `main`, dans l'ordre
+
+- #99 UI-REFONTE-02 (Aujourd'hui iPhone, 9e97ee21), #100 AGENTS (tests unitaires et DOM en local, e2e en CI, a520624b), #101 UI-REFONTE-03 (Semaine, c9507aa1), #102 UI-REFONTE-04 (Synchronisation, 9f010ec5), #103 UI-REFONTE-05 (Routines, de6d486a), #104 UI-REFONTE-06 (Checklists, c5a8ac20), #105 UI-REFONTE-07 (Événements, e9d094b4), #106 UI-REFONTE-08 (Aujourd'hui PC, e4fb9e9a). Bundle de `main` : 337 922 normalisés, marge 20 478.
+- Chaque fiche `docs/stories/UI-REFONTE-0x.md` porte les quatre passes, les identifiants rouge et vert, les mesures avant push et sur `main`, et son tableau d'écarts (matière de PRD-02).
+
+### En vol
+
+- **UI-REFONTE-09** (Réglages PC, dernière des huit) : PR #107, branche `ui-refonte-09-reglages-pc` (worktree `.claude/worktrees/codex-main-validation`), rouge 7d7b2b70, vert 7287609b, bundle −28 ; CI en cours. À faire au vert : fusionner, mesurer `main`, consigner la mesure dans la fiche (par une PR de documentation ou la story suivante), fermer la ligne du backlog.
+
+### Reste à faire
+
+1. Fusionner #107 (ci-dessus).
+2. **PRD-02** : à ouvrir par Ali ; la liste des écarts est dans le backlog et dans chaque fiche.
+3. Une compilation iPhone du lot des refontes (une seule), les contrôles natifs du guide (dont N-FIX-03, N-FIX-04, UI-FIX-04 à 06 et le rendu natif de UI-REFONTE-01 à 07), puis REL-01 à REL-03.
+4. Q-05-FIX-01 attend la décision d'Ali (fiche et backlog).
+
+### Règles ajoutées le 28 octobre
+
+- Tests unitaires et DOM en local seulement ; e2e Playwright en CI ; prévenir Ali avant tout e2e local ; jamais `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP` (`AGENTS.md`, #100).
+- Les PR doivent être à jour de `main` pour fusionner : mettre la branche à jour (`gh api -X PUT repos/doncivo/circletasks/pulls/N/update-branch`) dès qu'une PR voisine est fusionnée, puis attendre la CI.
+
 ## État au 2026-10-27, nuit (Claude Code, reprise après le redémarrage du PC)
 
 ### Fusionné le 27 octobre dans `main`, dans l'ordre
