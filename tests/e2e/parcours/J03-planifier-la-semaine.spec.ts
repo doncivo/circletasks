@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { addIsoDays } from '../helpers/schedule';
-import { openToday } from '../helpers/today';
+import { isPhone, openToday } from '../helpers/today';
 import { browserMonday, dayOf, dayTitles, openWeek, taskButton } from '../helpers/week';
 
 /**
@@ -15,8 +15,14 @@ test('parcours 3 : créer 5 tâches, en déplacer 2, naviguer à la semaine suiv
   const plan = [0, 1, 2, 4, 6].map((offset) => ({ iso: addIsoDays(monday, offset), title: `Tâche ${String(offset + 1)} ${tag}` }));
 
   for (const { iso, title } of plan) {
-    await dayOf(page, iso).getByRole('button', { name: /^Ajouter une tâche/ }).click();
-    const field = dayOf(page, iso).getByRole('combobox');
+    // UI-REFONTE-03 : sur iPhone, un toucher sur le jour vise la rangée d'ajout unique ; sur PC, « + Ajouter » du jour.
+    let field = dayOf(page, iso).getByRole('combobox');
+    if (isPhone(testInfo)) {
+      await dayOf(page, iso).getByRole('button', { name: /^Choisir / }).click();
+      field = page.locator('.ct-week__addRow').getByRole('combobox', { name: 'Nouvelle tâche' });
+    } else {
+      await dayOf(page, iso).getByRole('button', { name: /^Ajouter une tâche/ }).click();
+    }
     await field.fill(title);
     await field.press('Enter');
     await expect(taskButton(page, title)).toBeVisible();

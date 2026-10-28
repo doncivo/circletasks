@@ -65,11 +65,11 @@ test.describe('S-01 — la semaine en 7 jours', () => {
     const early = taskButton(page, names.early).locator('xpath=ancestor::*[contains(@class,"ct-week-item")][1]');
     await expect(early).toContainText('09:00');
 
-    // Terminer : la tâche reste barrée dans son jour (après les tâches à faire).
+    // Terminer : la tâche reste barrée dans son jour ; PC : après les tâches à faire ; iPhone (UI-REFONTE-03) : à son heure, comme l'agenda du jour.
     await page.getByRole('checkbox', { name: `Terminer : ${names.early}` }).click();
     await expect(page.getByRole('checkbox', { name: `Rouvrir : ${names.early}` })).toBeVisible();
     await expect(taskButton(page, names.early)).toHaveAttribute('data-done', 'true');
-    await expect.poll(() => dayTitles(page, wednesday)).toEqual([names.late, names.plain, names.early]);
+    await expect.poll(() => dayTitles(page, wednesday)).toEqual(isPhone(testInfo) ? [names.early, names.late, names.plain] : [names.late, names.plain, names.early]);
   });
 
   test('un titre ouvre la fiche détail (critère 8)', async ({ page }, testInfo) => {

@@ -65,7 +65,9 @@ Avant push (commit 25d10876, build `--manifest` depuis un worktree complet, `nod
 
 ## Passe QA
 
-À écrire après la CI complète (e2e joués par la CI seule).
+- **Première CI (PR #101, run 40701404136, tête 9f…/e9db22af + fiche 02)** : 44 contrôles verts, un job rouge, `e2e iphone (3/4)`, cinq tests d'autres stories écrits pour l'ancienne Semaine iPhone, aucun défaut du code : `parcours/J03-planifier-la-semaine` (« + Ajouter » par jour : passe par le toucher sur le jour puis la rangée d'ajout), `S-01` (la tâche faite reste à son heure sur iPhone : `[tôt, tard, sans heure]`), `S-03` ×2 (« Cette semaine » absente dans la semaine courante sur iPhone ; légende « semaine 53 » puis « semaine 1 · 2027 »), `S-05` (rond au trait `.ct-week-event__mark[data-kind="external"]` à la place de l'icône calendrier). Adaptés avec trace « UI-REFONTE-03 », lint vert ; `UI-REFONTE-03.spec.ts` lui-même est passé (6 tests sur `iphone` et `iphone-webkit`) ainsi que les suites `pc`, Vitest, Rust, perf et bundle. Seconde CI : à consigner.
+- **Contrôles QA à l'écran (DOM, Vitest, `WeekRefonte.test.tsx`)** : sections en minuscules, aujourd'hui au trait et `aria-current`, `data-past` / `data-weekend`, tiret pour les sans heure, faits à leur heure, « en retard » le jour courant seulement (08:30 à 10:00 UTC ; pas pour 23:00), rond d'événement et ouverture de la fiche, rangée d'ajout visant aujourd'hui puis le jour touché, changement de semaine qui recale le jour visé, filtre d'espace appliqué à la création, synthèse mise à jour après terminer / filtrer, PC inchangé. Jours futurs jamais en retard et semaine passée entièrement en retard : `weekSummary.test.ts`.
+- **Vérification appareil** (séance d'Ali au prochain lot iPhone) : zone de sécurité du bas avec la rangée d'ajout clavier ouvert, balayage entre semaines avec la nouvelle hauteur de ligne, lisibilité des jours passés et du week-end en sombre.
 
 ## Passe code-reviewer
 
