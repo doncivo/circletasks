@@ -69,4 +69,11 @@ Avant push (build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 446
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `ae88119c..f437cc2d` (écran, carte, appareils, conflits, réinitialisation, catalogues, feuilles de style) et des tests avant leur premier passage en CI.
+
+- **Trouvé et corrigé** : l'e2e `UI-REFONTE-04.spec.ts` ouvrait l'écran par `openSyncDetails` dans l'app de développement **non configurée**, où l'accueil de Réglages ne montre que « Choisir le dossier » (pas de lien « Détails ») : il n'aurait jamais atteint l'écran. Réécrit sur le simulateur de dossier (`openSyncedPage`, premier appareil), ce qui permet en plus de prouver la règle 5 : la carte passe au vert **après** `syncNow` (« À jour »), pastille « Actif » de cet appareil, bloc « Repartir de zéro » présent.
+- **Trouvé et corrigé** : `DeviceId` est un type marqué sans `.slice` (le build de la garde du bundle l'a dit, pas `npm run typecheck`) : `String(id).slice(0, 8)`.
+- **Vérifié sans remarque** : la ligne d'état garde sa classe, son `data-testid`, ses attributs `data-tone` / `data-trouble` et sa région vivante (aides e2e `syncStatusLine`, bandeau, tests Y-IOS-02 inchangés) ; la variante `line` de l'accueil de Réglages est inchangée ; aucune logique touchée dans `SyncDetailsReset` (seul le rendu de la ligne `canStart`) ni dans `ConflictList` (titre, valeurs, méta ; focus, refus et messages intacts) ; `conflictHeading` tronque par `quoted` et ne met pas de guillemets autour de « Élément supprimé » ni des genres sans titre (« Répétition », « Réglage ») ; les clés supprimées (`kept`, `discarded`, `actionHint`) le sont dans les deux langues (parité `syncTexts.a11y.test`) ; spécificité des styles : `.ct-sync .ct-sync__resetButton` et `.ct-sync__stateCard .ct-sync__sub[data-tone]` l'emportent sur les règles génériques ; l'identifiant de clé (`shortKid`, 8 caractères) n'est pas un identifiant d'appareil et reste.
+- **Point d'attention laissé à la QA** : deux appareils de même plateforme renommés à l'identique ne se distinguent plus que par leurs 8 caractères ; acceptable (surnoms choisis par Ali).
+
+Verdict : approuvée sous réserve de la CI complète (QA à consigner).
