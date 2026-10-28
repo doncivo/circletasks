@@ -48,7 +48,20 @@ Les cinq autres refontes ; le PRD ; la ligne « Synchronisation » de l'accueil 
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit ae88119c (tests seuls) : `src/features/sync/SyncRefonte.test.tsx` (8 tests, 8 rouges), `tests/e2e/UI-REFONTE-04.spec.ts` (3 tests, joués par la CI seule).
+- **Catalogue à la demande** `src/i18n/syncRefonteText.ts` : « Réglages » (retour), phrase d'aide des conflits, « Appliquée · {side} », le bloc « Repartir de zéro » en trois morceaux (gras au milieu). Les valeurs de clés existantes changent dans le départ, à taille égale ou moindre : titres de section en bas de casse (`fr/en.syncEngine`, `syncReset`, `syncForget`, `syncVersion`), conflits (`heading` → « {field} de {title} », « Rétablir », « Rétablissement… », « Rétablie le », « Valeur rétablie ») ; clés `kept`, `discarded` et `actionHint` supprimées des deux langues (plus affichées ; parité fr/en préservée).
+- **Écran** (`SyncDetailsScreen.tsx`) : retour texte (flèche + « Réglages », libellé accessible inchangé), carte d'état `SyncStatusLine variant="card"` à la place de la ligne et du titre « ÉTAT », aide des noms sous la liste des appareils, lignes d'appareils avec `data-device-id` et pastille `.ct-sync__deviceState[data-tone]` (`deviceTone` : actif → `success`, oublié ou jamais vu → `muted`, autres → `danger`), phrase d'aide des conflits sous le titre. Ordre des sections et emplacements inchangés.
+- **Carte d'état** (`SyncStatusLine.tsx`, variante `card`) : rond `.ct-sync__stateMark`, phrase d'état (mêmes classe, `data-testid`, `data-tone`, `data-trouble`), dossier en sous-ligne, région vivante inchangée, « Synchroniser » à droite. La variante `line` de l'accueil de Réglages est textuellement inchangée.
+- **Appareils** (`SyncDeviceName.tsx`) : « Cet appareil » pour soi, 8 premiers caractères de l'identifiant pour les autres (audit Y-10, voir critère 4), plus d'identifiant complet.
+- **Conflits** (`ConflictList.tsx`, `conflictText.ts`) : `conflictHeading` (« Heure prévue de « Envoyer la facture » », initiale en capitale, titre tronqué à 80 caractères par `quoted`, « Élément supprimé » sans guillemets) ; valeur appliquée en gras avec « Appliquée · appareil · heure » ; valeur écartée `.ct-conflicts__discardedValue` avec « appareil · heure » et « Rétablir » ; `aroundValue` supprimé ; messages, focus, refus, « Afficher plus », annulation inchangés.
+- **Repartir de zéro** (`SyncDetailsReset.tsx`) : titre `data-tone="danger"`, bloc `.ct-sync__resetCard` (phrase de coût, bouton `.ct-sync__resetButton` pleine largeur, libellé accessible inchangé) à la place de la ligne et de son aide ; tous les autres états de la section inchangés.
+- **Feuille de style** : `SyncDetailsScreen.css` (retour, titres 17 px encre, carte et ses tons, pastilles, bloc rouge) et `ConflictList.css` (rangées sans fond, valeur écartée en gris) avec les jetons existants (`achieved`, `danger`, `surface-input`) : aucune paire de contraste nouvelle.
+- **Tests adaptés, avec trace « UI-REFONTE-04 »** : `ConflictList.test` (titres, « Rétablir », « Appliquée », plus de « gardée / écartée »), `SyncDetailsVersion.test` (« Version », plus de « ÉTAT »), `deviceNames.test` (ligne par `data-device-id`), `SyncDetailsForget.test` (8 caractères). Deux erreurs de typage (`DeviceId` marqué, `.slice` interdit) trouvées par le build de la garde du bundle et corrigées par `String(...)` ; `npm run typecheck` ne les voyait pas (configuration différente du build).
+- **Vérifié en local** : suites Vitest `sync`, `i18n`, `settings` (844 tests), lint, garde du bundle 64/64.
+
+## Mesure du bundle
+
+Avant push (build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 446 octets normalisés** (brute 337 438), **marge 20 954** ; **−135** face à `main` 337 581 (9e97ee21) : les clés `kept`, `discarded`, `actionHint` quittent le départ, les titres raccourcissent ; les textes nouveaux sont dans le bloc à la demande de l'écran. Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 

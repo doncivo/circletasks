@@ -100,7 +100,7 @@ describe('ligne APPAREILS (critère 1)', () => {
 describe('audit Y-10 (ADR 0011 §18 point 8) : identifiant, appareils jamais vus', () => {
   it('chaque autre appareil affiche les 8 premiers caractères de son identifiant (les mêmes que la boîte native)', () => {
     renderIn(<SyncDetailsScreen />);
-    expect(within(devicesList()[1] as HTMLElement).getByText(IPHONE.slice(0, 8))).toBeTruthy(); // UI-REFONTE-04 : 8 caractères, jamais l'identifiant complet
+    expect(within(devicesList()[1] as HTMLElement).getByText(String(IPHONE).slice(0, 8))).toBeTruthy(); // UI-REFONTE-04 : 8 caractères, jamais l'identifiant complet
   });
 
   it('appareil jamais vu : nom neutre « Appareil » et 8 caractères, état « Jamais vu », « Oublier » ; jamais « PC » inventé', () => {

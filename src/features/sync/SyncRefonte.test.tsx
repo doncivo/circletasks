@@ -183,8 +183,8 @@ describe('UI-REFONTE-04 — Synchronisation', () => {
     // les mêmes que la boîte native « Oublier cet appareil »), cet appareil aucun.
     const list = document.querySelector('.ct-sync__devices') as HTMLElement;
     expect(list.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}/);
-    expect(self.textContent).not.toContain(SELF.slice(0, 8));
-    expect(within(phone).getByText(IPHONE.slice(0, 8))).toBeInTheDocument();
+    expect(self.textContent).not.toContain(String(SELF).slice(0, 8));
+    expect(within(phone).getByText(String(IPHONE).slice(0, 8))).toBeInTheDocument();
     // L'aide est sous la liste.
     const hint = screen.getByText(/^Touchez un nom pour le modifier/);
     expect(list.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

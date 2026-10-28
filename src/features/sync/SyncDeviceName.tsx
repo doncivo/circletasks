@@ -26,7 +26,7 @@ export function SyncDeviceName({ device, devices }: { readonly device: SyncDevic
       )}
       {/* UI-REFONTE-04 (règle 4 des refontes) : plus d'identifiant complet ; cet appareil n'en montre aucun. Les autres gardent leurs 8 premiers
           caractères (audit Y-10, ADR 0011 §18 point 8 : les mêmes que la boîte native « Oublier cet appareil »). */}
-      {device.self ? <span className="ct-sync__deviceSelf">{t('sync.status.thisDeviceName')}</span> : <span className="ct-sync__deviceId">{device.deviceId.slice(0, 8)}</span>}
+      {device.self ? <span className="ct-sync__deviceSelf">{t('sync.status.thisDeviceName')}</span> : <span className="ct-sync__deviceId">{String(device.deviceId).slice(0, 8)}</span>}
     </>
   );
 }

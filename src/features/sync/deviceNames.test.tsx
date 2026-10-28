@@ -47,7 +47,7 @@ describe('UI-FIX-02 : noms locaux d’appareils', () => {
     if (!form) throw new Error('formulaire de nom absent');
     fireEvent.submit(form);
     expect(await screen.findByRole('button', { name: 'Renommer Ancien PC du bureau' })).toBeInTheDocument();
-    const row = document.querySelector(`[data-device-id="${OTHER}"]`); // UI-REFONTE-04 : l'identifiant complet n'est plus affiché
+    const row = document.querySelector<HTMLElement>(`[data-device-id="${OTHER}"]`); // UI-REFONTE-04 : l'identifiant complet n'est plus affiché
     if (!row) throw new Error('ligne appareil absente');
     expect(within(row).getByText('Oublié')).toBeInTheDocument();
     cleanup();
