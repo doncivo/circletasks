@@ -77,14 +77,14 @@ describe('Semaine : cas limites QA (S-01 à S-05)', () => {
     expect(titlesOf('2027-01-01')).toEqual(['Jour de l’an']);
   });
 
-  it('S-03 c.5 : iPhone, plage « 28 déc. – 3 janv. » et « Semaine 53 · 2026 », puis semaine 1 de 2027', async () => {
+  it('S-03 c.5 : iPhone, plage « 28 déc. – 3 janv. » et « semaine 53 » (année courante tue), puis « semaine 1 · 2027 »', async () => {
     await start('402', '2026-12-30T10:00:00.000Z', 440);
     renderWeek(h.container);
     await screen.findByText('28 déc. – 3 janv.');
-    expect(document.querySelector('.ct-week__caption')).toHaveTextContent('Semaine 53 · 2026');
+    expect(document.querySelector('.ct-week__caption')).toHaveTextContent('semaine 53'); // UI-REFONTE-03 : minuscule, année courante tue
     fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }));
     expect(await screen.findByText('4 – 10 janv.')).toBeInTheDocument();
-    await waitFor(() => expect(document.querySelector('.ct-week__caption')).toHaveTextContent('Semaine 1 · 2027'));
+    await waitFor(() => expect(document.querySelector('.ct-week__caption')).toHaveTextContent('semaine 1 · 2027'));
   });
 
   it('S-01 c.4 : changement d’heure (dim. 25 oct. 2026) : sept jours, 02:30 avant et après le recul restent le dimanche', async () => {

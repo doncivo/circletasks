@@ -692,3 +692,185 @@ button.ct-week-event:focus-visible {
 .ct-week__headerRow:has(.ct-week__range[data-fit='floor']) {
   flex-wrap: wrap;
 }
+
+/* ---------- UI-REFONTE-03 : Semaine iPhone (docs/maquettes-refonte/Semaine-v2.html) ---------- */
+
+/* En-tête : « semaine 39 » en petit gris, synthèse sous le titre, filet simple ; plus de filet décoratif. */
+.ct-week[data-layout='mobile'] .ct-week__caption {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-week__summary {
+  margin: 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--ct-color-border);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-week__summaryLate {
+  color: var(--ct-color-agenda-late);
+}
+
+/* Sections : séparées par un filet fin ; aujourd'hui porte un trait d'encre de 2 px en haut, sans fond. */
+.ct-week-day[data-layout='mobile'] {
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 0;
+  border-top: 1px solid var(--ct-color-border);
+}
+
+.ct-week-day[data-layout='mobile']:first-child {
+  border-top-color: transparent;
+}
+
+.ct-week-day[data-layout='mobile'][data-today] {
+  background: transparent;
+  border-radius: 0;
+  border-top: 2px solid var(--ct-color-text);
+  padding-top: 14px;
+}
+
+/* Colonne de gauche (48 px) : jour court en minuscules, numéro en Fraunces ; un bouton qui vise le jour pour la rangée d'ajout. */
+button.ct-week-day__head {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+  border-radius: var(--ct-radius-md);
+}
+
+button.ct-week-day__head:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week-day__weekday {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-agenda-hour);
+  text-transform: none;
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week-day__number {
+  font-size: 1.6875rem;
+  line-height: 1.1;
+  color: var(--ct-color-text);
+}
+
+.ct-week-day[data-layout='mobile'][data-past] .ct-week-day__number {
+  color: var(--ct-color-agenda-past);
+}
+
+.ct-week-day[data-layout='mobile'][data-weekend] .ct-week-day__weekday,
+.ct-week-day[data-layout='mobile'][data-weekend] .ct-week-day__number {
+  color: var(--ct-color-agenda-hour);
+}
+
+.ct-week-day[data-layout='mobile'][data-today] .ct-week-day__weekday,
+.ct-week-day[data-layout='mobile'][data-today] .ct-week-day__number {
+  color: var(--ct-color-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Jour visé par la rangée d'ajout : numéro souligné d'un trait d'encre. */
+.ct-week-day[data-layout='mobile'] .ct-week-day__head[aria-pressed='true'] .ct-week-day__number {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.ct-week-day__empty {
+  margin: 0;
+  min-height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-agenda-past);
+}
+
+/* Lignes : colonne d'heures de 46 px (chiffres tabulaires) ou tiret, case, titre ; « en retard » en rouge le jour courant. */
+.ct-week-item[data-layout='mobile'] .ct-week-item__time,
+.ct-week-event[data-layout='mobile'] .ct-week-item__time {
+  width: 46px;
+  flex-shrink: 0;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-agenda-hour);
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-week-item[data-layout='mobile'] .ct-week-item__time[data-none],
+.ct-week-event[data-layout='mobile'] .ct-week-item__time[data-none] {
+  color: var(--ct-color-agenda-past);
+}
+
+.ct-week-item[data-layout='mobile'][data-late] .ct-week-item__time {
+  color: var(--ct-color-agenda-late);
+}
+
+.ct-week-item__late {
+  margin-left: auto;
+  padding-left: var(--ct-space-2);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-agenda-late);
+  white-space: nowrap;
+}
+
+.ct-week-item__count {
+  margin-left: auto;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-agenda-hour);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Événement : rond au trait de la couleur des événements ; anniversaire et férié gardent leurs couleurs. */
+.ct-week-event__mark {
+  width: 19px;
+  height: 19px;
+  margin: 0 2px;
+  border: 2px solid var(--ct-color-agenda-event);
+  border-radius: var(--ct-radius-round);
+  flex-shrink: 0;
+}
+
+.ct-week-event__mark[data-kind='birthday'],
+.ct-week-event__mark[data-kind='important'] {
+  border-color: var(--ct-color-event-local-text);
+}
+
+.ct-week-event__mark[data-kind='holiday'] {
+  border-color: var(--ct-color-achieved-text);
+}
+
+/* Rangée d'ajout unique, collée au bas au-dessus de la zone de sécurité : champ « Ajouter à jeudi 24 » et « + ». */
+.ct-week__addRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  padding: var(--ct-space-2) 0 calc(var(--ct-space-2) + var(--ct-safe-area-bottom, 0px));
+  border-top: 1px solid var(--ct-color-border);
+  background: var(--ct-color-surface);
+}
+
+.ct-week__addRowField {
+  flex-grow: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.ct-week__addRowForm {
+  margin: 0;
+}

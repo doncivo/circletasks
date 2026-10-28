@@ -22,10 +22,11 @@ test.describe('S-01 — la semaine en 7 jours', () => {
     const today = await browserToday(page);
     const dates = await page.locator('.ct-week-day').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-date')));
     expect(dates).toEqual(Array.from({ length: 7 }, (_, i) => addIsoDays(monday, i)));
-    await expect(dayOf(page, monday)).toContainText('LUN.');
-    await expect(dayOf(page, addIsoDays(monday, 6))).toContainText('DIM.');
+    // UI-REFONTE-03 : jours en minuscules sur iPhone (« lun. »), en capitales sur PC.
+    await expect(dayOf(page, monday)).toContainText(isPhone(testInfo) ? 'lun.' : 'LUN.');
+    await expect(dayOf(page, addIsoDays(monday, 6))).toContainText(isPhone(testInfo) ? 'dim.' : 'DIM.');
 
-    await expect(page.locator('.ct-week__caption')).toHaveText(isPhone(testInfo) ? /^Semaine \d+ · \d{4}$/ : /^Semaine \d+$/);
+    await expect(page.locator('.ct-week__caption')).toHaveText(isPhone(testInfo) ? /^semaine \d+$/ : /^Semaine \d+$/); // UI-REFONTE-03 : minuscule, sans l'année courante
     await expect(page.getByRole('heading', { level: 1 })).toContainText('–');
 
     await expect(page.locator('.ct-week-day[data-today]')).toHaveCount(1);
