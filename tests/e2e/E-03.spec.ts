@@ -23,17 +23,18 @@ async function openHolidaySettings(page: Page): Promise<void> {
 }
 
 test.describe('E-03 — jours fériés', () => {
-  test('liste de l’année : fériés FR et TN avec leurs tags, fêtes religieuses « date estimée » (critères 1, 2, 4, 7)', async ({ page }) => {
+  test('liste de l’année : fériés FR et TN, pays en toutes lettres (badges sur PC seulement, UI-REFONTE-07), fêtes religieuses « date estimée » (critères 1, 2, 4, 7)', async ({ page }, testInfo) => {
     await openApp(page, { holidays: true });
     await openEvents(page);
     const evacuation = eventRow(page, 'Fête de l’Évacuation');
-    await expect(evacuation).toContainText('Jour férié · Tunisie');
-    await expect(evacuation).toContainText('Férié TN');
+    await expect(evacuation).toContainText('Jour férié en Tunisie');
+    if (isPhone(testInfo)) await expect(evacuation.locator('.ct-event-row__tag')).toHaveCount(0);
+    else await expect(evacuation).toContainText('Férié TN');
     const toussaint = eventRow(page, 'Toussaint');
-    await expect(toussaint).toContainText('Jour férié · France');
-    await expect(toussaint).toContainText('Férié FR');
-    await expect(eventRow(page, 'Aïd el-Fitr')).toContainText('Jour férié · Tunisie · date estimée');
-    await expect(eventRow(page, 'Lundi de Pâques')).toContainText('Férié FR');
+    await expect(toussaint).toContainText('Jour férié en France');
+    if (!isPhone(testInfo)) await expect(toussaint).toContainText('Férié FR');
+    await expect(eventRow(page, 'Aïd el-Fitr')).toContainText('Jour férié en Tunisie · date estimée');
+    if (!isPhone(testInfo)) await expect(eventRow(page, 'Lundi de Pâques')).toContainText('Férié FR');
     // Sous Pro comme sous Perso : un férié n'a pas d'espace (critère 7).
     await page.getByRole('button', { name: 'Perso', exact: true }).first().click();
     await expect(eventRow(page, 'Toussaint')).toBeVisible();
