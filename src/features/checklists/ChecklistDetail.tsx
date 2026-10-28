@@ -5,6 +5,7 @@ import type { Checklist, ChecklistItem } from '../../domain/model';
 import type { ChecklistId, ChecklistItemId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { t } from '../../i18n';
+import { clearCheckedLabel } from '../../i18n/checklistsRefonteText';
 import { CompactToggle, ConfirmDialog, Fab, Icon, type Layout } from '../../ui';
 import { AddItemField } from './AddItemField';
 import { ChecklistIcon } from './ChecklistIcon';
@@ -117,7 +118,8 @@ export function ChecklistDetail({
           if (hasChecked) setConfirmClear(true);
         }}
       >
-        {t('checklists.actions.clearChecked')}
+        {/* UI-REFONTE-06 (iPhone) : le libellé porte le compte ; PC : « Effacer les cochés ». */}
+        {pc ? t('checklists.actions.clearChecked') : clearCheckedLabel(progress.checked)}
       </button>
       <button
         type="button"
@@ -132,8 +134,17 @@ export function ChecklistDetail({
     </>
   );
 
+  // iPhone (UI-REFONTE-06) : « Réorganiser » / « Terminer » à droite de la progression.
+  const reorderButton = (
+    <button type="button" className="ct-checklist-action" data-size="sm" aria-pressed={reordering} onClick={() => onReorderingChange(!reordering)}>
+      {t(reordering ? 'checklists.actions.reorderDone' : 'checklists.actions.reorder')}
+    </button>
+  );
+
   return (
     <section className="ct-checklist-detail" data-layout={layout} aria-label={checklist.title}>
+      {/* iPhone (UI-REFONTE-06, Checklists-v2.html) : le sélecteur de la rangée du haut est le titre ; ni en-tête, ni filet, ni « Vue compacte ». */}
+      {pc && (
       <div className="ct-checklist-detail__head">
         <ChecklistIcon icon={checklist.icon} size={pc ? 44 : 40} />
         <Heading className="ct-checklist-detail__title">{checklist.title}</Heading>
@@ -147,17 +158,20 @@ export function ChecklistDetail({
           <Icon icon={Pencil} size={24} />
         </button>
       </div>
+      )}
+      {pc && (
       <div className="ct-checklist-detail__rule" aria-hidden="true">
         <div className="ct-checklist-detail__ruleAccent" />
         <div className="ct-checklist-detail__ruleLine" />
       </div>
+      )}
 
-      <ChecklistProgressBar progress={progress} {...(pc && meta ? { trailing: meta } : {})} />
+      <ChecklistProgressBar progress={progress} mobile={!pc} {...(pc ? (meta ? { trailing: meta } : {}) : { trailing: reorderButton })} />
       {!pc && meta && <p className="ct-checklist-detail__meta">{meta}</p>}
       <ChecklistItems
         items={items}
         layout={layout}
-        compact={compact}
+        compact={pc && compact}
         reordering={reordering}
         onToggle={onToggleItem}
         onRename={onRenameItem}

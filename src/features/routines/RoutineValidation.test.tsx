@@ -28,11 +28,11 @@ describe('Routines : ronds de la carte cliquables (R-03 critère 10, QB-03)', ()
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Faire mon lit' });
     const lit0 = card('Faire mon lit');
-    expect(within(lit0).getByLabelText('1 sur 7 cette semaine')).toHaveTextContent('1/7');
+    expect(within(lit0).getByLabelText('1 sur 7 cette semaine')).toHaveTextContent('1 sur 7 cette semaine'); // UI-REFONTE-05 : compteur en phrase sur iPhone
 
     fireEvent.click(within(lit0).getByRole('checkbox', { name: 'Mercredi' }));
     await waitFor(() => expect(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Mercredi, fait' })).toBeChecked());
-    expect(within(card('Faire mon lit')).getByLabelText('2 sur 7 cette semaine')).toHaveTextContent('2/7');
+    expect(within(card('Faire mon lit')).getByLabelText('2 sur 7 cette semaine')).toHaveTextContent('2 sur 7 cette semaine');
     expect(await logDates(h, lit.id as RoutineId)).toEqual(['2026-09-28', '2026-09-30']);
 
     // Message « Annuler » (T-13).
@@ -40,7 +40,7 @@ describe('Routines : ronds de la carte cliquables (R-03 critère 10, QB-03)', ()
 
     fireEvent.click(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Mercredi, fait' }));
     await waitFor(() => expect(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Mercredi' })).not.toBeChecked());
-    expect(within(card('Faire mon lit')).getByLabelText('1 sur 7 cette semaine')).toHaveTextContent('1/7');
+    expect(within(card('Faire mon lit')).getByLabelText('1 sur 7 cette semaine')).toHaveTextContent('1 sur 7 cette semaine'); // UI-REFONTE-05 : compteur en phrase sur iPhone
     expect(await logDates(h, lit.id as RoutineId)).toEqual(['2026-09-28']);
   });
 
@@ -75,7 +75,7 @@ describe('Routines : ronds de la carte cliquables (R-03 critère 10, QB-03)', ()
     await screen.findByRole('heading', { name: 'Courir' });
     const jeudi = within(card('Courir')).getByRole('checkbox', { name: 'Jeudi' });
     expect(jeudi).toHaveAttribute('aria-disabled', 'true');
-    expect(within(card('Courir')).getByLabelText('3 sur 3 cette semaine')).toHaveTextContent('3/3');
+    expect(within(card('Courir')).getByLabelText('3 sur 3 cette semaine')).toHaveTextContent('3 sur 3 cette semaine');
     fireEvent.click(within(card('Courir')).getByRole('checkbox', { name: 'Mardi, fait' }));
     await waitFor(() => expect(within(card('Courir')).getByLabelText('2 sur 3 cette semaine')).toBeInTheDocument());
     expect(within(card('Courir')).getByRole('checkbox', { name: 'Jeudi' })).toHaveAttribute('aria-disabled', 'false');

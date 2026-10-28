@@ -47,13 +47,13 @@ describe('Checklists : cas limites QA (C-01 à C-05)', () => {
   it('C-02 progression 3 / 5 après suppression d’un item non coché, 2 / 5 après celle d’un coché', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     fireEvent.click(screen.getByRole('button', { name: 'Réorganiser' }));
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer : Assurance' }));
-    expect(await screen.findByText('3 / 5')).toBeInTheDocument();
+    expect(await screen.findByText('3 sur 5')).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: 'Progression : 3 sur 5' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer : Chargeur' }));
-    expect(await screen.findByText('2 / 4')).toBeInTheDocument();
+    expect(await screen.findByText('2 sur 4')).toBeInTheDocument();
   });
 
   it('C-02 le nom de la case passe de « Cocher : » à « Décocher : » (critère 7)', async () => {
@@ -66,8 +66,8 @@ describe('Checklists : cas limites QA (C-01 à C-05)', () => {
   it('C-05 « Effacer les cochés » confirmé : seuls les 3 non cochés restent (le délai de 5 s relève de UndoToast, T-04)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
-    fireEvent.click(screen.getByRole('button', { name: 'Effacer les cochés' }));
+    await screen.findByText('3 sur 6');
+    fireEvent.click(screen.getByRole('button', { name: /^Supprimer les \d+ éléments cochés$/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Effacer' }));
     expect(await screen.findByText('3 éléments effacés')).toBeInTheDocument();
     const left = await h.container.data.repos.checklistItems.listForChecklist(checklist.id as ChecklistId);
@@ -77,11 +77,11 @@ describe('Checklists : cas limites QA (C-01 à C-05)', () => {
   it('C-05 « Tout décocher » puis Annuler rétablit les trois cochés sans toucher l’ordre', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     fireEvent.click(screen.getByRole('button', { name: 'Tout décocher' }));
-    await screen.findByText('0 / 6');
+    await screen.findByText('0 sur 6');
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     expect(rowTexts()).toEqual(['Adaptateur', 'Crème solaire', 'Assurance', 'Passeport', 'Chargeur', 'Billets']);
   });
 });

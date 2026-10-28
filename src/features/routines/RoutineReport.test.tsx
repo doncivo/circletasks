@@ -106,7 +106,7 @@ describe('Rapport de la routine : PC (R-06)', () => {
     expect(await screen.findByRole('complementary', { name: 'Rapport de la routine' })).toBeInTheDocument();
 
     fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: 'Fermer' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Sport' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Sport' }));
     expect(await screen.findByRole('form', { name: 'Modifier la routine' })).toBeInTheDocument();
   });
 
@@ -164,7 +164,7 @@ describe('Rapport de la routine : iPhone (R-06, QB-06)', () => {
     fireEvent.keyDown(sheet, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Éditer la routine Sport' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier la routine Sport' }));
     expect(await screen.findByRole('dialog', { name: 'Modifier la routine' })).toBeInTheDocument();
   });
 

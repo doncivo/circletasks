@@ -21,7 +21,7 @@ describe('Routines : liste et création (R-01), iPhone', () => {
     renderRoutines(h.container);
     expect(await screen.findByText(/Aucune routine/)).toBeInTheDocument();
     expect(screen.queryByRole('article')).toBeNull();
-    expect(screen.getByText('Gérez vos routines ici et cochez-les dans la liste du jour.')).toBeInTheDocument();
+    expect(screen.queryByText('Gérez vos routines ici et cochez-les dans la liste du jour.')).toBeNull(); // UI-REFONTE-05 : l'aide a quitté l'écran iPhone
   });
 
   it('« + » ouvre le formulaire « Nouvelle routine » sans archivage ni série (critère 1)', async () => {
@@ -83,13 +83,13 @@ describe('Routines : liste et création (R-01), iPhone', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const sport = card('Sport');
-    expect(sport.querySelector('svg')).not.toBeNull(); // icône Lucide
+    expect(sport.querySelector('svg')).toBeNull(); // UI-REFONTE-05 : plus d'icône sur la carte iPhone (elle reste dans le formulaire et le rapport)
     // Ronds L à D : jours non prévus en pointillés ; jours avant le départ (lun. 28 sept.) non prévus aussi.
     const rounds = within(sport).getAllByRole('checkbox');
     expect(rounds).toHaveLength(7);
     expect(rounds.map((round) => round.getAttribute('data-state'))).toEqual(['off', 'off', 'off', 'off', 'planned', 'off', 'off']);
-    expect(within(sport).getByLabelText('0 sur 1 cette semaine')).toHaveTextContent('0/1');
-    expect(sport).toHaveTextContent('Pro · lun., mer., ven.');
+    expect(within(sport).getByLabelText('0 sur 1 cette semaine')).toHaveTextContent('0 sur 1 cette semaine'); // UI-REFONTE-05
+    expect(sport).toHaveTextContent('Pro · lundi, mercredi et vendredi'); // UI-REFONTE-05 : fréquence en toutes lettres sur iPhone
 
     const [stored] = await h.container.data.repos.routines.listForFilter('all');
     expect(stored).toMatchObject({ title: 'Sport', scheduleType: 'weekdays', weekdays: [1, 3, 5], startDate: '2026-10-02', icon: { kind: 'lucide', name: 'dumbbell' }, spaceId: SPACE_PRO_ID });
@@ -110,7 +110,7 @@ describe('Routines : liste et création (R-01), iPhone', () => {
     expect(stored).toMatchObject({ title: 'Courir', scheduleType: 'x_per_week', timesPerWeek: 4, weekdays: [] });
     expect(stored?.icon?.kind).toBe('emoji');
     expect(card('Courir')).toHaveTextContent('4 fois par semaine');
-    expect(within(card('Courir')).getByLabelText('0 sur 4 cette semaine')).toHaveTextContent('0/4');
+    expect(within(card('Courir')).getByLabelText('0 sur 4 cette semaine')).toHaveTextContent('0 sur 4 cette semaine');
   });
 
   it('l’espace proposé suit le filtre ; le filtre n’affiche que les routines de l’espace (critère 10)', async () => {
@@ -130,13 +130,13 @@ describe('Routines : liste et création (R-01), iPhone', () => {
     await waitFor(async () => expect((await h.container.data.repos.routines.listForFilter(SPACE_PERSO_ID)).map((r) => r.title)).toContain('Méditer'));
   });
 
-  it('une routine quotidienne : compteur faits / 7 et rond du jour rempli, calculés depuis les validations (critère 8)', async () => {
+  it('une routine quotidienne : compteur « 2 sur 7 cette semaine » et rond du jour rempli, calculés depuis les validations (critère 8)', async () => {
     const water = await seedRoutine(h, { title: 'Boire de l’eau', time: '08:30' as never, spaceId: SPACE_PERSO_ID });
     await seedLog(h, water, '2026-09-28');
     await seedLog(h, water, '2026-09-29');
     renderRoutines(h.container);
     const eau = await screen.findByRole('heading', { name: 'Boire de l’eau' }).then((heading) => heading.closest('article') as HTMLElement);
-    expect(within(eau).getByLabelText('2 sur 7 cette semaine')).toHaveTextContent('2/7');
+    expect(within(eau).getByLabelText('2 sur 7 cette semaine')).toHaveTextContent('2 sur 7 cette semaine');
     expect(within(eau).getByRole('checkbox', { name: 'Lundi, fait' })).toBeChecked();
     expect(within(eau).getByRole('checkbox', { name: 'Mercredi' })).not.toBeChecked();
     expect(eau).toHaveTextContent('08:30 · Perso');

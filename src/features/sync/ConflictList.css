@@ -96,3 +96,20 @@
 .ct-conflicts__more {
   align-self: flex-start;
 }
+
+/* UI-REFONTE-04 (Synchro-v4.html) : valeur appliquée en gras, valeur écartée en gris, rangées sans fond. */
+.ct-conflicts__value--kept {
+  background: transparent;
+  padding-inline: 0;
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-conflicts__value--discarded {
+  background: transparent;
+  padding-inline: 0;
+}
+
+.ct-conflicts__discardedValue {
+  color: var(--ct-color-text-secondary);
+  font-weight: var(--ct-font-weight-medium);
+}

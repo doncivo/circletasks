@@ -5,7 +5,7 @@
  */
 export const syncVersionFr = {
   banner: 'Mettez à jour l’app : un de vos appareils utilise une version plus récente',
-  section: 'VERSION',
+  section: 'Version',
   newer: '{device} utilise une version plus récente de l’app',
   newerWithVersion: '{device} utilise une version plus récente de l’app ({version})',
   /** I-06 : l'autre appareil n'a pas pu lire son numéro (publié `unknown`, ou `0.0.0` des anciennes versions de l'iPhone). */

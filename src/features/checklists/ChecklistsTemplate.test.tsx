@@ -133,7 +133,7 @@ describe('Checklists : modèle réutilisable (C-04), iPhone', () => {
     fireEvent.click(within(sheet).getByRole('button', { name: 'Dupliquer et réinitialiser' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Valise voyage (copie)' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(await screen.findByText('0 / 6')).toBeInTheDocument();
+    expect(await screen.findByText('0 sur 6')).toBeInTheDocument();
     expect(screen.getByText('Checklist dupliquée')).toBeInTheDocument();
   });
 });

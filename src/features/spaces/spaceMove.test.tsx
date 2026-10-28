@@ -158,7 +158,7 @@ describe('Déplacer un élément d’un espace ou projet à l’autre (ES-05)', 
           <UndoToast />
         </AppContainerProvider>,
       );
-      fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Faire mon lit' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Faire mon lit' }));
       const form = await screen.findByRole('form', { name: 'Modifier la routine' });
       fireEvent.click(within(form).getByRole('button', { name: 'Perso' }));
       fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer' }));

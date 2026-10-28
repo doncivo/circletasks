@@ -10,7 +10,7 @@ const VALISE = ['Adaptateur de prise', 'Crème solaire', 'Attestation d’assura
 
 const rowTexts = (): string[] => Array.from(document.querySelectorAll('.ct-checklist-item__text')).map((node) => node.textContent ?? '');
 const stored = async (h: ChecklistsHarness, id: string) => (await h.container.data.repos.checklistItems.listForChecklist(id as ChecklistId)).map((item) => [item.text, item.checked, item.sortOrder]);
-const clearButton = () => screen.getByRole('button', { name: 'Effacer les cochés' });
+const clearButton = () => screen.getByRole('button', { name: /^Supprimer (les|l’)/ }); // UI-REFONTE-06 : le libellé iPhone porte le compte
 const uncheckButton = () => screen.getByRole('button', { name: 'Tout décocher' });
 
 describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', () => {
@@ -25,12 +25,12 @@ describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', ()
   it('confirmation « Effacer 3 éléments cochés ? » ; Annuler ne change rien (critère 1)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     fireEvent.click(clearButton());
     const dialog = await screen.findByRole('alertdialog', { name: 'Effacer 3 éléments cochés ?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
-    expect(screen.getByText('3 / 6')).toBeInTheDocument();
+    expect(screen.getByText('3 sur 6')).toBeInTheDocument();
     expect(await stored(h, checklist.id)).toHaveLength(6);
     expect(h.container.undo.getSnapshot().size).toBe(0);
     // Le focus revient sur le bouton qui a ouvert la boîte (critère 9).
@@ -40,12 +40,12 @@ describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', ()
   it('confirmer efface les 3 items, « 0 / 3 », message « 3 éléments effacés » ; Annuler les restaure à leur place (critère 2)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     fireEvent.click(clearButton());
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Effacer' }));
     expect(await screen.findByText('3 éléments effacés')).toBeInTheDocument();
     await waitFor(() => expect(rowTexts()).toEqual(['Adaptateur de prise', 'Crème solaire', 'Attestation d’assurance']));
-    expect(screen.getByText('0 / 3')).toBeInTheDocument();
+    expect(screen.getByText('0 sur 3')).toBeInTheDocument();
     // Suppression logique : les lignes restent en base avec `deleted_at` (synchro).
     const removed = await h.container.data.repos.checklistItems.getByIds((await h.container.data.repos.checklistItems.listForChecklist(checklist.id as ChecklistId)).map((i) => i.id));
     expect(removed).toHaveLength(3);
@@ -53,13 +53,13 @@ describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', ()
 
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     await waitFor(() => expect(rowTexts()).toEqual(['Adaptateur de prise', 'Crème solaire', 'Attestation d’assurance', 'Passeport', 'Chargeur', 'Billets d’avion']));
-    expect(screen.getByText('3 / 6')).toBeInTheDocument();
+    expect(screen.getByText('3 sur 6')).toBeInTheDocument();
   });
 
   it('Ctrl+Z restaure aussi les items effacés (critère 2)', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     fireEvent.click(clearButton());
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Effacer' }));
     await waitFor(() => expect(rowTexts()).toHaveLength(3));
@@ -72,7 +72,7 @@ describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', ()
   it('un seul item coché : « Effacer 1 élément coché ? » puis « 1 élément effacé »', async () => {
     await seedChecklist(h, { title: 'Courses', items: ['Lait', ['Pain', true]] });
     renderChecklists(h.container);
-    await screen.findByText('1 / 2');
+    await screen.findByText('1 sur 2');
     fireEvent.click(clearButton());
     expect(await screen.findByRole('alertdialog', { name: 'Effacer 1 élément coché ?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Effacer' }));
@@ -82,7 +82,7 @@ describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', ()
   it('aucun item coché : « Effacer les cochés » et « Tout décocher » sont inactifs (critères 3, 4)', async () => {
     await seedChecklist(h, { title: 'Courses', items: ['Lait', 'Pain'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 2');
+    await screen.findByText('0 sur 2');
     expect(clearButton()).toHaveAttribute('aria-disabled', 'true');
     expect(uncheckButton()).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(clearButton());
@@ -94,39 +94,39 @@ describe('Checklists : effacer les cochés et tout décocher (C-05), iPhone', ()
   it('« Tout décocher » décoche d’un coup sans confirmation, « 0 / 6 », message « Annuler » (critère 4)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     expect(uncheckButton()).not.toHaveAttribute('aria-disabled');
     fireEvent.click(uncheckButton());
     expect(screen.queryByRole('alertdialog')).toBeNull();
-    expect(await screen.findByText('0 / 6')).toBeInTheDocument();
+    expect(await screen.findByText('0 sur 6')).toBeInTheDocument();
     expect(screen.getByText('Éléments décochés')).toBeInTheDocument();
     await waitFor(async () => expect((await stored(h, checklist.id)).every(([, checked]) => checked === false)).toBe(true));
     expect(uncheckButton()).toHaveAttribute('aria-disabled', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    expect(await screen.findByText('3 / 6')).toBeInTheDocument();
+    expect(await screen.findByText('3 sur 6')).toBeInTheDocument();
     expect((await stored(h, checklist.id)).filter(([, checked]) => checked).map(([text]) => text)).toEqual(['Passeport', 'Chargeur', 'Billets d’avion']);
   });
 
   it('l’annulation est « stale » si un item a changé depuis', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: VALISE });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     fireEvent.click(uncheckButton());
-    await screen.findByText('0 / 6');
+    await screen.findByText('0 sur 6');
     h.db.clock.advance(5);
     fireEvent.click(screen.getByRole('button', { name: 'Cocher : Chargeur' }));
-    await screen.findByText('1 / 6');
+    await screen.findByText('1 sur 6');
     await waitFor(() => expect(h.container.undo.getSnapshot().size).toBe(1));
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(await screen.findByText('Action impossible à annuler : la tâche a changé')).toBeInTheDocument();
-    expect(screen.getByText('1 / 6')).toBeInTheDocument();
+    expect(screen.getByText('1 sur 6')).toBeInTheDocument();
   });
 
   it('un cochage tout juste fait est pris en compte par « Effacer les cochés »', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Courses', items: ['Lait', ['Pain', true]] });
     renderChecklists(h.container);
-    await screen.findByText('1 / 2');
+    await screen.findByText('1 sur 2');
     fireEvent.click(screen.getByRole('button', { name: 'Cocher : Lait' }));
     fireEvent.click(clearButton());
     expect(await screen.findByRole('alertdialog', { name: 'Effacer 2 éléments cochés ?' })).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe('Checklists : mode Réorganiser (C-05), iPhone', () => {
   it('« Réorganiser » montre une poignée et un « − » par item ; le bouton devient « Terminer » (critère 5)', async () => {
     await seedChecklist(h, { title: 'Courses', items: ['Lait', 'Pain'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 2');
+    await screen.findByText('0 sur 2');
     expect(screen.queryByRole('button', { name: /^Déplacer : / })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Supprimer : / })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Réorganiser' }));
@@ -162,7 +162,7 @@ describe('Checklists : mode Réorganiser (C-05), iPhone', () => {
   it('« − » supprime l’item avec un message « Annuler » qui le restaure à sa place (critère 7)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Courses', items: ['Lait', 'Pain', 'Œufs'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 3');
+    await screen.findByText('0 sur 3');
     fireEvent.click(screen.getByRole('button', { name: 'Réorganiser' }));
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer : Pain' }));
     expect(await screen.findByText('« Pain » supprimé')).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('Checklists : mode Réorganiser (C-05), iPhone', () => {
   it('↓ sur la poignée descend l’item, l’ordre est écrit, annonce et « Annuler » (critère 6)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Courses', items: ['Lait', 'Pain', 'Œufs'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 3');
+    await screen.findByText('0 sur 3');
     fireEvent.click(screen.getByRole('button', { name: 'Réorganiser' }));
     const handle = screen.getByRole('button', { name: 'Déplacer : Lait' });
     act(() => handle.focus());
@@ -194,7 +194,7 @@ describe('Checklists : mode Réorganiser (C-05), iPhone', () => {
     await seedChecklist(h, { title: 'Courses', items: ['Lait'] });
     await seedChecklist(h, { title: 'Valise', items: ['Passeport'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 1');
+    await screen.findByText('0 sur 1');
     fireEvent.click(screen.getByRole('button', { name: 'Réorganiser' }));
     const valise = (await h.container.data.repos.checklists.listSummaries('all')).find((s) => s.checklist.title === 'Valise');
     fireEvent.change(screen.getByRole('combobox', { name: 'Choisir une checklist' }), { target: { value: valise?.checklist.id } });
