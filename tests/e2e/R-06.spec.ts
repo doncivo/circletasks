@@ -82,7 +82,7 @@ test.describe('R-06 — rapport de routine', () => {
     if (isPhone(testInfo)) {
       await expect(report.getByRole('button', { name: 'Modifier' })).toHaveCount(0);
       await report.getByRole('button', { name: 'Fermer' }).click();
-      await cardOf(page, 'Sport').getByRole('button', { name: 'Éditer la routine Sport' }).click();
+      await cardOf(page, 'Sport').getByRole('button', { name: 'Modifier la routine Sport' }).click();
     } else {
       await report.getByRole('button', { name: 'Modifier' }).click();
     }

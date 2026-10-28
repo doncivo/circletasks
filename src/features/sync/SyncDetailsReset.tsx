@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import type { DeviceId } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
+import { tSyncRefonte } from '../../i18n/syncRefonteText';
 import type { SyncDeviceStatus, SyncResetStatus } from '../../platform/sync/types';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -119,7 +120,7 @@ export function SyncDetailsReset() {
 
   return (
     <>
-      <h2 className="ct-settings__section">{t('sync.reset.section')}</h2>
+      <h2 className="ct-settings__section" data-tone="danger">{t('sync.reset.section')}</h2>
       <div role="status" className="ct-sync__reset" data-testid="sync-reset">
         {required && (
           <div className="ct-settings__row ct-sync__device" data-reset-required="true">
@@ -174,12 +175,14 @@ export function SyncDetailsReset() {
           </div>
         )}
         {canStart && (
-          <div className="ct-settings__row">
-            <span className="ct-settings__stack">
-              {t('sync.reset.action')}
-              <span className="ct-settings__hint">{t('sync.reset.actionHint')}</span>
-            </span>
-            <Button variant="secondary" ariaLabel={t('sync.reset.actionLabel')} onClick={() => setDialog(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
+          /* UI-REFONTE-04 (Synchro-v4.html, règle 6) : l'action destructrice descend, annonce son coût et reste au trait. */
+          <div className="ct-sync__resetCard">
+            <p className="ct-sync__resetBody">
+              {tSyncRefonte('resetBodyBefore')}
+              <strong>{tSyncRefonte('resetBodyStrong')}</strong>
+              {tSyncRefonte('resetBodyAfter')}
+            </p>
+            <Button variant="secondary" ariaLabel={t('sync.reset.actionLabel')} onClick={() => setDialog(true)} disabled={busy} ariaBusy={busy} className="ct-sync__resetButton">
               {busy ? t('sync.reset.running') : t('sync.reset.action')}
             </Button>
           </div>

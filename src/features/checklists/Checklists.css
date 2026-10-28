@@ -711,3 +711,114 @@
 .ct-checklist-item .ct-remove-button {
   flex-shrink: 0;
 }
+
+/* ---------- UI-REFONTE-06 : Checklists iPhone (docs/maquettes-refonte/Checklists-v2.html) ---------- */
+
+/* Le sélecteur est le titre : Fraunces 36 px, chevron à côté, sans cadre ; le select natif recouvre toujours le bouton. */
+.ct-checklists__chooser--title.ct-dropdown[data-variant='pill'] {
+  flex-grow: 1;
+  min-width: 0;
+  height: auto;
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.ct-checklists__chooser--title .ct-dropdown__text {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--ct-font-title);
+  font-size: 2.25rem;
+  line-height: 1;
+  font-weight: var(--ct-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.ct-checklists__topActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.ct-checklists[data-layout='mobile'] .ct-checklists__topRow {
+  align-items: flex-start;
+}
+
+/* Progression : barre de 6 px, « 2 sur 3 » en gris, « Réorganiser » à droite. */
+.ct-checklist-progress[data-layout='mobile'] {
+  gap: 13px;
+  margin-top: 4px;
+}
+
+.ct-checklist-progress[data-layout='mobile'] .ct-checklist-progress__bar,
+.ct-checklist-progress[data-layout='mobile'] .ct-checklist-progress__fill {
+  height: 6px;
+  border-radius: 3px;
+}
+
+.ct-checklist-progress[data-layout='mobile'] .ct-checklist-progress__fill {
+  background: var(--ct-color-text);
+}
+
+.ct-checklist-progress[data-layout='mobile'] .ct-checklist-progress__count {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Éléments : lignes sans carte, case ronde. */
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-item {
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  min-height: 52px;
+}
+
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-items {
+  gap: 0;
+}
+
+/* Un seul champ d'ajout, arrondi, au trait plein. */
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-add__input {
+  height: 50px;
+  padding: 0 18px;
+  border: 1.5px solid var(--ct-color-border);
+  border-style: solid;
+  border-radius: 25px;
+}
+
+/* Rangée du bas : deux libellés texte, collée au bas au-dessus de la zone de sécurité ; rouge seulement quand il y a de quoi. */
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-detail__batch {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding: 13px 0 calc(var(--ct-space-2) + var(--ct-safe-area-bottom, 0px));
+  border-top: 1px solid var(--ct-color-border);
+  background: var(--ct-color-surface);
+}
+
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-detail__batch .ct-checklist-action {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+}
+
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-detail__batch .ct-checklist-action[data-variant='danger'][aria-disabled='true'] {
+  color: var(--ct-color-text-secondary);
+  opacity: 1;
+}
+
+.ct-checklist-detail[data-layout='mobile'] .ct-checklist-detail__batch .ct-checklist-action[aria-disabled='true'] {
+  opacity: 0.55;
+}

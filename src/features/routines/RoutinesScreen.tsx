@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Plus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
 import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import { routineQuietSummary } from '../../domain/quietShift';
+import { daysOfWeek, mondayOf, weekCounter } from '../../domain/routineSchedule';
 import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate, RoutineId } from '../../domain/types';
 import { t } from '../../i18n';
 import { routineQuietLineText } from '../../i18n/quietShiftText';
-import { CompactToggle, ConfirmDialog, EmptyState, Fab, Kbd, Sheet, SpacePills, openNow, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
+import { formatRoutinesSummary, tRoutinesRefonte } from '../../i18n/routinesRefonteText';
+import { CompactToggle, ConfirmDialog, EmptyState, Fab, Icon, Kbd, Sheet, SpacePills, openNow, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -76,6 +79,21 @@ export function RoutinesScreen() {
   const setArchived = useFeatureStore(routinesStore, (s) => s.setArchived);
   const setPaused = useFeatureStore(routinesStore, (s) => s.setPaused);
   const defaultOffsets = useFeatureStore(routinesStore, (s) => s.defaultOffsets);
+
+  // UI-REFONTE-05 (iPhone, critère 1) : « Semaine du 19 au 25 oct. · 7 sur 10 faites », somme des compteurs des routines du filtre.
+  const summary = useMemo(() => {
+    if (layout !== 'mobile' || routines.length === 0) return null;
+    const weekStart = mondayOf(today);
+    const totals = routines.reduce(
+      (acc, routine) => {
+        const counter = weekCounter(routine, doneByRoutine.get(routine.id as RoutineId) ?? EMPTY_DONE, weekStart, pausesOf.get(routine.id as RoutineId) ?? []);
+        return { done: acc.done + counter.done, planned: acc.planned + counter.planned };
+      },
+      { done: 0, planned: 0 },
+    );
+    const days = daysOfWeek(weekStart);
+    return formatRoutinesSummary(weekStart, days[6] ?? weekStart, totals.done, totals.planned);
+  }, [layout, routines, doneByRoutine, pausesOf, today]);
 
   const [editor, setEditor] = useState<Editor | null>(null);
   /** Routine dont le rapport est ouvert : sélection de la carte (PC, panneau de droite) ou feuille « Rapport de la routine » (iPhone). */
@@ -207,15 +225,22 @@ export function RoutinesScreen() {
     <div className="ct-routines" data-layout={layout}>
       <div className="ct-routines__headerRow">
         <h1 className="ct-routines__title">{t('routines.title')}</h1>
-        <div className="ct-routines__headerActions">
-          {layout === 'pc' && pills}
-          <CompactToggle active={compact} onChange={(value) => void setCompact(value)} label={t('routines.compactView')} />
+        {layout === 'pc' && (
+          <div className="ct-routines__headerActions">
+            {pills}
+            <CompactToggle active={compact} onChange={(value) => void setCompact(value)} label={t('routines.compactView')} />
+          </div>
+        )}
+      </div>
+      {layout === 'pc' ? (
+        <div className="ct-routines__rule" aria-hidden="true">
+          <div className="ct-routines__ruleAccent" />
+          <div className="ct-routines__ruleLine" />
         </div>
-      </div>
-      <div className="ct-routines__rule" aria-hidden="true">
-        <div className="ct-routines__ruleAccent" />
-        <div className="ct-routines__ruleLine" />
-      </div>
+      ) : (
+        /* UI-REFONTE-05 : synthèse de la semaine, filet simple ; plus de bascule « Vue compacte » ni de filet décoratif. */
+        summary && <p className="ct-routines__summary">{summary}</p>
+      )}
       {layout === 'mobile' && pills}
 
       {actionErrorKey && (
@@ -243,7 +268,7 @@ export function RoutinesScreen() {
                 pauses={pausesOf.get(routine.id as RoutineId) ?? []}
                 today={today}
                 layout={layout}
-                compact={compact}
+                compact={layout === 'pc' && compact}
                 selected={reportId === routine.id}
                 onEdit={() => void openEdit(routine.id as RoutineId)}
                 onOpen={() => setReportId(routine.id as RoutineId)}
@@ -259,19 +284,26 @@ export function RoutinesScreen() {
 
       <RoutinesArchived routines={archived} spaces={spaces} onRestore={(routine) => void setArchived(routine.id as RoutineId, false)} />
 
-      {layout === 'mobile' && <p className="ct-routines__helper">{t('routines.helper')}</p>}
-
+      {/* UI-REFONTE-05 : plus de phrase d'aide sur iPhone (l'état vide a la sienne). Rangée du bas : « Rapport du mois » et « Routine ». */}
       <div className="ct-routines__bottomRow">
         {layout === 'pc' ? (
-          <span className="ct-routines__hint">
-            {t('routines.hintCheck')} <Kbd keys="Ctrl+N" separator=" " /> {t('routines.hintNew')}
-          </span>
+          <>
+            <span className="ct-routines__hint">
+              {t('routines.hintCheck')} <Kbd keys="Ctrl+N" separator=" " /> {t('routines.hintNew')}
+            </span>
+            <Fab onClick={openCreate} label={t('common.add')} />
+          </>
         ) : (
-          <button type="button" className="ct-routines__monthReport" onClick={() => navigate({ tab: 'routines', screen: 'report' })}>
-            {t('routines.monthReport.open')}
-          </button>
+          <>
+            <button type="button" className="ct-routines__monthReport" onClick={() => navigate({ tab: 'routines', screen: 'report' })}>
+              {t('routines.monthReport.open')}
+            </button>
+            <button type="button" className="ct-routines__addButton" aria-label={t('routines.add')} onClick={openCreate}>
+              <Icon icon={Plus} size={22} />
+              <span>{tRoutinesRefonte('addRoutine')}</span>
+            </button>
+          </>
         )}
-        <Fab onClick={openCreate} label={layout === 'pc' ? t('common.add') : t('routines.add')} />
       </div>
 
       {archiveTarget && (

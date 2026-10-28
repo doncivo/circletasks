@@ -85,7 +85,7 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   capture: 'capture.undo.created',
   // Import CSV (P-07) : la commande porte son propre libellé (pluriel ou singulier) ; ce libellé est un repli.
   import: 'importCsv.undoLabel',
-  // Restauration d'une valeur écartée par un conflit de synchro (Y-04) : « Valeur restaurée · Annuler ».
+  // Restauration d'une valeur écartée par un conflit de synchro (Y-04) : « Valeur rétablie · Annuler » (UI-REFONTE-04).
   syncRestore: 'sync.conflicts.undoLabel',
 };
 

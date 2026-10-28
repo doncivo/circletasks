@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { insertChecklists, itemTexts, reopenChecklists } from './helpers/checklists';
+import { clearCheckedButton, insertChecklists, itemTexts, progressText, reopenChecklists } from './helpers/checklists';
 import { isPhone } from './helpers/today';
 
 /**
@@ -14,15 +14,15 @@ const VALISE = ['Adaptateur de prise', 'Crème solaire', 'Attestation d’assura
 const ALL = ['Adaptateur de prise', 'Crème solaire', 'Attestation d’assurance', 'Passeport', 'Chargeur', 'Billets d’avion'];
 
 test.describe('C-05 — effacer les cochés, tout décocher, réorganiser', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await openApp(page);
     await insertChecklists(page, [{ title: 'Valise voyage', items: VALISE }]);
     await reopenChecklists(page);
-    await expect(page.getByText('3 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 3, 6)).first()).toBeVisible();
   });
 
-  test('confirmation, effacement de 3 éléments, « 0 / 3 », Annuler restaure à leur place (critères 1, 2, 9)', async ({ page }) => {
-    const clear = page.getByRole('button', { name: 'Effacer les cochés', exact: true });
+  test('confirmation, effacement de 3 éléments, « 0 / 3 », Annuler restaure à leur place (critères 1, 2, 9)', async ({ page }, testInfo) => {
+    const clear = clearCheckedButton(page, testInfo);
     await clear.click();
     const dialog = page.getByRole('alertdialog', { name: 'Effacer 3 éléments cochés ?' });
     await expect(dialog).toBeVisible();
@@ -35,34 +35,34 @@ test.describe('C-05 — effacer les cochés, tout décocher, réorganiser', () =
     await dialog.getByRole('button', { name: 'Effacer' }).click();
     await expect(page.getByText('3 éléments effacés')).toBeVisible();
     await expect.poll(() => itemTexts(page)).toEqual(ALL.slice(0, 3));
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('0 / 3');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 0, 3));
     await expect(clear).toBeFocused();
     await expect(clear).toHaveAttribute('aria-disabled', 'true');
 
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
     await expect.poll(() => itemTexts(page)).toEqual(ALL);
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('3 / 6');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 3, 6));
   });
 
   test('Ctrl+Z restaure les éléments effacés (critère 2)', async ({ page }, testInfo) => {
     test.skip(isPhone(testInfo), 'clavier : PC seulement');
-    await page.getByRole('button', { name: 'Effacer les cochés', exact: true }).click();
+    await clearCheckedButton(page, testInfo).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Effacer' }).click();
     await expect.poll(() => itemTexts(page)).toHaveLength(3);
     await page.keyboard.press('Control+z');
     await expect.poll(() => itemTexts(page)).toEqual(ALL);
   });
 
-  test('« Tout décocher » : sans confirmation, « 0 / 6 », annulable ; boutons inactifs ensuite (critères 3, 4)', async ({ page }) => {
+  test('« Tout décocher » : sans confirmation, « 0 / 6 », annulable ; boutons inactifs ensuite (critères 3, 4)', async ({ page }, testInfo) => {
     const uncheck = page.getByRole('button', { name: 'Tout décocher', exact: true });
     await uncheck.click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('0 / 6');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 0, 6));
     await expect(page.getByText('Éléments décochés')).toBeVisible();
     await expect(uncheck).toHaveAttribute('aria-disabled', 'true');
-    await expect(page.getByRole('button', { name: 'Effacer les cochés', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(clearCheckedButton(page, testInfo)).toHaveAttribute('aria-disabled', 'true');
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('3 / 6');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 3, 6));
     await expect(uncheck).not.toHaveAttribute('aria-disabled', 'true');
   });
 

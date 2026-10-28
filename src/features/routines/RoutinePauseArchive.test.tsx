@@ -26,7 +26,7 @@ describe('Routines : pause et archivage (R-05)', () => {
   });
 
   async function openEditor(title: string): Promise<HTMLElement> {
-    fireEvent.click(await screen.findByRole('button', { name: `Éditer la routine ${title}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Modifier la routine ${title}` }));
     return screen.findByRole('form', { name: 'Modifier la routine' });
   }
 

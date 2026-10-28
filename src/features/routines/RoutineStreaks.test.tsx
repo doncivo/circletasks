@@ -36,7 +36,7 @@ describe('Routines : séries (R-04)', () => {
     await seedDays(h, lit, '2026-09-22', '2026-10-01');
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Faire mon lit' });
-    expect(card('Faire mon lit')).toHaveTextContent('07:30 · Pro · série 10 jours');
+    expect(card('Faire mon lit')).toHaveTextContent('07:30 · Pro · tous les jours · série 10 jours');
     fireEvent.click(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Vendredi' }));
     await waitFor(() => expect(card('Faire mon lit')).toHaveTextContent('série 11 jours'));
   });
@@ -60,7 +60,7 @@ describe('Routines : séries (R-04)', () => {
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Sport' });
     // Aujourd'hui, ven. 2 oct., prévu et non validé : ne casse pas la série.
-    expect(card('Sport')).toHaveTextContent('lun., mer., ven. · série 5 séances');
+    expect(card('Sport')).toHaveTextContent('lundi, mercredi et vendredi · série 5 séances');
   });
 
   it('une occurrence prévue hier non validée remet la série à 0 (critère 3)', async () => {
@@ -96,7 +96,7 @@ describe('Routines : séries (R-04)', () => {
     await seedLog(h, sport, '2026-09-30');
     await seedLog(h, sport, '2026-10-02');
     renderRoutines(h.container);
-    fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Sport' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la routine Sport' }));
     const form = await screen.findByRole('form', { name: 'Modifier la routine' });
     expect(form).toHaveTextContent('Série en cours 6 séances');
     expect(within(form).getByLabelText('Meilleure série 11 séances')).toHaveTextContent('Meilleure 11');

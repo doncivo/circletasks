@@ -21,58 +21,58 @@ describe('Checklists : cocher et progression (C-02), iPhone', () => {
   it('« 3 / 6 », barre à 50 % (critère 1)', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: valise });
     renderChecklists(h.container);
-    expect(await screen.findByText('3 / 6')).toBeInTheDocument();
+    expect(await screen.findByText('3 sur 6')).toBeInTheDocument();
     const bar = screen.getByRole('progressbar', { name: 'Progression : 3 sur 6' });
     expect(bar).toHaveAttribute('aria-valuenow', '3');
     expect(bar).toHaveAttribute('aria-valuemax', '6');
     expect((bar.firstElementChild as HTMLElement).style.width).toBe('50%');
-    expect(screen.getByRole('status')).toHaveTextContent('3 / 6');
+    expect(screen.getByRole('status')).toHaveTextContent('3 sur 6');
   });
 
   it('cocher met à jour « 4 / 6 », la barre et le barré sans recharger ; une nouvelle touche décoche (critère 2)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Valise voyage', items: valise });
     renderChecklists(h.container);
-    await screen.findByText('3 / 6');
+    await screen.findByText('3 sur 6');
     expect(check('Chargeur', true)).toHaveAttribute('aria-pressed', 'true');
     expect(check('Crème solaire')).toHaveAttribute('aria-pressed', 'false');
 
     fireEvent.click(check('Crème solaire'));
-    expect(await screen.findByText('4 / 6')).toBeInTheDocument();
+    expect(await screen.findByText('4 sur 6')).toBeInTheDocument();
     expect(check('Crème solaire', true)).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Modifier : Crème solaire' })).toHaveAttribute('data-checked', 'true');
     expect((screen.getByRole('progressbar').firstElementChild as HTMLElement).style.width).toBe('67%');
     await waitFor(async () => expect((await stored(h, checklist.id)).find(([text]) => text === 'Crème solaire')?.[1]).toBe(true));
 
     fireEvent.click(check('Crème solaire', true));
-    expect(await screen.findByText('3 / 6')).toBeInTheDocument();
+    expect(await screen.findByText('3 sur 6')).toBeInTheDocument();
     await waitFor(async () => expect((await stored(h, checklist.id)).find(([text]) => text === 'Crème solaire')?.[1]).toBe(false));
   });
 
   it('deux touches rapides : l’état final est celui du dernier geste (critère 3)', async () => {
     const { checklist } = await seedChecklist(h, { title: 'Valise voyage', items: ['Passeport', 'Chargeur'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 2');
+    await screen.findByText('0 sur 2');
     const button = check('Passeport');
     fireEvent.click(button);
     fireEvent.click(check('Passeport', true));
     await waitFor(async () => expect((await stored(h, checklist.id)).find(([text]) => text === 'Passeport')?.[1]).toBe(false));
-    expect(screen.getByText('0 / 2')).toBeInTheDocument();
+    expect(screen.getByText('0 sur 2')).toBeInTheDocument();
 
     fireEvent.click(check('Passeport'));
     fireEvent.click(check('Passeport', true));
     fireEvent.click(check('Passeport'));
     await waitFor(async () => expect((await stored(h, checklist.id)).find(([text]) => text === 'Passeport')?.[1]).toBe(true));
-    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('1 sur 2')).toBeInTheDocument());
   });
 
   it('les items cochés restent à leur place (critère 4)', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: ['A', 'B', 'C'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 3');
+    await screen.findByText('0 sur 3');
     fireEvent.click(check('B'));
-    await screen.findByText('1 / 3');
+    await screen.findByText('1 sur 3');
     fireEvent.click(check('A'));
-    await screen.findByText('2 / 3');
+    await screen.findByText('2 sur 3');
     expect(rowTexts()).toEqual(['A', 'B', 'C']);
   });
 
@@ -81,33 +81,33 @@ describe('Checklists : cocher et progression (C-02), iPhone', () => {
     await seedChecklist(h, { title: 'Pleine', items: [['a', true], ['b', true]] });
     renderChecklists(h.container);
     await screen.findByRole('heading', { level: 1, name: 'Pleine' });
-    await screen.findByText('2 / 2');
+    await screen.findByText('2 sur 2');
     expect((screen.getByRole('progressbar').firstElementChild as HTMLElement).style.width).toBe('100%');
     const empty = (await h.container.data.repos.checklists.listSummaries('all')).find((s) => s.checklist.title === 'Vide');
     fireEvent.change(screen.getByRole('combobox', { name: 'Choisir une checklist' }), { target: { value: empty?.checklist.id } });
-    await screen.findByText('0 / 0');
+    await screen.findByText('0 sur 0');
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
   it('aucun message « Annuler » au cochage (décision D2)', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: ['Passeport'] });
     renderChecklists(h.container);
-    await screen.findByText('0 / 1');
+    await screen.findByText('0 sur 1');
     fireEvent.click(check('Passeport'));
-    await screen.findByText('1 / 1');
+    await screen.findByText('1 sur 1');
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
   });
 
   it('l’état coché est conservé après fermeture et réouverture (critère 8)', async () => {
     await seedChecklist(h, { title: 'Valise voyage', items: ['Passeport', 'Chargeur'] });
     const first = renderChecklists(h.container);
-    await screen.findByText('0 / 2');
+    await screen.findByText('0 sur 2');
     fireEvent.click(check('Chargeur'));
-    await screen.findByText('1 / 2');
+    await screen.findByText('1 sur 2');
     await waitFor(async () => expect(await stored(h, (await h.container.data.repos.checklists.listSummaries('all'))[0]?.checklist.id ?? '')).toEqual([['Passeport', false], ['Chargeur', true]]));
     first.unmount();
     renderChecklists(h.container);
-    expect(await screen.findByText('1 / 2')).toBeInTheDocument();
+    expect(await screen.findByText('1 sur 2')).toBeInTheDocument();
     expect(check('Chargeur', true)).toBeInTheDocument();
   });
 
@@ -162,7 +162,8 @@ describe('Checklists : cocher et progression (C-02), iPhone', () => {
     });
   });
 
-  it('la vue compacte réduit les lignes, se mémorise et réutilise CompactToggle (critère 9)', async () => {
+  it('la vue compacte réduit les lignes, se mémorise et réutilise CompactToggle (critère 9, PC : UI-REFONTE-06 l’a retirée de l’écran iPhone)', async () => {
+    mockViewport(1440);
     await seedChecklist(h, { title: 'Valise voyage', items: ['Passeport'] });
     renderChecklists(h.container);
     const toggle = await screen.findByRole('button', { name: 'Vue compacte' });

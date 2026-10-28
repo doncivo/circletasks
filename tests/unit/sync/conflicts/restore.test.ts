@@ -87,12 +87,12 @@ describe('restauration d’une valeur (critère 5)', () => {
 });
 
 describe('annulation (critère 6)', () => {
-  it('« Valeur restaurée · Annuler » : nouvelle écriture de la valeur gardée, restored = 0 et resolved_at = NULL', async () => {
+  it('« Valeur rétablie · Annuler » : nouvelle écriture de la valeur gardée, restored = 0 et resolved_at = NULL', async () => {
     const { taskId, conflictId } = await timeConflict();
     await bench.useCases.restore(conflictId);
     const top = bench.undo.getSnapshot().top;
     expect(top?.kind).toBe('syncRestore');
-    expect(top && undoMessage(top)).toBe('Valeur restaurée');
+    expect(top && undoMessage(top)).toBe('Valeur rétablie');
     const restoredHlc = (await fieldClock('task', taskId, 'time'))?.hlc;
     await published();
     bench.clock.advance(1_000);
