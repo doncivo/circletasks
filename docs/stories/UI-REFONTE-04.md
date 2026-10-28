@@ -61,11 +61,11 @@ Les cinq autres refontes ; le PRD ; la ligne « Synchronisation » de l'accueil 
 
 ## Mesure du bundle
 
-Avant push (build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 446 octets normalisés** (brute 337 438), **marge 20 954** ; **−135** face à `main` 337 581 (9e97ee21) : les clés `kept`, `discarded`, `actionHint` quittent le départ, les titres raccourcissent ; les textes nouveaux sont dans le bloc à la demande de l'écran. Mesure de `main` après fusion : à consigner.
+Avant push (build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 446 octets normalisés** (brute 337 438), **marge 20 954** ; **−135** face à `main` 337 581 (9e97ee21) : les clés `kept`, `discarded`, `actionHint` quittent le départ, les titres raccourcissent ; les textes nouveaux sont dans le bloc à la demande de l'écran. Mesure de `main` après fusion (#102, 9f010ec5) : **337 469 octets normalisés**, marge 20 931.
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI, premier passage** (head dc4ab36a) : 48 contrôles verts, aucune adaptation après coup. Fusionnée (#102, 9f010ec5).
 
 ## Passe code-reviewer
 
