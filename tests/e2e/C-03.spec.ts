@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { insertChecklists, openChecklists, reopenChecklists } from './helpers/checklists';
+import { insertChecklists, openChecklists, progressText, reopenChecklists } from './helpers/checklists';
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { isPhone } from './helpers/today';
 import { dayOf, openWeek } from './helpers/week';
@@ -49,7 +49,7 @@ test.describe('C-03 — checklist associée à un jour', () => {
     else await expect(dayOf(page, today)).toContainText('checklist 3/6');
     await dayOf(page, today).getByRole('button', { name: 'Ouvrir la checklist : Valise voyage' }).click();
     await page.getByRole('button', { name: 'Cocher : Crème solaire', exact: true }).click();
-    await expect(page.getByText('4 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 4, 6)).first()).toBeVisible();
     await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
     await expect(todayRow(page, 'Valise voyage')).toContainText('4/6');
     await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();

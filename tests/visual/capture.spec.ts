@@ -698,7 +698,7 @@ const SCREENS: Screen[] = [
   },
   {
     name: 'Checklists',
-    mockup: 'Checklists.html',
+    mockup: '../maquettes-refonte/Checklists-v2.html',
     viewport: PHONE,
     date: WEDNESDAY,
     prepare: (page) => prepareChecklists(page, false),

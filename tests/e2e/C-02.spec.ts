@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { addField, chooseChecklist, insertChecklists, itemTexts, openChecklists, reopenChecklists } from './helpers/checklists';
+import { addField, chooseChecklist, insertChecklists, itemTexts, openChecklists, progressText, reopenChecklists } from './helpers/checklists';
 import { isPhone } from './helpers/today';
 
 /**
@@ -14,11 +14,11 @@ import { isPhone } from './helpers/today';
 const VALISE = ['Adaptateur de prise', 'Crème solaire', 'Attestation d’assurance', ['Passeport', true], ['Chargeur', true], ['Billets d’avion', true]] as const;
 
 test.describe('C-02 — cocher des items', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await openApp(page);
     await insertChecklists(page, [{ title: 'Valise voyage', items: VALISE }]);
     await reopenChecklists(page);
-    await expect(page.getByText('3 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 3, 6)).first()).toBeVisible();
   });
 
   test('barre à 50 %, « 3 / 6 » dans le détail (et dans le volet sur PC) (critère 1)', async ({ page }, testInfo) => {
@@ -30,16 +30,16 @@ test.describe('C-02 — cocher des items', () => {
     if (!isPhone(testInfo)) await expect(page.getByRole('list', { name: 'Mes checklists' })).toContainText('3 / 6');
   });
 
-  test('cocher met à jour la progression sans recharger ; décocher la rétablit (critère 2)', async ({ page }) => {
+  test('cocher met à jour la progression sans recharger ; décocher la rétablit (critère 2)', async ({ page }, testInfo) => {
     const box = page.getByRole('button', { name: 'Cocher : Crème solaire', exact: true });
     await expect(box).toHaveAttribute('aria-pressed', 'false');
     await box.click();
-    await expect(page.getByText('4 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 4, 6)).first()).toBeVisible();
     const done = page.getByRole('button', { name: 'Décocher : Crème solaire', exact: true });
     await expect(done).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Modifier : Crème solaire' })).toHaveCSS('text-decoration-line', 'line-through');
     await done.click();
-    await expect(page.getByText('3 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 3, 6)).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Modifier : Crème solaire' })).not.toHaveCSS('text-decoration-line', 'line-through');
   });
 
@@ -47,20 +47,20 @@ test.describe('C-02 — cocher des items', () => {
     test.skip(isPhone(testInfo), 'clavier : PC seulement');
     await page.getByRole('button', { name: 'Cocher : Adaptateur de prise', exact: true }).focus();
     await page.keyboard.press('Space');
-    await expect(page.getByText('4 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 4, 6)).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Décocher : Adaptateur de prise', exact: true })).toBeFocused();
   });
 
-  test('deux clics rapides : état final du dernier geste ; items cochés à leur place (critères 3, 4)', async ({ page }) => {
+  test('deux clics rapides : état final du dernier geste ; items cochés à leur place (critères 3, 4)', async ({ page }, testInfo) => {
     const box = page.getByRole('button', { name: /^(Cocher|Décocher) : Crème solaire$/ });
     await box.dblclick();
-    await expect(page.getByText('3 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 3, 6)).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cocher : Crème solaire', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cocher : Crème solaire', exact: true }).click();
     expect(await itemTexts(page)).toEqual(['Adaptateur de prise', 'Crème solaire', 'Attestation d’assurance', 'Passeport', 'Chargeur', 'Billets d’avion']);
   });
 
-  test('le texte se modifie en ligne : Entrée valide, Échap annule, vide refusé (critère 5)', async ({ page }) => {
+  test('le texte se modifie en ligne : Entrée valide, Échap annule, vide refusé (critère 5)', async ({ page }, testInfo) => {
     await page.getByRole('button', { name: 'Modifier : Passeport', exact: true }).click();
     const field = page.getByLabel('Texte de l’élément');
     await expect(field).toBeFocused();
@@ -74,19 +74,20 @@ test.describe('C-02 — cocher des items', () => {
     await page.getByLabel('Texte de l’élément').fill('Passeport valide');
     await page.getByLabel('Texte de l’élément').press('Enter');
     await expect.poll(() => itemTexts(page)).toContain('Passeport valide');
-    await expect(page.getByText('3 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 3, 6)).first()).toBeVisible();
   });
 
-  test('l’état coché est conservé en changeant d’onglet (critère 8)', async ({ page }) => {
+  test('l’état coché est conservé en changeant d’onglet (critère 8)', async ({ page }, testInfo) => {
     await page.getByRole('button', { name: 'Cocher : Crème solaire', exact: true }).click();
-    await expect(page.getByText('4 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 4, 6)).first()).toBeVisible();
     await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Routines', exact: true }).click();
     await openChecklists(page);
-    await expect(page.getByText('4 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 4, 6)).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Décocher : Crème solaire', exact: true })).toBeVisible();
   });
 
-  test('vue compacte : lignes plus basses, cases de 44 pt (critère 9)', async ({ page }) => {
+  test('vue compacte : lignes plus basses, cases de 44 pt (critère 9)', async ({ page }, testInfo) => {
+    test.skip(isPhone(testInfo), 'UI-REFONTE-06 : la bascule « Vue compacte » a quitté l’écran iPhone (réglage PC).');
     const row = page.locator('.ct-checklist-item').first();
     const before = (await row.boundingBox())?.height ?? 0;
     await page.getByRole('button', { name: 'Vue compacte' }).click();
@@ -111,15 +112,15 @@ test.describe('C-02 — états limites', () => {
     await openApp(page);
     await insertChecklists(page, [{ title: 'Vide' }, { title: 'Pleine', items: [['a', true], ['b', true]] }]);
     await reopenChecklists(page);
-    await expect(page.getByText('2 / 2').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 2, 2)).first()).toBeVisible();
     await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '2');
     const full = await page.getByRole('progressbar').boundingBox();
     const fill = await page.locator('.ct-checklist-progress__fill').boundingBox();
     expect(fill?.width).toBeCloseTo(full?.width ?? 0, 0);
     await page.getByRole('button', { name: 'Décocher : a', exact: true }).click();
-    await expect(page.getByText('1 / 2').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 1, 2)).first()).toBeVisible();
     await chooseChecklist(page, testInfo, 'Vide');
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('0 / 0');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 0, 0));
     await expect(page.getByRole('progressbar')).toHaveCount(0);
   });
 });

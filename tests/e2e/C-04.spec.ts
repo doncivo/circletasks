@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { chooseChecklist, insertChecklists, itemTexts, reopenChecklists } from './helpers/checklists';
+import { chooseChecklist, insertChecklists, itemTexts, progressText, reopenChecklists } from './helpers/checklists';
 import { isPhone } from './helpers/today';
 
 /**
@@ -23,24 +23,24 @@ async function duplicate(page: Page, phone: boolean): Promise<void> {
 }
 
 test.describe('C-04 — checklist modèle', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await openApp(page);
     await insertChecklists(page, [{ title: 'Valise voyage', space: 'perso', icon: 'lucide:briefcase', date: '2026-10-09', template: true, items: VALISE }]);
     await reopenChecklists(page);
-    await expect(page.getByText('3 / 6').first()).toBeVisible();
+    await expect(page.getByText(progressText(testInfo, 3, 6)).first()).toBeVisible();
   });
 
   test('crée la copie décochée, sans date, ouverte ; l’original est inchangé (critères 1, 2)', async ({ page }, testInfo) => {
     await duplicate(page, isPhone(testInfo));
     await expect(page.getByRole('heading', { name: 'Valise voyage (copie)', exact: true })).toBeVisible();
     await expect.poll(() => itemTexts(page)).toEqual(TEXTS);
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('0 / 6');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 0, 6));
     await expect(page.getByText(/Prévue le/)).toHaveCount(0);
     await expect(page.getByText(/modèle réutilisable/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Décocher : / })).toHaveCount(0);
 
     await chooseChecklist(page, testInfo, 'Valise voyage');
-    await expect(page.locator('.ct-checklist-progress__count')).toHaveText('3 / 6');
+    await expect(page.locator('.ct-checklist-progress__count')).toHaveText(progressText(testInfo, 3, 6));
     await expect(page.getByText(/Prévue le/)).toBeVisible();
     await expect(page.getByText('Perso · modèle réutilisable')).toBeVisible();
   });

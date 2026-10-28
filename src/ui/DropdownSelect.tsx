@@ -19,6 +19,8 @@ export interface DropdownSelectProps {
   readonly variant?: 'field' | 'pill';
   readonly disabled?: boolean;
   readonly className?: string;
+  /** UI-REFONTE-06 : le texte visible peut être le titre de l'écran (`h1`, Checklists iPhone : « le sélecteur est le titre »). */
+  readonly textAs?: 'span' | 'h1';
 }
 
 /**
@@ -28,11 +30,12 @@ export interface DropdownSelectProps {
  * @example
  * <DropdownSelect label={t('spaces.projectLabel')} options={options} value={projectId ?? ''} onChange={choose} display={t('spaces.projectFieldNone')} />
  */
-export function DropdownSelect({ options, value, onChange, label, display, variant = 'field', disabled, className }: DropdownSelectProps) {
+export function DropdownSelect({ options, value, onChange, label, display, variant = 'field', disabled, className, textAs = 'span' }: DropdownSelectProps) {
   const shown = display ?? options.find((option) => option.value === value)?.label ?? '';
+  const Text = textAs;
   return (
     <span className={['ct-dropdown', className].filter(Boolean).join(' ')} data-variant={variant} data-disabled={disabled ? 'true' : undefined}>
-      <span className="ct-dropdown__text">{shown}</span>
+      <Text className="ct-dropdown__text">{shown}</Text>
       <Icon icon={ChevronDown} size={18} />
       <select aria-label={label} className="ct-dropdown__native" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
