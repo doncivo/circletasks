@@ -10,6 +10,7 @@ export const captureEn: Messages['capture'] = {
   removeToken: 'Remove {label}',
   sheetNotReady: 'The database is not ready. Your text is kept; it cannot be edited while waiting. Tap Retry to try saving again.',
   sheetRetry: 'Retry',
+  sheetAdd: 'Add task',
   lateSaved: 'The task “{title}” was saved after the sheet closed.',
   lateFailed: 'The task “{title}” could not be saved. Tap + to enter it again.',
   sheetSaveError: 'The task could not be saved. Your text is kept.',

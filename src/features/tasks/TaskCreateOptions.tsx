@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useId, useState, type CSSProperties } from 'react';
+import { useId, useState, type CSSProperties } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
@@ -26,16 +26,13 @@ export interface TaskCreateOptionsProps {
   recurrence: RecurrenceFields | null; setRecurrence: (value: RecurrenceFields | null) => void;
   offsets: readonly ReminderOffsetMin[]; onOffset: (value: ReminderOffsetMin) => void;
   goalId: GoalId | null; setGoalId: (value: GoalId | null) => void;
-  onReady: (label: string) => void;
 }
 
 /** Le titre reste dans l'hôte synchrone ; sélecteurs, styles et nouveaux textes arrivent à l'ouverture seulement. */
 export function TaskCreateOptions(p: TaskCreateOptionsProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreId = useId();
-  const { onReady } = p;
   const selectedSpace = p.spaces.find((space) => space.id === p.spaceId);
-  useEffect(() => onReady(tTaskRefonte('add')), [onReady]);
   return <>
     <TaskSchedulePicker value={p.choice} today={p.today} onChange={p.changeChoice} />
     <div className="ct-task-sheet__spaceRow"><SpaceSegmented layout="compact" items={p.spaces} value={p.spaceId} onChange={p.onSpace} label={t('detail.spaceChoiceLabel')} {...(selectedSpace ? { selectedStyle: selectedSpaceStyle(selectedSpace.color) } : {})} /></div>
