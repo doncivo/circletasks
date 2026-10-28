@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createTask, openToday, rowOf } from './helpers/today';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * A-03 — Je masque les routines de la liste du jour.
@@ -22,7 +23,7 @@ test.describe('A-03 — masquer les routines', () => {
 
   test('désactivé par défaut, se bascule au clavier et reste choisi (critères 1, 6, 8)', async ({ page }) => {
     await nav(page, 'Réglages').click();
-    await expect(page.getByRole('heading', { name: 'TÂCHES' })).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'tasks')).toBeVisible(); // UI-REFONTE-09
     const toggle = page.getByRole('switch', { name: 'Masquer les routines de la liste' });
     await expect(toggle).toBeEnabled();
     await expect(toggle).toHaveAttribute('aria-checked', 'false');

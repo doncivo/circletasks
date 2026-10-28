@@ -2,7 +2,7 @@
 
 Module : M2 Aujourd'hui · Palier : refontes après la 1.0.2, septième des huit dans l'ordre d'Ali du 2026-10-27 · Agent : tasks-planning avec ui-design-system · Ouverte le 2026-10-28 par Claude Code.
 
-Statut : **ouverte, passe product-owner écrite.** Estimation : 8 à 12 h actives ; alerte à 15 h.
+Statut : **fusionnée (#106, e4fb9e9a), quatre passes consignées.** Estimation : 8 à 12 h actives ; alerte à 15 h.
 
 Références : `docs/maquettes-refonte/PC-Jour.html`, huit règles transversales du README du même dossier ; acquis de UI-REFONTE-02 (agenda du jour, `buildTodayAgenda`, `TodayGoalLine`, jetons `--ct-color-agenda-*`). Écran de départ : `src/features/today/TodayScreen.tsx`, `TodayHeader.tsx`, `TodayListView.tsx`, `TodayParts.tsx`, `TodayCreate.tsx`, `TodayScreen.css` ; `src/features/search/SearchButton.tsx`, `src/features/someday/SomedayButton.tsx`. Aujourd'hui est l'écran du premier rendu : **tout ce qui s'ajoute au départ se mesure** ; la seconde colonne est un bloc à la demande. **Périmètre : la mise en page PC** (`useLayout() === 'pc'`) ; l'agenda iPhone (UI-REFONTE-02) ne change pas.
 
@@ -57,7 +57,7 @@ La dernière refonte (Réglages PC) ; le PRD ; l'agenda iPhone ; la fiche détai
 
 ### Mesure du bundle de départ
 
-Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 544 octets normalisés** (brute 337 547), **marge 20 856** ; **+84** face à `main` 337 460 (barre PC et ses quatre textes ; la seconde colonne et son catalogue sont à la demande ; `CompactToggle` et `Fab` quittent le départ (le bouton flottant iPhone est rendu en ligne), lignes retirées de `tests/bundle/start-modules.json` sur demande de la garde). Projection annoncée +1 000 à +2 500 : tenue. Mesure de `main` après fusion : à consigner.
+Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 544 octets normalisés** (brute 337 547), **marge 20 856** ; **+84** face à `main` 337 460 (barre PC et ses quatre textes ; la seconde colonne et son catalogue sont à la demande ; `CompactToggle` et `Fab` quittent le départ (le bouton flottant iPhone est rendu en ligne), lignes retirées de `tests/bundle/start-modules.json` sur demande de la garde). Projection annoncée +1 000 à +2 500 : tenue. Dernière mesure avant fusion (head d4fe6a08, `Fab` de retour sur iPhone et pastilles à largeur fixe) : **337 917**, marge 20 483. Mesure de `main` après fusion (#106, e4fb9e9a) : **337 922 octets normalisés**, marge 20 478 (+458 face à 337 464 : barre PC, ses textes et `Fab` rétabli).
 
 ## Passe QA
 
@@ -69,8 +69,15 @@ Avant push (commit de fusion 09914f48 avec `main` de6d486a, build `--manifest`, 
   - **Badge « Aujourd’hui » attendu sur PC** : `smoke.spec`, `App.test`, fumée Windows `pc-demarrage.spec` ; adaptés sur `h1.ct-today__day` (trace).
   - **Sous-ligne « 09:00 · Pro » attendue sur PC** : l'agenda met l'heure dans sa colonne et « En retard de … » devant l'espace (`A-01`, `A-06`, `A-08`, `Q-01`, `Q-03`, `Q-06`) ; adaptés comme la branche iPhone de UI-REFONTE-02 (`.ct-agenda__hour` + sous-ligne `/Pro$/`).
   - **Autres adaptations tracées** : `A-02` (la ligne « maintenant » est un `listitem`), `OB-02` (ligne « Objectif · titre » sur PC aussi), `T-03` (l'agenda n'affiche pas l'icône ; le panneau la porte), `UI-REFONTE-08.spec` (une seule ouverture de l'app : `openToday` recharge la page et perdait les insertions directes).
-- **CI, second passage** : à consigner.
+- **CI, second passage** (head d4fe6a08) : 42 verts, 6 rouges : `UI-REFONTE-08.spec` (seconde colonne : 420 px sans la marge intérieure ; `box-sizing: border-box`), `A-01` et `A-06` (sous-ligne PC `.ct-list-row__meta`, seconde occurrence oubliée). **Troisième passage** (96cfe936, puis branche mise à jour sur `main` 395ef322) : 48 verts. Fusionnée (#106, e4fb9e9a).
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `469a2afd..96cfe936` (écran, en-tête, seconde colonne, catalogue, feuilles de style, tests), faite après le second passage en CI et avant la fusion.
+
+- **Vérifié sans remarque** : l'iPhone rend le même arbre qu'avant (agenda de UI-REFONTE-02, `Fab` 64 px, menu « Plus d'options ») ; les libellés accessibles des commandes PC sont ceux du PRD (« Objectif de la semaine », « Rapport mensuel », « Un jour, N tâches », « Ajouter », « Mode édition », « Vue compacte ») et les bascules portent `aria-pressed` ; « Ajouter » fait le geste PC du bouton flottant (focus du champ en ligne, T-01, Q-05) ; Ctrl N et « Ajout rapide » de la zone de notification passent par le même `openCreate` ; la seconde colonne est un bloc à la demande (`lazyScreen` `onDemand`), lit la base jour par jour avec le même tri que le jour (`buildTodayList`) et se relit quand les tâches, le filtre, le jour ou les sources changent ; elle est une `section` nommée, pas un second `complementary` (le panneau de détail reste seul) ; un échec de lecture la laisse vide sans masquer les messages d'erreur de l'écran principal.
+- **Bundle** : +458 octets sur `main` (barre PC et ses quatre textes, `Fab` rétabli) ; `CompactToggle` sort du départ ; projection annoncée +1 000 à +2 500 : tenue. Aucun module nouveau.
+- **Écart corrigé en revue** : la première version ouvrait la feuille « Nouvelle tâche » depuis « Ajouter » sur PC, contraire à T-01 critères 4 à 8 ; corrigé avant fusion, tableau des écarts et test de la story alignés.
+- **Point d'attention laissé à la QA** : la barre fixe (`position: sticky`) recouvre le haut de la colonne pendant le défilement ; les pastilles gardent leur largeur et « Rechercher » se réduit en premier (clics interceptés en CI avant correction). À regarder sur le PC avec une fenêtre étroite (1 024 px).
+
+Verdict : approuvée, fusionnée après CI complète verte.

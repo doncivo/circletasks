@@ -56,11 +56,11 @@ Les trois autres refontes ; le PRD ; le volet PC ; la feuille « Modifier la che
 
 ## Mesure du bundle
 
-Avant push (commit 17e087f8, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 604 octets normalisés** (brute 337 589), **marge 20 796** ; **+18** face à `main` 337 586 : la propriété `textAs` de `DropdownSelect` (départ) ; l'écran et son catalogue sont à la demande. Mesure de `main` après fusion : à consigner.
+Avant push (commit 17e087f8, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 604 octets normalisés** (brute 337 589), **marge 20 796** ; **+18** face à `main` 337 586 : la propriété `textAs` de `DropdownSelect` (départ) ; l'écran et son catalogue sont à la demande. Mesure de `main` après fusion (#104, c5a8ac20) : **337 604 octets normalisés**, marge 20 796.
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI complète** verte (48 contrôles). Fusionnée (#104, c5a8ac20).
 
 ## Passe code-reviewer
 

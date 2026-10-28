@@ -22,9 +22,10 @@
   background: var(--ct-color-surface);
 }
 
+/* UI-REFONTE-09 : combinaison prise par une autre application, dite en une phrase sous l'étiquette ; la touche passe en ambre, sans barré. */
 .ct-quickcapture__key[data-state='unavailable'] {
-  color: var(--ct-color-text-secondary);
-  text-decoration: line-through;
+  color: var(--ct-color-warning-text);
+  border-color: var(--ct-color-warning-border);
 }
 
 .ct-quickcapture__key:disabled {

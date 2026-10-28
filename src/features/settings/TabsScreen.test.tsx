@@ -173,11 +173,11 @@ describe('Onglets (P-01)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’enregistrer ce réglage.');
   });
 
-  it('la ligne « Onglets » de Réglages affiche « 5 visibles » puis « 4 visibles » et ouvre l’écran', async () => {
+  it('la ligne « Onglets visibles » de Réglages (PC, UI-REFONTE-09) affiche « 5 sur 5 » puis « 4 sur 5 » et ouvre l’écran', async () => {
     renderIn(<SettingsScreen />);
-    expect(await screen.findByRole('button', { name: 'Onglets : 5 visibles' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Onglets visibles : 5 sur 5' })).toBeInTheDocument();
     useTabsConfigStore.setState({ config: { order: [], hidden: ['events'] } });
-    const row = await screen.findByRole('button', { name: 'Onglets : 4 visibles' });
+    const row = await screen.findByRole('button', { name: 'Onglets visibles : 4 sur 5' });
     fireEvent.click(row);
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'tabs' });
   });

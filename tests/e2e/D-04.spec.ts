@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createTask, isPhone, openToday, todayTab } from './helpers/today';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * D-04 (raccourcis clavier) et P-08 (liste des raccourcis) — projet `pc` seulement.
@@ -52,7 +53,7 @@ test.describe('D-04 / P-08 — raccourcis clavier', () => {
     await page.keyboard.press('Escape');
     await page.keyboard.press('Control+,');
     await expect(page.getByRole('heading', { name: 'Réglages' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'CLAVIER' })).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'keyboard')).toBeVisible(); // UI-REFONTE-09
     // Navigateur de développement : pas d'enregistrement système, donc pas de ligne « Capture rapide ».
     await expect(page.getByRole('button', { name: /^Capture rapide : / })).toHaveCount(0);
     await page.getByRole('button', { name: 'Afficher les raccourcis clavier' }).click();

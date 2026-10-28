@@ -21,8 +21,19 @@ import { compareStartModules, describeComparison, initialList, normalizeSource, 
  * Hors de `npm run test` : lancé par `npm run test:bundle` (configuration vitest.bundle.config.ts).
  */
 const LIMIT_BYTES = 350 * 1024;
-/** BUNDLE-01 critère 4 : écart absolu admis entre mesure normalisée et mesure brute du même build (au-delà : relèvement de fait, ou modèle des hachages périmé). */
-const NORMALIZATION_GAP_BYTES = 100;
+/**
+ * BUNDLE-01 critère 4, borne asymétrique (décision d'Ali du 2026-10-28, UI-REFONTE-09) : les deux erreurs ne coûtent pas la même chose.
+ * Une mesure normalisée plus PETITE que le build réel ferait croire qu'on est sous le plafond alors qu'on l'a dépassé : un dépassement
+ * silencieux, exactement ce que la garde doit éliminer ; borne serrée (100 octets, inchangée depuis le 2026-10-18).
+ */
+const NORMALIZATION_UNDERSHOOT_BYTES = 100;
+/**
+ * Une mesure normalisée plus GRANDE que le build réel ne fait qu'inquiéter à tort ; borne large (300 octets), qui reste une borne de bon sens
+ * contre un modèle des hachages périmé. Mesuré le 2026-10-28 avec 85 blocs à la demande dans le départ : +143 octets (normalisé 337 914,
+ * brut 337 771) ; le bruit de compression des pseudo-hachages croît avec le nombre de blocs. Dette inscrite au backlog : modèle de
+ * normalisation sans bruit, quand le plafond redeviendra serré.
+ */
+const NORMALIZATION_OVERSHOOT_BYTES = 300;
 
 describe('bundle de départ (index.html)', () => {
   let outDir = '';
@@ -66,8 +77,10 @@ describe('bundle de départ (index.html)', () => {
     );
     expect(normalized.chunks.length).toBeGreaterThan(0);
     expect(normalized.total).toBeLessThan(LIMIT_BYTES);
-    // Critère 4 : la normalisation ne relève pas le plafond de fait (et le modèle des hachages de Vite n'est pas périmé).
-    expect(Math.abs(normalized.total - raw.total), `normalisé ${String(normalized.total)}, brut ${String(raw.total)}`).toBeLessThanOrEqual(NORMALIZATION_GAP_BYTES);
+    // Critère 4 : la normalisation ne relève pas le plafond de fait (borne serrée dans le sens qui ment) et le modèle des hachages n'est pas périmé.
+    const label = `normalisé ${String(normalized.total)}, brut ${String(raw.total)}`;
+    expect(raw.total - normalized.total, `${label} : la mesure jugée est plus petite que le build réel (dépassement silencieux possible)`).toBeLessThanOrEqual(NORMALIZATION_UNDERSHOOT_BYTES);
+    expect(normalized.total - raw.total, `${label} : écart de normalisation anormal`).toBeLessThanOrEqual(NORMALIZATION_OVERSHOOT_BYTES);
   });
 
   // BUNDLE-01 (critères 19 à 25) : garde par liste blanche des modules du départ, mécanisme principal ; le plafond reste le dernier juge. Les

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { E2E_DEV_PORT } from '../sim/ports';
 import { openApp } from './helpers/app';
 import { isPhone, listTitles, todayTab } from './helpers/today';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * P-05 — Je suis guidé au premier lancement. Le navigateur de développement part d'une base neuve à chaque chargement : l'assistant n'y
@@ -129,7 +130,7 @@ test.describe('P-05 — premier lancement', () => {
     await dialog.getByRole('button', { name: 'Passer le guide de bienvenue' }).click();
     await expect(dialog).not.toBeVisible();
     await tab(page, 'Réglages').click();
-    await expect(page.getByRole('heading', { name: 'À PROPOS' })).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'about')).toBeVisible(); // UI-REFONTE-09
     await page.getByRole('button', { name: 'Revoir le guide de bienvenue' }).click();
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Étape 1 sur 3')).toBeVisible();

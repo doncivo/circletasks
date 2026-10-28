@@ -23,6 +23,13 @@ export function useVisibleTabCount(): number {
   return visibleTabCount(config, ALL_TABS);
 }
 
+/** UI-REFONTE-09 (Réglages PC) : visibles et total (« 5 sur 5 »), Réglages non compté : il reste toujours affiché, hors de la liste. */
+export function useTabCounts(): { readonly visible: number; readonly total: number } {
+  const config = useTabsConfigStore((s) => s.config);
+  const visible = visibleTabCount(config, ALL_TABS);
+  return { visible, total: visible + hiddenTabs(config, ALL_TABS).length };
+}
+
 /**
  * Écran « Onglets » (M12, P-01), ouvert depuis Réglages › GÉNÉRAL. Non dessiné : liste dans le style de la liste des projets
  * d'ES-04 (poignée, pastille de couleur, interrupteur « Afficher »). Tâches (Aujourd'hui) est fixe et toujours affiché ; Réglages

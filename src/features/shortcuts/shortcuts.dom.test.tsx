@@ -148,7 +148,7 @@ describe('liste des raccourcis et réglage de la capture rapide (P-08, D-04)', (
   });
 
   describe('Réglages › CLAVIER', () => {
-    it('PC : ligne « Raccourcis clavier » qui ouvre la même fenêtre (P-08 critère 6)', async () => {
+    it('PC : ligne « Tous les raccourcis » (UI-REFONTE-09) qui ouvre la même fenêtre (P-08 critère 6)', async () => {
       renderShell(<ShortcutsSettingsSection />);
       expect(screen.getByText('CLAVIER')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Afficher les raccourcis clavier' }));
@@ -158,7 +158,7 @@ describe('liste des raccourcis et réglage de la capture rapide (P-08, D-04)', (
     it('hors application installée, pas de ligne « Capture rapide » (aucun raccourci système possible)', () => {
       renderShell(<ShortcutsSettingsSection />, createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data }));
       expect(screen.queryByText('Capture rapide')).not.toBeInTheDocument();
-      expect(screen.getByText('Raccourcis clavier')).toBeInTheDocument();
+      expect(screen.getByText('Tous les raccourcis')).toBeInTheDocument(); // UI-REFONTE-09
     });
 
     const keyButton = () => screen.getByRole('button', { name: /^Capture rapide : / });
@@ -236,7 +236,8 @@ describe('liste des raccourcis et réglage de la capture rapide (P-08, D-04)', (
     it('état « indisponible » quand le système refuse au démarrage (critère 9)', async () => {
       desktop.takenChords.add('Ctrl+Alt+Space');
       renderShell(<ShortcutsSettingsSection />);
-      expect(await screen.findByText('Indisponible : combinaison prise par une autre application')).toBeInTheDocument();
+      // UI-REFONTE-09 : phrase sous l'étiquette, touche en ambre, plus de note barrée.
+      expect(await screen.findByText('Ctrl+Alt+Espace est utilisé par une autre application. Choisissez-en un autre.')).toBeInTheDocument();
     });
   });
 

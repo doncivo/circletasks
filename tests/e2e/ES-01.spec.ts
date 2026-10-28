@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { settingsSectionHeading } from './helpers/settings';
 import { openApp } from './helpers/app';
 
 /**
@@ -13,7 +14,7 @@ test.describe('ES-01 — espaces Pro et Perso', () => {
   async function openSpaces(page: Page): Promise<void> {
     await openApp(page);
     await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
-    await expect(page.getByText('ESPACES ET CALENDRIERS', { exact: true })).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'spaces')).toBeVisible(); // UI-REFONTE-09
     await page.getByRole('button', { name: /^Espaces et projets :/ }).click();
     await expect(page.getByRole('heading', { name: 'Espaces et projets' })).toBeVisible();
   }

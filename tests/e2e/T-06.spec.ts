@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { settingsSectionHeading } from './helpers/settings';
 import { openApp } from './helpers/app';
 
 /**
@@ -49,9 +50,9 @@ test.describe('T-06 — report automatique à minuit', () => {
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 
-  test('l’interrupteur est activé par défaut (critère 11)', async ({ page }) => {
+  test('l’interrupteur est activé par défaut (critère 11)', async ({ page }, testInfo) => {
     await openSettings(page);
-    await expect(page.getByText('TÂCHES', { exact: true })).toBeVisible();
+    await expect(settingsSectionHeading(page, testInfo, 'tasks')).toBeVisible(); // UI-REFONTE-09
     await expect(page.getByRole('switch', { name: 'Reporter les tâches non faites' })).toHaveAttribute('aria-checked', 'true');
   });
 

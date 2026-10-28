@@ -57,11 +57,11 @@ Les quatre autres refontes ; le PRD ; le formulaire, le rapport de routine et le
 
 ## Mesure du bundle
 
-Avant push (branche à jour de `main` c9507aa1, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 578 octets normalisés** (brute 337 570), **marge 20 822** ; **−8** face à `main` 337 586 : l'écran Routines et son catalogue sont dans le bloc à la demande ; dans le départ, « Modifier » est plus court qu'« Éditer la routine… ». Mesure de `main` après fusion : à consigner.
+Avant push (branche à jour de `main` c9507aa1, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 578 octets normalisés** (brute 337 570), **marge 20 822** ; **−8** face à `main` 337 586 : l'écran Routines et son catalogue sont dans le bloc à la demande ; dans le départ, « Modifier » est plus court qu'« Éditer la routine… ». Mesure de `main` après fusion (#103, de6d486a) : **337 460 octets normalisés**, marge 20 940.
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI, premier passage** (head aca6759e) : 48 contrôles verts, aucune adaptation après coup. Fusionnée (#103, de6d486a).
 
 ## Passe code-reviewer
 

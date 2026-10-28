@@ -132,7 +132,13 @@ async function readView(platform: SyncPlatform): Promise<View> {
  * dossier seul (la clé est gardée) ou le dossier et la clé (confirmation native de Rust). Aucun bouton « Associer » avant Y-06.
  * Absente quand la plateforme ne synchronise pas (iPhone jusqu'à l'ordre 5). Aucune clé ni aucun chemin ne passe par cet écran.
  */
-export function SyncSettingsSection({ platform: injected }: { readonly platform?: SyncPlatform }) {
+/** UI-REFONTE-09 (Réglages PC) : la section « Synchronisation » et son entrée du sommaire n'existent que si la plateforme la propose. */
+export function useSyncAvailable(injected?: SyncPlatform): boolean {
+  const container = useAppContainer();
+  return (injected ?? container.syncPlatform ?? platformOf(container)).available();
+}
+
+export function SyncSettingsSection({ platform: injected, heading = true }: { readonly platform?: SyncPlatform; readonly heading?: boolean }) {
   const container = useAppContainer();
   // Même plateforme que le service de synchro (conteneur), pour que le cycle voie le dossier et la clé choisis ici.
   const platform = injected ?? container.syncPlatform ?? platformOf(container);
@@ -296,7 +302,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
 
   return (
     <>
-      <h2 className="ct-settings__section">{t('sync.folder.sectionTitle')}</h2>
+      {heading && <h2 className="ct-settings__section">{t('sync.folder.sectionTitle')}</h2>}
       <RestoreMarkerResume />
       {view.kind === 'loading' && (
         <div className="ct-settings__row" aria-busy="true">

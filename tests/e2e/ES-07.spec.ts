@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { isPhone } from './helpers/today';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * ES-07 — Je définis des plages silencieuses par espace.
@@ -17,7 +18,7 @@ test.describe('ES-07 — plages silencieuses par espace', () => {
   async function openSettings(page: Page): Promise<void> {
     await openApp(page);
     await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
-    await expect(page.getByText('RAPPELS', { exact: true })).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'reminders')).toBeVisible(); // UI-REFONTE-09
   }
 
   test('lignes « Silence Pro » et « Silence Perso » par défaut (critères 1, 2)', async ({ page }) => {

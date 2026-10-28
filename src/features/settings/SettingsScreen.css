@@ -125,3 +125,121 @@
   text-align: left;
   cursor: pointer;
 }
+
+/* UI-REFONTE-09 (PC-Reglages.html) : sommaire à gauche, colonne de réglages bornée à 660 px, titres de section en Fraunces minuscules,
+   chevron sur chaque ligne cliquable, mention sous l'étiquette. Règle 7 : sur grand écran, on borne et on navigue. */
+.ct-settings--pc {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.ct-settings__summary {
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  width: 220px;
+  box-sizing: border-box;
+  padding-right: 16px;
+  border-right: 1px solid var(--ct-color-border);
+}
+
+.ct-settings--pc .ct-settings__title {
+  margin: 0 0 18px 14px;
+  font-size: 30px;
+}
+
+.ct-settings__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-settings__navItem {
+  display: block;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-settings__navItem:hover {
+  color: var(--ct-color-text);
+}
+
+.ct-settings__navItem[aria-current='true'] {
+  background: var(--ct-color-surface-raised);
+  color: var(--ct-color-text);
+}
+
+.ct-settings__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 660px;
+}
+
+.ct-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-settings__group + .ct-settings__group {
+  margin-top: 34px;
+}
+
+.ct-settings--pc .ct-settings__section {
+  margin: 0 0 4px 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-heading-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0;
+  color: var(--ct-color-text);
+}
+
+.ct-settings--pc .ct-settings__row {
+  gap: 20px;
+  min-height: 46px;
+  padding: 6px 0;
+}
+
+.ct-settings--pc .ct-settings__value {
+  font-size: var(--ct-font-size-text);
+  flex-shrink: 0;
+}
+
+/* Chevron (trait Lucide « chevron-right ») au bout de chaque ligne cliquable, colorié par le texte secondaire. */
+.ct-settings--pc .ct-settings__rowButton::after {
+  content: '';
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  background: var(--ct-color-text-secondary);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l6 6-6 6'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l6 6-6 6'/></svg>") center / contain no-repeat;
+}
+
+.ct-settings--pc .ct-settings__rowButton > :first-child {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+/* Mention en ambre (combinaison prise par une autre application, UI-REFONTE-09) : jetons d'avertissement existants. */
+.ct-settings__hint[data-tone='warning'] {
+  color: var(--ct-color-warning-text);
+}
+
+.ct-settings__kbd {
+  font-size: var(--ct-font-size-xs);
+  padding: 3px 8px;
+  color: var(--ct-color-text);
+}

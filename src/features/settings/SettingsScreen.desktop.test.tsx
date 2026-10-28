@@ -11,6 +11,7 @@ import { SettingsScreen } from './SettingsScreen';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000d2');
 
+// UI-REFONTE-09 : sur PC les titres de section sont en minuscules (« Général », « À propos »).
 describe('SettingsScreen PC (D-02, D-03)', () => {
   let db: TestDb;
   let desktop: FakeDesktop;
@@ -44,19 +45,19 @@ describe('SettingsScreen PC (D-02, D-03)', () => {
       renderScreen(containerWith(null));
       await waitFor(() => expect(screen.getByRole('switch', { name: 'Reporter les tâches non faites' })).not.toBeDisabled());
       expect(screen.queryByRole('switch', { name: 'Démarrer avec Windows' })).not.toBeInTheDocument();
-      expect(screen.getByText('À PROPOS')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: 'À propos' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Rechercher une mise à jour' })).not.toBeInTheDocument();
     });
 
     it('sur PC : section GÉNÉRAL, interrupteur désactivé par défaut (critère 1)', async () => {
       renderScreen();
-      expect(await screen.findByText('GÉNÉRAL')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 2, name: 'Général' })).toBeInTheDocument();
       await waitFor(() => expect(startup()).toHaveAttribute('aria-checked', 'false'));
     });
 
     it('activer crée l’entrée et mémorise le réglage local ; désactiver la supprime (critères 2 et 3)', async () => {
       renderScreen();
-      await screen.findByText('GÉNÉRAL');
+      await screen.findByRole('heading', { level: 2, name: 'Général' });
       startup().click();
       await waitFor(() => expect(startup()).toHaveAttribute('aria-checked', 'true'));
       await waitFor(() => expect(desktop.autostart).toBe(true));
@@ -70,7 +71,7 @@ describe('SettingsScreen PC (D-02, D-03)', () => {
       await db.data.repos.settings.set('desktop.launchAtStartup', true);
       desktop.autostart = false;
       renderScreen();
-      await screen.findByText('GÉNÉRAL');
+      await screen.findByRole('heading', { level: 2, name: 'Général' });
       await waitFor(() => expect(startup()).toHaveAttribute('aria-checked', 'false'));
       await waitFor(async () => expect(await db.data.repos.settings.get('desktop.launchAtStartup')).toBe(false));
     });
@@ -83,7 +84,7 @@ describe('SettingsScreen PC (D-02, D-03)', () => {
 
     it('échec du registre : retour à l’état précédent et message', async () => {
       renderScreen();
-      await screen.findByText('GÉNÉRAL');
+      await screen.findByRole('heading', { level: 2, name: 'Général' });
       desktop.failAutostart = true;
       startup().click();
       expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de modifier le démarrage avec Windows.');

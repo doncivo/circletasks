@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { backupState, failNextBackup, installFakeBackups, type FakeVersion } from './helpers/backups';
 import { isPhone, openToday } from './helpers/today';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * P-04 — Je sauvegarde et restaure mes données. Date figée au lun. 5 oct. 2026, 10:00 (Paris). Le service de sauvegarde est un faux gardé dans
@@ -34,7 +35,7 @@ async function openSheet(page: Page) {
 test.describe('P-04 — sauvegarde et restauration', () => {
   test('critères 1 et 3 : une sauvegarde du jour à l’ouverture, et la ligne de Réglages l’affiche', async ({ page }) => {
     await openSettings(page);
-    await expect(page.getByText('DONNÉES ET SÉCURITÉ')).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'data')).toBeVisible(); // UI-REFONTE-09
     await expect(page.getByText('Sauvegarde automatique')).toBeVisible();
     await expect(page.getByTestId('backup-summary')).toHaveText('Aujourd’hui 10:00 · 3 versions');
     const state = await backupState(page);
@@ -136,7 +137,7 @@ test.describe('P-04 — sauvegarde et restauration', () => {
 
   test('plateforme sans sauvegarde (iPhone installé) : la ligne n’est pas affichée', async ({ page }) => {
     await openSettings(page, [], { available: false });
-    await expect(page.getByText('DONNÉES ET SÉCURITÉ')).toBeVisible();
+    await expect(settingsSectionHeading(page, test.info(), 'data')).toBeVisible(); // UI-REFONTE-09
     await expect(page.getByText('Sauvegarde automatique')).toHaveCount(0);
   });
 });

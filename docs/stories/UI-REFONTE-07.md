@@ -53,12 +53,12 @@ Les deux autres refontes ; le PRD ; le volet PC ; les bandeaux d'Aujourd'hui et 
 
 ## Mesure du bundle
 
-Avant push (commit 67af8e20, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 592 octets normalisés** (brute 337 566), **marge 20 808** ; **+6** face à `main` 337 586 (la nouvelle valeur de `holidaySubtitle`) ; l'écran et son catalogue sont à la demande. Mesure de `main` après fusion : à consigner.
+Avant push (commit 67af8e20, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 592 octets normalisés** (brute 337 566), **marge 20 808** ; **+6** face à `main` 337 586 (la nouvelle valeur de `holidaySubtitle`) ; l'écran et son catalogue sont à la demande. Mesure de `main` après fusion (#105, e9d094b4) : **337 464 octets normalisés**, marge 20 936.
 
 ## Passe QA
 
 - **CI, premier passage (run 40715955055, head bdbc5368)** : 44 contrôles verts, `e2e iphone (1/4)` rouge : `E-01` (2 tests), `E-02` (2), `E-04` (1) attendaient le bouton flottant `.ct-fab` « Ajouter un événement » par `tests/e2e/helpers/events.ts` (`addEventButton`), supprimé sur iPhone par la refonte (critère 6). Cause : l'aide n'avait pas été adaptée, seule `E-01` l'était pour « Vue calendrier ». Correction : sur `iphone`, `addEventButton` vise `.ct-events__addButton` (libellé accessible inchangé « Ajouter un événement ») ; sur `pc`, le bouton flottant « Ajouter » reste. Aucun test désactivé ni allongé.
-- **CI, second passage** : à consigner.
+- **CI, second passage** (head 9d4cb544) : 46 verts puis `cargo test (Windows)` annulé par le runner (35 min) et relancé : 48 verts ; branche mise à jour sur `main` (e104924a) : 48 verts. Fusionnée (#105, e9d094b4).
 
 ## Passe code-reviewer
 
