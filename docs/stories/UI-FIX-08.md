@@ -2,7 +2,7 @@
 
 Module : M7 Événements, avec M12 Réglages (réglage local) · Palier : alignement PRD-02 décidé par Ali le 2026-10-28, à livrer dans l'IPA N+1 · Agent : checklists-events · Ouverte le 2026-10-28 par Claude Code.
 
-Statut : **ouverte, passe product-owner écrite.** Estimation : 1 h 30 active ; alerte à 2 h 30.
+Statut : **en CI, passes product-owner, module et revue écrites.** Estimation : 1 h 30 active ; alerte à 2 h 30.
 
 ## Origine
 
@@ -28,7 +28,14 @@ Le PC ; les calendriers de fériés et leurs réglages ; les bandeaux d'Aujourd'
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit 26afcf76 (tests seuls) : `src/features/events/EventsRefonte.test.tsx`, deux tests (réglage mémorisé après démontage et nouveau rendu ; échec d'écriture avec retour en arrière et message), rouges sur `main` (réglage inconnu).
+- **Vert ensuite** : commit 023cee38. `src/domain/model/settings.ts` : `events.hideHolidays` (booléen, local, faux par défaut) ; `settingsUseCases.setHideHolidays` (seul point d'écriture) ; `eventsStore` : `hideHolidays` lu à chaque chargement, `setHideHolidays` optimiste avec retour à la valeur précédente et `settingErrorKey` (`events.holidaySettings.saveError`, texte existant) ; `EventsScreen` : l'état vient du store, l'erreur est dite par un `role="alert"`.
+- **Fiche UI-REFONTE-07** : la ligne « Masquer les fériés » du tableau des écarts renvoie à cette décision.
+- **Local** : suites `events`, `settings`, `domain/model` (344 tests) vertes ; lint ; typage.
+
+## Mesure du bundle
+
+Avant push (commit 023cee38, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 931 octets normalisés** (écart normalisé / brut +142, dans la borne large de 300), **marge 20 469** ; **+36** face à `main` 337 895 (définition du réglage et cas d'usage dans le départ) ; garde 66/66, aucun module nouveau. Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 
@@ -36,4 +43,6 @@ Le PC ; les calendriers de fériés et leurs réglages ; les bandeaux d'Aujourd'
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff. Vérifié : réglage **local** (jamais synchronisé : un choix d'affichage propre à l'appareil, sans effet sur les calendriers de fériés de Réglages, E-03) ; lecture tolérante (une base illisible donne « faux », jamais un écran bloqué) ; la bascule est optimiste et revient à la valeur enregistrée en cas d'échec, avec un message visible (aucun échec muet) ; le PC n'a pas la pastille, donc rien ne change ; l'e2e `UI-REFONTE-07` bascule et rebascule dans le même test, sans dépendre de l'ordre. Point laissé à la QA : un réglage resté à « masqué » alors que plus aucun calendrier de fériés n'est activé ne cache rien et la pastille n'apparaît pas (pas de commande qui ne peut rien faire).
+
+Verdict : approuvée sous réserve de la CI complète (QA à consigner).
