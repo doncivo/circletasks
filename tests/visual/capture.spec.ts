@@ -427,7 +427,7 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('complementary')).toBeVisible();
     },
   },
-  { name: 'Semaine', mockup: 'Semaine.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareWeek(page) },
+  { name: 'Semaine', mockup: '../maquettes-refonte/Semaine-v2.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareWeek(page) }, // UI-REFONTE-03
   { name: 'PC-Semaine', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareWeek(page) },
   // Semaine PC alimentée par le rafraîchissement réel d'un compte Google simulé (K-01, K-03, S-05 critère 10), comparée à la même maquette.
   { name: 'PC-Semaine-Agendas', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareWeek(page, true) },

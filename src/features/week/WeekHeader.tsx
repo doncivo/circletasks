@@ -1,10 +1,12 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useRef, type ReactNode } from 'react';
-import { addDays } from '../../domain/localDate';
+import { addDays, parseLocalDate } from '../../domain/localDate';
 import type { LocalDate } from '../../domain/types';
 import { isoWeekOf } from '../../domain/week';
+import type { WeekSummary } from '../../domain/weekSummary';
 import { t } from '../../i18n';
 import { formatWeekRange } from '../../i18n/format';
+import { formatWeekCounts, tWeekRefonte } from '../../i18n/weekRefonteText';
 import { Icon, useFitText, type Layout } from '../../ui';
 
 export interface WeekHeaderProps {
@@ -12,7 +14,7 @@ export interface WeekHeaderProps {
   readonly layout: Layout;
   /** Pastilles Pro / Perso / Tout (à droite sur PC, sous le filet sur iPhone). */
   readonly pills: ReactNode;
-  /** La semaine affichée est la semaine courante : « Cette semaine » est inactif (S-03 critère 4). */
+  /** La semaine affichée est la semaine courante : « Cette semaine » est inactif sur PC (S-03 critère 4), absent sur iPhone (UI-REFONTE-03). */
   readonly isCurrent: boolean;
   readonly onPrevious: () => void;
   readonly onNext: () => void;
@@ -21,16 +23,23 @@ export interface WeekHeaderProps {
   readonly somedayToggle?: ReactNode;
   /** Plage en forme courte (« 21 – 27 sept. 2026 ») : le panneau « Un jour » réduit la place du titre (S-06). */
   readonly shortRange?: boolean;
+  /** iPhone (UI-REFONTE-03) : jour courant (l'année n'est écrite que hors de l'année courante) et synthèse de la semaine ; null : semaine en chargement. */
+  readonly today?: LocalDate;
+  readonly summary?: WeekSummary | null;
 }
 
 /**
- * En-tête de la Semaine (S-01, S-03 ; PC-Semaine.html / Semaine.html) : « Semaine 39 » (« Semaine 39 · 2026 » sur iPhone) au-dessus de
- * la plage en grand (Fraunces), flèches « Semaine précédente / suivante » et pastille « Cette semaine » (PC : à droite des pastilles
- * d'espace, entre les flèches ; iPhone : flèches à droite du titre, pastille à droite des pastilles d'espace), puis le filet décoratif.
+ * En-tête de la Semaine (S-01, S-03). PC (PC-Semaine.html) : « Semaine 39 » au-dessus de la plage en grand (Fraunces), flèches
+ * « Semaine précédente / suivante » et pastille « Cette semaine » à droite des pastilles d'espace, puis le filet décoratif.
+ * iPhone (UI-REFONTE-03, Semaine-v2.html) : « semaine 39 » en petit gris (« semaine 1 · 2027 » hors de l'année courante), plage courte,
+ * flèches à droite du titre, ligne de synthèse « 8 tâches restantes · 6 faites · 1 en retard » sous un filet, pastilles d'espace et
+ * « Cette semaine » seulement hors de la semaine courante ; plus de filet décoratif.
  */
-export function WeekHeader({ weekStart, layout, pills, isCurrent, onPrevious, onNext, onCurrent, somedayToggle, shortRange = false }: WeekHeaderProps) {
+export function WeekHeader({ weekStart, layout, pills, isCurrent, onPrevious, onNext, onCurrent, somedayToggle, shortRange = false, today, summary = null }: WeekHeaderProps) {
   const { week, year } = isoWeekOf(addDays(weekStart, 3));
-  const caption = layout === 'pc' ? t('week.title', { number: week }) : t('week.titleYear', { number: week, year });
+  const mobile = layout === 'mobile';
+  const currentYear = today ? parseLocalDate(today).year : year;
+  const caption = !mobile ? t('week.title', { number: week }) : year === currentYear ? tWeekRefonte('caption', { number: week }) : tWeekRefonte('captionYear', { number: week, year });
   const range = formatWeekRange(weekStart, addDays(weekStart, 6), layout === 'pc' && !shortRange ? 'long' : 'short');
   const size = layout === 'pc' ? 22 : 24;
   const rowRef = useRef<HTMLDivElement>(null);
@@ -78,14 +87,36 @@ export function WeekHeader({ weekStart, layout, pills, isCurrent, onPrevious, on
           </div>
         )}
       </div>
-      <div className="ct-week__rule" aria-hidden="true">
-        <div className="ct-week__ruleAccent" />
-        <div className="ct-week__ruleLine" />
-      </div>
-      {layout === 'mobile' && (
-        <div className="ct-week__pillsRow">
-          {pills}
-          {current}
+      {mobile ? (
+        <>
+          {/* Synthèse (critère 2) : tâches seulement, sur les sept jours et le filtre courant ; « en retard » en rouge, absent à zéro. */}
+          {summary && (
+            <p className="ct-week__summary">
+              {summary.total === 0 ? (
+                tWeekRefonte('summaryEmpty')
+              ) : (
+                <>
+                  {formatWeekCounts(summary.remaining, summary.done)}
+                  {summary.late > 0 && (
+                    <>
+                      {' · '}
+                      <span className="ct-week__summaryLate">{tWeekRefonte('late', { count: summary.late })}</span>
+                    </>
+                  )}
+                </>
+              )}
+            </p>
+          )}
+          <div className="ct-week__pillsRow">
+            {pills}
+            {/* Règle 3 des refontes : aucune commande qui ne peut rien faire ; « Cette semaine » n'apparaît que hors de la semaine courante. */}
+            {!isCurrent && current}
+          </div>
+        </>
+      ) : (
+        <div className="ct-week__rule" aria-hidden="true">
+          <div className="ct-week__ruleAccent" />
+          <div className="ct-week__ruleLine" />
         </div>
       )}
     </>

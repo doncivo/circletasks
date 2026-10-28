@@ -238,7 +238,7 @@ describe('Tâches rattachées dans l’écran Objectif et la Semaine (OB-03)', (
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Terminer : Relire le PRD' })).toBeNull());
   });
 
-  it('la Semaine marque la tâche rattachée (critère 3, « objectif » sur PC, icône sur iPhone)', async () => {
+  it('la Semaine iPhone ne marque plus la tâche rattachée en ligne (UI-REFONTE-03 : écart OB-03 critère 3 noté dans la fiche ; la fiche Détail garde l’objectif)', async () => {
     const goal = await seedGoal(h);
     const task = await seedTask(h, { title: 'Relire le PRD' });
     await h.container.data.repos.tasks.update(task.id, { goalId: goal.id });
@@ -249,7 +249,9 @@ describe('Tâches rattachées dans l’écran Objectif et la Semaine (OB-03)', (
       </AppContainerProvider>,
     );
     const item = (await screen.findByRole('button', { name: 'Relire le PRD' })).closest('.ct-week-item') as HTMLElement;
-    expect(within(item).getByRole('img', { name: 'Rattachée à l’objectif' })).toBeInTheDocument();
+    // UI-REFONTE-03 (Semaine-v2.html) : la ligne iPhone n'a que l'heure, la case et le titre ; la marque d'objectif n'y est plus.
+    expect(within(item).queryByRole('img', { name: 'Rattachée à l’objectif' })).toBeNull();
+    expect(item.querySelector('.ct-week-item__time')).toHaveTextContent('—');
   });
 });
 

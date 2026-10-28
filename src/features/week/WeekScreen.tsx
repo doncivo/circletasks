@@ -1,10 +1,11 @@
 import { useDefaultReminderOffsets } from '../reminders';
 import type { CaptureInput } from '../capture';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { todayLocal } from '../../domain/clock';
+import { nowLocalTime, todayLocal } from '../../domain/clock';
 import type { EventId, ExternalEventId, LocalDate } from '../../domain/types';
 import { externalEventsByDay } from '../../domain/externalEvents';
 import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from '../../domain/week';
+import { weekSummary } from '../../domain/weekSummary';
 import { detectTimeZone } from '../../platform';
 import { t } from '../../i18n';
 import { getFirstWeekday } from '../../i18n/formatPrefs';
@@ -25,6 +26,7 @@ import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
 import { ExternalEventDetail } from './ExternalEventDetail';
+import { WeekAddRow } from './WeekAddRow';
 import { WeekDayView, type WeekGestures } from './WeekDayView';
 import { WeekHeader } from './WeekHeader';
 import { useWeekMoves } from './useWeekMoves';
@@ -80,6 +82,16 @@ export function WeekScreen() {
   const somedayOpen = layout === 'pc' && route.tab === 'week' && route.somedayPanel;
   const toggleSomeday = (): void => navigate({ tab: 'week', weekStart: route.tab === 'week' ? route.weekStart : null, somedayPanel: !somedayOpen });
 
+  // UI-REFONTE-03 (iPhone) : heure courante relue à la minute, pour la synthèse et les tâches « en retard » du jour courant.
+  const [now, setNow] = useState(() => nowLocalTime(container.clock));
+  useEffect(() => {
+    if (layout !== 'mobile') return undefined;
+    const tick = (): void => setNow(nowLocalTime(container.clock));
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, [container, layout]);
+
   const currentWeekStart = weekStartOf(today, firstWeekday);
   const isCurrentWeek = weekStart === currentWeekStart;
 
@@ -122,6 +134,14 @@ export function WeekScreen() {
     [weekStart, externalEvents, calendarAccounts, timeZone, spaceFilter, projectFilter],
   );
   const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras: projectFilter ? new Map() : extras, externalEvents: external }), [weekStart, spaceFilter, tasks, extras, external, projectFilter]);
+
+  // UI-REFONTE-03 (iPhone, critère 7) : jour visé par la rangée d'ajout, aujourd'hui s'il est dans la semaine affichée, sinon son premier jour ;
+  // la sélection ne survit pas au changement de semaine.
+  const [selection, setSelection] = useState<{ readonly weekStart: LocalDate; readonly date: LocalDate } | null>(null);
+  const defaultTarget: LocalDate = today >= weekStart && today <= addDays(weekStart, 6) ? today : weekStart;
+  const targetDate: LocalDate = selection?.weekStart === weekStart ? selection.date : defaultTarget;
+  const selectDay = useCallback((date: LocalDate): void => setSelection({ weekStart, date }), [weekStart]);
+  const summary = layout === 'mobile' && status === 'ready' ? weekSummary(days, today, now) : null;
 
   // T-09 : une règle posée depuis la fiche apparaît aussitôt sur la carte.
   const hasUnknownRule = tasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
@@ -193,6 +213,8 @@ export function WeekScreen() {
         onNext={() => shiftWeek(1)}
         onCurrent={() => goToWeek(currentWeekStart, weekStart < currentWeekStart ? 'next' : 'previous')}
         shortRange={somedayOpen}
+        today={today}
+        summary={summary}
         {...(layout === 'pc' ? { somedayToggle: <SomedayButton onToggle={toggleSomeday} pressed={somedayOpen} /> } : {})}
       />
 
@@ -232,6 +254,9 @@ export function WeekScreen() {
               layout={layout}
               isToday={day.date === today}
               today={today}
+              now={layout === 'mobile' && day.date === today ? now : null}
+              selected={layout === 'mobile' && day.date === targetDate}
+              onSelect={selectDay}
               spaces={spaces}
               showSpace={spaceFilter === 'all'}
               recurrences={recurrences}
@@ -245,7 +270,7 @@ export function WeekScreen() {
               onFocusTask={moves.setFocusedTaskId}
               onOpenEvent={(entry) => openDetail(entry.calendarName !== null ? { type: 'externalEvent', id: entry.id as ExternalEventId } : { type: 'event', id: entry.id as EventId })}
               onOpenChecklist={(id) => navigate({ tab: 'checklists', checklistId: id })}
-              onAddTask={addToDay}
+              {...(layout === 'pc' ? { onAddTask: addToDay } : {})}
               onToggleDone={(id) => void toggleDone(id)}
               onToggleRoutine={(id, date) => void toggleRoutine(id, date)}
               onOpen={(id) => openDetail({ type: 'task', id })}
@@ -263,18 +288,22 @@ export function WeekScreen() {
         {showSkeleton ? t('status.loading') : moves.announcement?.text}
       </div>
 
-      <div className="ct-week__footer">
-        <span className="ct-week__hint">{layout === 'pc' ? `${t('week.hintDrag')} · ${t('week.hintNavigate')}` : null}</span>
-        <Fab onClick={openCreate} label={t('common.add')} />
-      </div>
+      {layout === 'mobile' ? (
+        <WeekAddRow date={targetDate} onAdd={(capture) => addToDay(targetDate, capture)} onOpenCreate={openCreate} />
+      ) : (
+        <div className="ct-week__footer">
+          <span className="ct-week__hint">{`${t('week.hintDrag')} · ${t('week.hintNavigate')}`}</span>
+          <Fab onClick={openCreate} label={t('common.add')} />
+        </div>
+      )}
 
       {sheetOpen && (
         <AddSheet
           initialSegment="task"
-          date={today}
+          date={layout === 'mobile' ? targetDate : today}
           onClose={() => setSheetOpen(false)}
           taskSheet={{
-            viewedDate: today,
+            viewedDate: layout === 'mobile' ? targetDate : today,
             initialProjectId: projectFilter,
             defaultOffsets,
             onCreate: async (input) => {
@@ -283,7 +312,7 @@ export function WeekScreen() {
                 title: input.title,
                 spaceId: input.spaceId,
                 projectId: input.projectId,
-                date: schedule.date ?? today,
+                date: schedule.date ?? (layout === 'mobile' ? targetDate : today),
                 ...(schedule.someday ? { someday: true } : {}),
                 ...(schedule.time !== undefined ? { time: schedule.time } : {}),
                 recurrence: input.recurrence,

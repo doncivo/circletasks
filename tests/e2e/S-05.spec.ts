@@ -47,7 +47,7 @@ test.describe('S-05 — événements calendrier dans la semaine', () => {
     await expect(event).toHaveCount(1);
     await expect(dayOf(page, wednesday).locator('.ct-week-event')).toHaveCount(1);
     await expect(event).toContainText(`${hour}`);
-    if (isPhone(testInfo)) await expect(event.locator('svg')).toBeVisible();
+    if (isPhone(testInfo)) await expect(event.locator('.ct-week-event__mark')).toHaveAttribute('data-kind', 'external'); // UI-REFONTE-03 : rond au trait
     else await expect(event).toContainText('Google Agenda');
     await expect(event).toHaveAttribute('data-source', 'external');
     // Lecture seule, annoncé comme tel : ni case, ni poignée ; en tête du jour, avant la tâche de 09:00.

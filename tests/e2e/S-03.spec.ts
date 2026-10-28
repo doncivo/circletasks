@@ -30,18 +30,21 @@ async function swipe(page: Page, from: [number, number], to: [number, number], s
 }
 
 test.describe('S-03 — naviguer entre semaines', () => {
-  test('« Semaine suivante » et « Semaine précédente » changent les sept jours ; « Cette semaine » y revient (critères 1, 4)', async ({ page }) => {
+  test('« Semaine suivante » et « Semaine précédente » changent les sept jours ; « Cette semaine » y revient (critères 1, 4)', async ({ page }, testInfo) => {
     await openToday(page);
     await openWeek(page);
     const monday = await browserMonday(page);
     const current = page.getByRole('button', { name: 'Cette semaine' });
-    await expect(current).toHaveAttribute('aria-disabled', 'true');
+    // UI-REFONTE-03 : sur iPhone la pastille n'apparaît que hors de la semaine courante (règle 3 des refontes) ; sur PC elle reste, inactive.
+    if (isPhone(testInfo)) await expect(current).toHaveCount(0);
+    else await expect(current).toHaveAttribute('aria-disabled', 'true');
 
     await page.getByRole('button', { name: 'Semaine suivante' }).click();
     await expect(dayOf(page, addIsoDays(monday, 7))).toBeVisible();
     await expect(dayOf(page, monday)).toHaveCount(0);
     await expect(page.locator('.ct-week-day')).toHaveCount(7);
-    await expect(current).toHaveAttribute('aria-disabled', 'false');
+    if (isPhone(testInfo)) await expect(current).toBeVisible();
+    else await expect(current).toHaveAttribute('aria-disabled', 'false');
     await expect(page.locator('.ct-week-day[data-today]')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Semaine précédente' }).click();
@@ -51,7 +54,8 @@ test.describe('S-03 — naviguer entre semaines', () => {
     await current.click();
     await expect(dayOf(page, monday)).toBeVisible();
     await expect(page.locator('.ct-week-day[data-today]')).toHaveCount(1);
-    await expect(current).toHaveAttribute('aria-disabled', 'true');
+    if (isPhone(testInfo)) await expect(current).toHaveCount(0);
+    else await expect(current).toHaveAttribute('aria-disabled', 'true');
   });
 
   test('chaque semaine affiche ses propres tâches (critère 1)', async ({ page }, testInfo) => {
@@ -115,10 +119,10 @@ test.describe('S-03 — naviguer entre semaines', () => {
     await page.clock.setFixedTime(new Date('2026-12-29T09:00:00Z'));
     await openToday(page);
     await openWeek(page);
-    await expect(page.getByText(isPhone(testInfo) ? 'Semaine 53 · 2026' : 'Semaine 53', { exact: true })).toBeVisible();
+    await expect(page.getByText(isPhone(testInfo) ? 'semaine 53' : 'Semaine 53', { exact: true })).toBeVisible(); // UI-REFONTE-03 : minuscule, année courante tue
     await expect(heading(page)).toHaveText(isPhone(testInfo) ? '28 déc. – 3 janv.' : '28 décembre 2026 – 3 janvier 2027');
     await page.getByRole('button', { name: 'Semaine suivante' }).click();
-    await expect(page.getByText(isPhone(testInfo) ? 'Semaine 1 · 2027' : 'Semaine 1', { exact: true })).toBeVisible();
+    await expect(page.getByText(isPhone(testInfo) ? 'semaine 1 · 2027' : 'Semaine 1', { exact: true })).toBeVisible();
     await expect(dayOf(page, '2027-01-04')).toBeVisible();
   });
 

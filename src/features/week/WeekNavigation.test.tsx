@@ -203,28 +203,32 @@ describe('Semaine : navigation entre semaines (S-03)', () => {
 
     it('un balayage vers la gauche affiche la semaine suivante, vers la droite la précédente (critère 3)', async () => {
       renderWeek(h.container);
-      await screen.findByText('Semaine 40 · 2026');
+      await screen.findByText('semaine 40');
       const zone = (): HTMLElement => document.querySelector('.ct-week__days') as HTMLElement;
       swipe(zone(), [300, 400], [60, 410], 300);
-      expect(await screen.findByText('Semaine 41 · 2026')).toBeInTheDocument();
+      expect(await screen.findByText('semaine 41')).toBeInTheDocument();
       expect(heading()).toBe('5 – 11 oct.');
       swipe(zone(), [40, 400], [300, 395], 300);
-      expect(await screen.findByText('Semaine 40 · 2026')).toBeInTheDocument();
+      expect(await screen.findByText('semaine 40')).toBeInTheDocument();
     });
 
     it('un défilement vertical ou un geste trop court ne change pas de semaine (critère 3)', async () => {
       renderWeek(h.container);
-      await screen.findByText('Semaine 40 · 2026');
+      await screen.findByText('semaine 40');
       const zone = document.querySelector('.ct-week__days') as HTMLElement;
       swipe(zone, [200, 650], [230, 80], 200);
       swipe(zone, [200, 400], [170, 400], 900);
-      expect(screen.getByText('Semaine 40 · 2026')).toBeInTheDocument();
+      expect(screen.getByText('semaine 40')).toBeInTheDocument();
     });
 
     it('les flèches sont à droite du titre et « Cette semaine » à droite des pastilles (maquette iPhone)', async () => {
       renderWeek(h.container);
-      await screen.findByText('Semaine 40 · 2026');
+      await screen.findByText('semaine 40');
       expect(document.querySelector('.ct-week__headerRow .ct-week__arrows')).not.toBeNull();
+      // UI-REFONTE-03 : « Cette semaine » n'apparaît que hors de la semaine courante (règle 3 des refontes : aucune commande inerte).
+      expect(document.querySelector('.ct-week__pillsRow .ct-week__pill')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Semaine précédente' }));
+      await screen.findByText('semaine 39');
       expect(document.querySelector('.ct-week__pillsRow .ct-week__pill')).toHaveTextContent('Cette semaine');
     });
   });

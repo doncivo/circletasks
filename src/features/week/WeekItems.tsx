@@ -1,22 +1,34 @@
-import { CalendarDays } from 'lucide-react';
 import type { ChecklistSummary, RecurrenceFields, Routine, Space, Task } from '../../domain/model';
 import type { TodayEventEntry } from '../../domain/todayList';
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatTime } from '../../i18n/format';
-import { Checkbox, Icon, IconView, resolveIconRefColor, spaceTextColor, type Layout } from '../../ui';
+import { tWeekRefonte } from '../../i18n/weekRefonteText';
+import { Checkbox, IconView, resolveIconRefColor, spaceTextColor, type Layout } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
 import type { CountdownTag } from '../events/countdownText';
-import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
+import { routineSubtitle, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Éléments d'un jour de la Semaine (S-01) : présentation seule, les actions viennent de l'écran. PC (PC-Semaine.html) : cartes
- * à case de 18 px, titre et sous-ligne (« 09:00 · Pro »). iPhone (Semaine.html) : lignes à case de 20 px, « 09:00 » puis le titre.
+ * à case de 18 px, titre et sous-ligne (« 09:00 · Pro »). iPhone (UI-REFONTE-03, Semaine-v2.html) : lignes alignées sur l'agenda du
+ * jour : colonne d'heures (« 09:00 » ou tiret), case de 20 px, titre ; faits barrés à leur heure ; « en retard » le jour courant.
  */
 
 const BOX_SIZE: Record<Layout, number> = { pc: 18, mobile: 20 };
 /** PC : la souris n'a pas besoin de la zone de 44 px ; iPhone : 44 px (PRD 5). */
 const HIT_SIZE: Record<Layout, number | undefined> = { pc: 24, mobile: undefined };
+
+/** Colonne d'heures de la ligne iPhone : heure en chiffres tabulaires, ou tiret décoratif sans heure (annoncé par rien : le titre suffit). */
+function HourCell({ time }: { readonly time: LocalTime | null }) {
+  return time ? (
+    <span className="ct-week-item__time">{formatTime(time)}</span>
+  ) : (
+    <span className="ct-week-item__time" data-none="true" aria-hidden="true">
+      —
+    </span>
+  );
+}
 
 export interface WeekTaskItemProps {
   readonly task: Task;
@@ -27,11 +39,13 @@ export interface WeekTaskItemProps {
   readonly rule: RecurrenceFields | undefined;
   /** Fiche détail ouverte sur cette tâche (PC) : carte surlignée. */
   readonly opened: boolean;
+  /** iPhone, jour courant : tâche non faite dont l'heure est dépassée (UI-REFONTE-03 critère 5). */
+  readonly late?: boolean;
   readonly onToggleDone: () => void;
   readonly onOpen: () => void;
 }
 
-export function WeekTaskItem({ task, layout, spaces, showSpace, rule, opened, onToggleDone, onOpen }: WeekTaskItemProps) {
+export function WeekTaskItem({ task, layout, spaces, showSpace, rule, opened, late = false, onToggleDone, onOpen }: WeekTaskItemProps) {
   const done = task.status === 'done';
   const checkbox = (
     <Checkbox
@@ -49,11 +63,11 @@ export function WeekTaskItem({ task, layout, spaces, showSpace, rule, opened, on
   );
   if (layout === 'mobile') {
     return (
-      <div className="ct-week-item" data-layout="mobile" data-done={done} data-opened={opened || undefined}>
+      <div className="ct-week-item" data-layout="mobile" data-done={done} data-opened={opened || undefined} data-late={late || undefined}>
+        <HourCell time={task.time} />
         {checkbox}
-        {task.time && <span className="ct-week-item__time">{formatTime(task.time)}</span>}
         {title}
-        {task.goalId && <TaskGoalMark />}
+        {late && <span className="ct-week-item__late">{tWeekRefonte('lateMark')}</span>}
       </div>
     );
   }
@@ -106,8 +120,8 @@ export function WeekRoutineItem({ routine, time, done, layout, spaces, showSpace
   if (layout === 'mobile') {
     return (
       <div className="ct-week-item" data-layout="mobile" data-done={done} data-kind="routine">
+        <HourCell time={time} />
         {checkbox}
-        {time && <span className="ct-week-item__time">{formatTime(time)}</span>}
         {title}
       </div>
     );
@@ -135,7 +149,7 @@ export interface WeekChecklistItemProps {
 
 /**
  * Checklist du jour (C-03) : icône à la place de la case (une checklist n'est pas terminée d'un geste, ses items se cochent dans
- * l'onglet Checklists), titre, « checklist 0/8 » (PC-Semaine.html : « Perso · checklist 0/8 ») ; sur iPhone, « 0/8 » à droite du titre.
+ * l'onglet Checklists), titre, « checklist 0/8 » (PC-Semaine.html : « Perso · checklist 0/8 ») ; sur iPhone, tiret, icône, titre, « 0/8 ».
  */
 export function WeekChecklistItem({ summary, layout, spaces, showSpace, onOpen }: WeekChecklistItemProps) {
   const { checklist, checked, total } = summary;
@@ -148,9 +162,10 @@ export function WeekChecklistItem({ summary, layout, spaces, showSpace, onOpen }
   if (layout === 'mobile') {
     return (
       <div className="ct-week-item" data-layout="mobile" data-kind="checklist">
+        <HourCell time={null} />
         <ChecklistIcon icon={checklist.icon} size={20} />
         {title}
-        <span className="ct-week-item__time" aria-label={t('today.checklistProgress', { checked, total })}>
+        <span className="ct-week-item__count" aria-label={t('today.checklistProgress', { checked, total })}>
           {checked}/{total}
         </span>
       </div>
@@ -185,15 +200,14 @@ export interface WeekEventItemProps {
 }
 
 /**
- * Événement du jour, lecture seule : sans case, sans poignée, jamais déplaçable. Externe (agenda lu par M8) : fond #E3EEF5, nom de
- * l'agenda, bouton qui ouvre la fiche en lecture seule, annoncé « Événement, lecture seule » ; interne (M7) : style distinct
- * (anniversaire, #FBE7E4).
+ * Événement du jour, lecture seule : sans case, sans poignée, jamais déplaçable. PC : externe (agenda lu par M8) sur fond #E3EEF5 avec le
+ * nom de l'agenda, interne (M7) sur fond distinct (anniversaire, #FBE7E4) ; annoncé « Événement, lecture seule » quand il ne s'ouvre pas.
+ * iPhone (UI-REFONTE-03) : heure dans la colonne, rond au trait de la couleur des événements (anniversaire, férié : leurs couleurs), titre.
  */
 export function WeekEventItem({ event, layout, onOpen, countdown = null }: WeekEventItemProps) {
   const holiday = event.kind === 'holiday';
   const external = event.calendarName !== null && !holiday;
   const when = event.allDay ? null : event.startTime;
-  const icon = event.icon ? <IconView icon={event.icon} size={18} color="currentColor" /> : <Icon icon={CalendarDays} size={18} />;
   const source = holiday ? 'holiday' : external ? 'external' : 'local';
   const readOnly = external || holiday ? <span className="ct-visually-hidden">{`, ${t('week.eventReadOnly')}`}</span> : null;
   const interactive = onOpen !== undefined;
@@ -207,8 +221,8 @@ export function WeekEventItem({ event, layout, onOpen, countdown = null }: WeekE
   const content =
     layout === 'mobile' ? (
       <>
-        {icon}
-        {when && <span className="ct-week-item__time">{when}</span>}
+        <HourCell time={when} />
+        <span className="ct-week-event__mark" data-kind={event.kind ?? source} aria-hidden="true" />
         <span className="ct-week-item__title">{event.title}</span>
         {tag}
         {readOnly}
