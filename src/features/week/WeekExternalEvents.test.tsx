@@ -205,12 +205,12 @@ describe('Semaine : événements d’agenda externes (S-05)', () => {
   describe('iPhone', () => {
     beforeEach(() => mockViewport(440));
 
-    it('affiche une ligne à icône calendrier, « 10:00 Point client », sans case, qui ouvre la fiche en feuille (critères 1, 2, 3)', async () => {
+    it('affiche une ligne à rond au trait, « 10:00 Point client », sans case, qui ouvre la fiche en feuille (critères 1, 2, 3)', async () => {
       await seedEvent({ id: 'e1', title: 'Point client' });
       renderWeek(h.container);
       const row = (await screen.findByRole('button', { name: /Point client/ })) as HTMLElement;
       expect(row).toHaveClass('ct-week-event');
-      expect(row.querySelector('svg')).not.toBeNull();
+      expect(row.querySelector('.ct-week-event__mark')).toHaveAttribute('data-kind', 'external'); // UI-REFONTE-03 : rond au trait à la place de l'icône
       expect(row).toHaveTextContent('10:00Point client');
       expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument();
       fireEvent.click(row);

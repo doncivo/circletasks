@@ -20,7 +20,8 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
     await teardownWeek(h);
   });
 
-  for (const [name, width] of [['PC', 1440], ['iPhone', 440]] as const) {
+  // UI-REFONTE-03 : sur iPhone, plus de « + Ajouter » par jour ; la rangée d'ajout unique est couverte par WeekRefonte.test.tsx.
+  for (const [name, width] of [['PC', 1440]] as const) {
     describe(name, () => {
       beforeEach(() => mockViewport(width));
 
@@ -214,19 +215,11 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
     });
   }
 
-  it('iPhone : le champ est amené au centre de l’écran à l’ouverture, au-dessus du clavier (critère 7)', async () => {
+  it('iPhone (UI-REFONTE-03) : aucun « + Ajouter » par jour ; la rangée d’ajout unique vise aujourd’hui (critère 7, Semaine-v2.html)', async () => {
     mockViewport(440);
-    const calls: ScrollIntoViewOptions[] = [];
-    Element.prototype.scrollIntoView = function scroll(options?: boolean | ScrollIntoViewOptions) {
-      if (typeof options === 'object') calls.push(options);
-    };
-    try {
-      renderWeek(h.container);
-      await screen.findByRole('heading', { level: 1 });
-      fireEvent.click(addButton('2026-10-03'));
-      await waitFor(() => expect(calls).toContainEqual(expect.objectContaining({ block: 'center' })));
-    } finally {
-      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-    }
+    renderWeek(h.container);
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryAllByRole('button', { name: /^Ajouter une tâche,/ })).toHaveLength(0);
+    expect(within(document.querySelector('.ct-week__addRow') as HTMLElement).getByRole('combobox', { name: 'Nouvelle tâche' })).toHaveAttribute('placeholder', 'Ajouter à vendredi 2');
   });
 });

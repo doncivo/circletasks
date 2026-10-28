@@ -141,9 +141,9 @@ describe('Semaine : sept jours (S-01)', () => {
   describe('iPhone', () => {
     beforeEach(() => mockViewport(440));
 
-    it('affiche sept sections verticales, « Semaine 40 · 2026 » et « 28 sept. – 4 oct. » (critères 1 et 2)', async () => {
+    it('affiche sept sections verticales, « semaine 40 » et « 28 sept. – 4 oct. » (critères 1 et 2)', async () => {
       renderWeek(h.container);
-      expect(await screen.findByText('Semaine 40 · 2026')).toBeInTheDocument();
+      expect(await screen.findByText('semaine 40')).toBeInTheDocument(); // UI-REFONTE-03 : minuscule, sans l'année courante
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('28 sept. – 4 oct.');
       expect(document.querySelectorAll('.ct-week-day[data-layout="mobile"]')).toHaveLength(7);
     });
@@ -156,7 +156,7 @@ describe('Semaine : sept jours (S-01)', () => {
       expect(row).toHaveTextContent('09:00Envoyer la facture');
       expect(within(row).getByRole('checkbox', { name: 'Terminer : Envoyer la facture' })).toBeInTheDocument();
       const plain = screen.getByRole('button', { name: 'Sans heure' }).closest('.ct-week-item') as HTMLElement;
-      expect(plain.querySelector('.ct-week-item__time')).toBeNull();
+      expect(plain.querySelector('.ct-week-item__time')).toHaveTextContent('—'); // UI-REFONTE-03 : tiret dans la colonne d'heures
     });
 
     it('un titre ouvre la fiche détail en feuille (critère 8)', async () => {
