@@ -1,5 +1,5 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockViewport, renderEvents, seedEvent, setupEvents, teardownEvents, type EventsHarness } from './testKit';
 
 /**
@@ -66,6 +66,33 @@ describe('UI-REFONTE-07 — Événements iPhone', () => {
     fireEvent.click(toggle);
     expect(await screen.findByText('Toussaint')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Masquer les fériés' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('UI-FIX-08 : « Masquer les fériés » est mémorisé (réglage local) : nouveau rendu → toujours masqué, même libellé (PRD-02, lot F)', async () => {
+    await start('475');
+    await seedEvent(h, { title: 'Vol vers Tunis', date: '2026-12-03' });
+    renderEvents(h.container);
+    await screen.findByText('Toussaint');
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer les fériés' }));
+    await waitFor(() => expect(screen.queryByText('Toussaint')).toBeNull());
+    await waitFor(async () => expect(await h.container.data.repos.settings.get('events.hideHolidays')).toBe(true));
+    cleanup();
+    renderEvents(h.container);
+    await screen.findByText('Vol vers Tunis');
+    expect(screen.queryByText('Toussaint')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Afficher les fériés' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('UI-FIX-08 : échec d’écriture du réglage → retour à la valeur enregistrée et message, rien de muet', async () => {
+    await start('476');
+    renderEvents(h.container);
+    await screen.findByText('Toussaint');
+    vi.spyOn(h.container.data.repos.settings, 'set').mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer les fériés' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’enregistrer ce réglage.');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Masquer les fériés' })).toHaveAttribute('aria-pressed', 'false'));
+    expect(screen.getByText('Toussaint')).toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 
   it('sans calendrier de fériés : pas de pastille (critère 1)', async () => {
