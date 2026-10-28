@@ -37,7 +37,7 @@ test.describe('A-06 — vue compacte', () => {
 
     await toggleTodayView(page, 'Vue compacte');
     expect(await todayViewState(page, 'Vue compacte')).toBe(false);
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(phone ? /Pro$/ : '09:00 · Pro');
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/);
   });
 
   test('le choix est conservé au changement d’onglet ; terminer et mode édition fonctionnent (critères 5, 6)', async ({ page }, testInfo) => {

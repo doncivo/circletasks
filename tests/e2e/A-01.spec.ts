@@ -43,7 +43,7 @@ test.describe('A-01 — liste du jour', () => {
     const row = rowOf(page, title);
     // UI-REFONTE-02 (iPhone) puis UI-REFONTE-08 (PC) : l'heure est dans la colonne de l'agenda ; la sous-ligne porte l'espace (précédé du retard si l'heure est passée).
     await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('09:00');
-    await expect(row.locator('.ct-list-row__subtitle')).toHaveText(/Pro$/);
+    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/);
     await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toHaveCount(0);
   });
 
