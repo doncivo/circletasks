@@ -21,7 +21,7 @@ test.describe('UI-REFONTE-09 — Réglages PC', () => {
       await page.getByRole('navigation', { name: 'Navigation principale' }).getByText('Réglages', { exact: true }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Réglages' })).toBeVisible();
 
-      const nav = page.getByRole('navigation', { name: 'Sections des réglages' });
+      const nav = page.getByRole('group', { name: 'Sections des réglages' });
       await expect(nav.getByRole('button')).toHaveText(SECTIONS);
       await expect(nav.getByRole('button', { name: 'Général' })).toHaveAttribute('aria-current', 'true');
       await expect(page.locator('.ct-settings__rule')).toHaveCount(0);

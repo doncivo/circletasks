@@ -128,7 +128,8 @@ export function SettingsScreenPc() {
     <div className="ct-settings ct-settings--pc">
       <aside className="ct-settings__summary">
         <h1 className="ct-settings__title">{t('settings.title')}</h1>
-        <nav className="ct-settings__nav" aria-label={tSettingsRefonte('summaryLabel')}>
+        {/* Groupe, pas `nav` : la coquille porte déjà le seul repère de navigation (la suite e2e le vise par son rôle). */}
+        <div className="ct-settings__nav" role="group" aria-label={tSettingsRefonte('summaryLabel')}>
           {sections.map((id) => (
             <button
               key={id}
@@ -140,7 +141,7 @@ export function SettingsScreenPc() {
               {tSettingsRefonte(SECTION_TITLES[id])}
             </button>
           ))}
-        </nav>
+        </div>
       </aside>
       <div className="ct-settings__content">
         {errorKey && (

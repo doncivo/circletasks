@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { isPhone } from './helpers/today';
-import { settingsSectionTitle } from './helpers/settings';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * N-04 — Je règle un récapitulatif matin et soir.
@@ -21,7 +21,7 @@ test.describe('N-04 — récapitulatifs matin et soir', () => {
 
   test('valeurs par défaut, écran Matin / Soir, enregistrement (critères 1, 2, 3, 9)', async ({ page }, testInfo) => {
     await openSettings(page);
-    await expect(page.getByText(settingsSectionTitle(testInfo, 'reminders'), { exact: true })).toBeVisible(); // UI-REFONTE-09
+    await expect(settingsSectionHeading(page, testInfo, 'reminders')).toBeVisible(); // UI-REFONTE-09
     await expect(row(page)).toContainText('07:30 · 21:00');
     await row(page).click();
     await expect(page.getByRole('heading', { name: 'Récapitulatifs' })).toBeVisible();

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { expectFitsViewport } from './helpers/layout';
 import { isPhone } from './helpers/today';
+import { settingsSectionHeading } from './helpers/settings';
 
 /**
  * I-02 — Je suis prévenu avant l'expiration hebdomadaire (critère 11).
@@ -177,7 +178,7 @@ test.describe('I-02 — PC', () => {
     await page.clock.install({ time: NOW });
     await openApp(page);
     await openSettings(page);
-    await expect(page.getByText('À PROPOS')).toBeVisible();
+    await expect(settingsSectionHeading(page, testInfo, 'about')).toBeVisible(); // UI-REFONTE-09
     await expect(page.getByText(/Expire le|Date d’expiration inconnue|Lecture de la date/)).toHaveCount(0);
   });
 });

@@ -43,7 +43,7 @@ describe('UI-REFONTE-09 — Réglages sur PC (PC-Reglages.html)', () => {
     );
   const ready = () => screen.findByRole('switch', { name: 'Démarrer avec Windows' });
   const region = (name: string) => screen.getByRole('region', { name });
-  const summary = () => screen.getByRole('navigation', { name: 'Sections des réglages' });
+  const summary = () => screen.getByRole('group', { name: 'Sections des réglages' });
 
   beforeEach(async () => {
     db = await openTestDb(DEVICE);

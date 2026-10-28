@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openSpacesScreen, projectsOf } from './helpers/spaces';
 import { afterFirstFrames } from './helpers/frames';
+import { tabsRow } from './helpers/settings';
 import { createTask, openToday } from './helpers/today';
 
 /**
@@ -76,7 +77,7 @@ const own = (c: Computed): Rgba => {
 
 async function openTabsScreen(page: Page): Promise<void> {
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
-  await page.getByRole('button', { name: /^Onglets : / }).click();
+  await tabsRow(page, test.info()).click(); // UI-REFONTE-09 : « Onglets visibles » sur PC
   await expect(page.getByRole('heading', { name: 'Onglets' })).toBeVisible();
 }
 

@@ -513,7 +513,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: async (page) => {
       await page.getByRole('navigation', { name: 'Navigation principale' }).getByText('Réglages', { exact: true }).click();
-      await expect(page.getByRole('navigation', { name: 'Sections des réglages' })).toBeVisible();
+      await expect(page.getByRole('group', { name: 'Sections des réglages' })).toBeVisible();
     },
   },
   {

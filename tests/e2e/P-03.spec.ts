@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openToday } from './helpers/today';
-import { appearanceRow } from './helpers/settings';
+import { appearanceRow, expectAppearanceSummary } from './helpers/settings';
 
 /**
  * P-03 — Je règle le premier jour de semaine, la langue et le format d'heure.
@@ -33,7 +33,7 @@ test.describe('P-03 — premier jour, langue, format d’heure', () => {
     await page.getByRole('radio', { name: '12 h' }).click();
     await expect(page.getByText('Exemple : 3:30 PM')).toBeVisible();
     await page.getByRole('button', { name: 'Retour aux réglages' }).click();
-    await expect(page.getByRole('button', { name: /Système · dimanche · 12 h/ })).toBeVisible();
+    await expectAppearanceSummary(page, test.info(), 'dimanche', '12 h'); // UI-REFONTE-09 : deux lignes sur PC
     await tab(page, 'Semaine').click();
     const first = page.locator('.ct-week-day').first();
     await expect(first).toBeVisible();

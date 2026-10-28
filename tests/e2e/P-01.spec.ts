@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { tabsRow } from './helpers/settings';
 import { openToday } from './helpers/today';
 
 /**
@@ -15,7 +16,7 @@ const railNames = (page: Page) => rail(page).getByRole('button').allTextContents
 async function openTabsScreen(page: Page): Promise<void> {
   await openToday(page);
   await tab(page, 'Réglages').click();
-  await page.getByRole('button', { name: /^Onglets : / }).click();
+  await tabsRow(page, test.info()).click(); // UI-REFONTE-09 : « Onglets visibles » sur PC
   await expect(page.getByRole('heading', { name: 'Onglets' })).toBeVisible();
 }
 
@@ -23,8 +24,8 @@ test.describe('P-01 — onglets', () => {
   test('cinq onglets listés, Tâches fixe et « Toujours affiché » (critères 1, 5)', async ({ page }) => {
     await openToday(page);
     await tab(page, 'Réglages').click();
-    await expect(page.getByRole('button', { name: 'Onglets : 5 visibles' })).toBeVisible();
-    await page.getByRole('button', { name: 'Onglets : 5 visibles' }).click();
+    await expect(tabsRow(page, test.info(), 5)).toBeVisible(); // UI-REFONTE-09 : « 5 sur 5 » sur PC
+    await tabsRow(page, test.info(), 5).click();
     await expect(page.getByRole('listitem')).toHaveCount(5);
     await expect(page.getByRole('switch', { name: 'Afficher Tâches' })).toBeDisabled();
     await expect(page.getByText('Toujours affiché')).toBeVisible();

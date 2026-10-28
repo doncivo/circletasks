@@ -31,6 +31,23 @@ export const settingsSectionHeading = (page: Page, testInfo: TestInfo, key: Sett
 export const appearanceRow = (page: Page, testInfo: TestInfo): Locator =>
   page.getByRole('button', { name: isPhone(testInfo) ? /^Thème · semaine · heure/ : /^Thème : / });
 
+/** Ligne « Onglets » de Réglages : « Onglets : 5 visibles » sur iPhone, « Onglets visibles : 5 sur 5 » sur PC (UI-REFONTE-09, Réglages non compté). */
+export const tabsRow = (page: Page, testInfo: TestInfo, visible?: number): Locator =>
+  page.getByRole('button', {
+    name: visible === undefined ? (isPhone(testInfo) ? /^Onglets : / : /^Onglets visibles : /) : isPhone(testInfo) ? `Onglets : ${visible} visibles` : `Onglets visibles : ${visible} sur 5`,
+  });
+
+/** Résumé d'apparence de Réglages après un choix : une ligne « Thème · semaine · heure : … » sur iPhone, deux lignes sur PC. */
+export async function expectAppearanceSummary(page: Page, testInfo: TestInfo, weekday: string, format: string): Promise<void> {
+  if (isPhone(testInfo)) {
+    await expect(page.getByRole('button', { name: new RegExp(`Système · ${weekday} · ${format}`) })).toBeVisible();
+    return;
+  }
+  const capitalized = weekday.charAt(0).toLocaleUpperCase('fr-FR') + weekday.slice(1);
+  await expect(page.getByRole('button', { name: `Début de semaine : ${capitalized}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: `Format de l’heure : ${format}` })).toBeVisible();
+}
+
 /** Fuseau horaire de Réglages : « Europe/Paris (automatique) » sur iPhone ; sur PC la valeur seule, « Suit celui de Windows » sous l'étiquette. */
 export async function expectTimeZone(page: Page, testInfo: TestInfo, zone: string): Promise<void> {
   if (isPhone(testInfo)) {
