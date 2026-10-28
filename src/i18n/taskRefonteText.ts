@@ -3,7 +3,6 @@ import { getLocale } from './index';
 const fr = {
   more: "Plus d'options",
   moreHint: 'répétition, rappel, projet, icône',
-  add: 'Ajouter la tâche',
   date: 'Date',
   time: 'Heure',
   noTime: "Pas d'heure",
@@ -16,7 +15,7 @@ const fr = {
   scheduleDone: 'Terminé',
 } as const;
 const en: Record<keyof typeof fr, string> = {
-  more: 'More options', moreHint: 'repeat, reminder, project, icon', add: 'Add task', date: 'Date', time: 'Time', noTime: 'No time', planned: 'Scheduled', reminder: 'Reminders', quiet: 'Moved by quiet hours for {space}', inactive: 'Reminders kept, inactive', defineGoal: 'Set a goal', noNote: 'No note', scheduleDone: 'Done',
+  more: 'More options', moreHint: 'repeat, reminder, project, icon', date: 'Date', time: 'Time', noTime: 'No time', planned: 'Scheduled', reminder: 'Reminders', quiet: 'Moved by quiet hours for {space}', inactive: 'Reminders kept, inactive', defineGoal: 'Set a goal', noNote: 'No note', scheduleDone: 'Done',
 };
 
 /** Ce catalogue ne se charge qu'avec les feuilles de tâches. */
