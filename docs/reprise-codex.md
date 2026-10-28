@@ -11,7 +11,7 @@ Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et
 
 ### En vol
 
-- **UI-REFONTE-09** (Réglages PC, dernière des huit) : PR #107, branche `ui-refonte-09-reglages-pc` (worktree `.claude/worktrees/codex-main-validation`), rouge 7d7b2b70, vert 7287609b, bundle −28 ; **bloquée par le critère 4 de BUNDLE-01** (écart normalisé / brut 143 > 100 octets sur le build à jour de `main`, plafond non touché, marge 20 486) : arrêt et remontée à Ali, options dans la passe QA de la fiche. Dès la décision : adapter la garde (quelques lignes), pousser, fusionner au vert, mesurer `main`, fermer la ligne du backlog.
+- **UI-REFONTE-09** (Réglages PC, dernière des huit) : PR #107, branche `ui-refonte-09-reglages-pc` (worktree `.claude/worktrees/codex-main-validation`), rouge 7d7b2b70, vert 7287609b, bundle −28 ; le critère 4 de BUNDLE-01 (écart normalisé / brut 143 > 100 octets) a été tranché par Ali le 28 au soir : borne asymétrique 100 / 300, garde adaptée, dette BUNDLE-02 inscrite ; CI relancée. Au vert : fusionner, mesurer `main`, fermer la ligne du backlog.
 
 ### Reste à faire
 
