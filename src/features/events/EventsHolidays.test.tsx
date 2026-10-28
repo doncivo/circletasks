@@ -27,15 +27,15 @@ describe('Jours fériés dans l’onglet Événements (E-03), iPhone', () => {
   });
   afterEach(() => teardownEvents(h));
 
-  it('France et Tunisie activées par défaut : tags « Férié FR » / « Férié TN » et sous-lignes de la maquette (critères 1, 2, 4, 7)', async () => {
+  it('France et Tunisie activées par défaut : sous-lignes « Jour férié en … », sans badge sur iPhone (critères 1, 2, 4, 7 ; UI-REFONTE-07)', async () => {
     renderEvents(h.container);
     await screen.findByText('Fête de l’Évacuation');
     const evacuation = rowOf('Fête de l’Évacuation');
-    expect(within(evacuation).getByText('Jour férié · Tunisie')).toBeInTheDocument();
-    expect(within(evacuation).getByText('Férié TN')).toBeInTheDocument();
+    expect(within(evacuation).getByText('Jour férié en Tunisie')).toBeInTheDocument();
+    expect(within(evacuation).queryByText('Férié TN')).toBeNull(); // UI-REFONTE-07 : plus de badge dans la liste iPhone
     const toussaint = rowOf('Toussaint');
-    expect(within(toussaint).getByText('Jour férié · France')).toBeInTheDocument();
-    expect(within(toussaint).getByText('Férié FR')).toBeInTheDocument();
+    expect(within(toussaint).getByText('Jour férié en France')).toBeInTheDocument();
+    expect(within(toussaint).queryByText('Férié FR')).toBeNull();
     expect(titles()).toEqual(expect.arrayContaining(['Jour de l’An', 'Lundi de Pâques', 'Ascension', 'Lundi de Pentecôte', 'Fête nationale', 'Assomption', 'Armistice', 'Noël', 'Fête de l’Indépendance']));
     // Ordre chronologique : 15 oct. (TN), 1er nov. (FR), 11 nov. (FR).
     const order = titles();
@@ -46,8 +46,8 @@ describe('Jours fériés dans l’onglet Événements (E-03), iPhone', () => {
   it('fêtes religieuses : « date estimée » tant qu’elles ne sont pas confirmées (critère 2)', async () => {
     renderEvents(h.container);
     await screen.findByText('Aïd el-Fitr');
-    for (const name of ['Aïd el-Fitr', 'Aïd el-Idha', 'Ras el am el hejri', 'Mouled']) expect(within(rowOf(name)).getByText('Jour férié · Tunisie · date estimée')).toBeInTheDocument();
-    expect(within(rowOf('Noël')).getByText('Jour férié · France')).toBeInTheDocument();
+    for (const name of ['Aïd el-Fitr', 'Aïd el-Idha', 'Ras el am el hejri', 'Mouled']) expect(within(rowOf(name)).getByText('Jour férié en Tunisie · date estimée')).toBeInTheDocument();
+    expect(within(rowOf('Noël')).getByText('Jour férié en France')).toBeInTheDocument();
     expect(within(rowOf('Fête de l’Évacuation')).queryByText(/estimée/)).toBeNull();
   });
 
@@ -152,13 +152,13 @@ describe('Date d’une fête religieuse modifiable à la main (E-03 critère 5),
     await waitFor(async () => expect((await h.container.data.repos.holidays.getByKey('TN', 2026, 'eidAlFitr'))?.date).toBe('2026-03-21'));
     expect(await h.container.data.repos.holidays.getByKey('TN', 2026, 'eidAlFitr')).toMatchObject({ source: 'manual', overridden: true });
     // La liste suit : nouvelle date, mention « estimée » retirée.
-    await waitFor(() => expect(within(rowOf('Aïd el-Fitr')).getByText('Jour férié · Tunisie')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowOf('Aïd el-Fitr')).getByText('Jour férié en Tunisie')).toBeInTheDocument());
     expect(rowOf('Aïd el-Fitr').getAttribute('data-date')).toBe('2026-03-21');
     expect(await within(panel).findByText('Date saisie à la main : elle prime sur la table.')).toBeInTheDocument();
     expect(within(panel).getByText(/Date de la table : /)).toBeInTheDocument();
     fireEvent.click(within(panel).getByRole('button', { name: 'Rétablir la date de la table' }));
     await waitFor(async () => expect((await h.container.data.repos.holidays.getByKey('TN', 2026, 'eidAlFitr'))?.date).toBe('2026-03-20'));
-    await waitFor(() => expect(within(rowOf('Aïd el-Fitr')).getByText('Jour férié · Tunisie · date estimée')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowOf('Aïd el-Fitr')).getByText('Jour férié en Tunisie · date estimée')).toBeInTheDocument());
     expect(rowOf('Aïd el-Fitr').getAttribute('data-date')).toBe('2026-03-20');
   });
 

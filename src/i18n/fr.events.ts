@@ -46,7 +46,7 @@ export const eventsFr = {
   },
   holidayTag: { FR: 'Férié FR', TN: 'Férié TN' },
   holidayCountry: { FR: 'France', TN: 'Tunisie' },
-  holidaySubtitle: 'Jour férié · {country}',
+  holidaySubtitle: 'Jour férié en {country}',
   holidayEstimated: 'date estimée',
   holidaysLine: 'Jours fériés {countries}',
   holidayDetail: {

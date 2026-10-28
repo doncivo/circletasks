@@ -671,7 +671,7 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('complementary')).toBeVisible();
     },
   },
-  { name: 'Evenements', mockup: 'Evenements.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareEvents(page, false) },
+  { name: 'Evenements', mockup: '../maquettes-refonte/Evenements-v2.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareEvents(page, false) },
   { name: 'PC-Evenements', mockup: 'PC-Evenements.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareEvents(page, true) },
   {
     // Feuille « Nouvel événement » (AjoutEvenement.html) : titre saisi, journée entière, répétition annuelle, rappel « La veille ».
