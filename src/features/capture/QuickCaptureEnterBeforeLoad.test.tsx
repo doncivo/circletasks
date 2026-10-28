@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
-import { TaskCreateSheet } from '../tasks/TaskCreateSheet';
+import { TaskCreateSheet, type TaskCreateSheetProps } from '../tasks/TaskCreateSheet';
 import { mockViewport, setupToday, teardownToday, type TodayHarness } from '../today/testKit';
 
 // Q-05-FIX-01 : le bloc des options (import dynamique après le premier affichage) est remplacé par un bloc vide qui ne signale jamais
@@ -25,7 +25,7 @@ describe('Q-05-FIX-01 — Entrée avant l’arrivée du bloc des options', () =>
     await teardownToday(h);
   });
 
-  function renderSheet(onCreate: () => Promise<boolean>) {
+  function renderSheet(onCreate: TaskCreateSheetProps['onCreate']) {
     const spaces = useAppStore.getState().spaces;
     return render(
       <AppContainerProvider container={h.container}>
@@ -44,7 +44,7 @@ describe('Q-05-FIX-01 — Entrée avant l’arrivée du bloc des options', () =>
   });
 
   it('Entrée sur un titre valide crée la tâche, une seule fois (critère 2)', async () => {
-    const onCreate = vi.fn(() => Promise.resolve(true));
+    const onCreate = vi.fn<TaskCreateSheetProps['onCreate']>(() => Promise.resolve(true));
     renderSheet(onCreate);
     fireEvent.change(field(), { target: { value: 'Acheter du pain #perso' } });
     await act(async () => {

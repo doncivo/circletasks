@@ -106,7 +106,6 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const fieldsRef = useRef<HTMLDivElement>(null);
   // Bas de la feuille rendu après le premier affichage (transition) : l'ouverture ne paie que l'en-tête, le champ Titre et l'aperçu (Q-05, mesure @perf).
   const [rest, setRest] = useState(false);
-  const [submitLabel, setSubmitLabel] = useState<string | null>(null);
   const [viewportFrame, setViewportFrame] = useState<CSSProperties>();
   useLayoutEffect(() => {
     const viewport = window.visualViewport;
@@ -148,11 +147,20 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     return () => window.clearTimeout(id);
   }, [shaking]);
 
-  // Entrée sur un titre vide : le champ tremble et la feuille reste ouverte (T-01). Le bouton désactivé empêche l'envoi du formulaire.
+  // Entrée sur un titre vide : le champ tremble et la feuille reste ouverte (T-01). Entrée sur un titre valide : soumission directe du
+  // formulaire (Q-05-FIX-01), indépendante de l'état du bouton et du bloc des options chargé à la demande ; `preventDefault` empêche la
+  // soumission implicite, donc une seule création.
   function handleTitleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key !== 'Enter' || valid) return;
+    if (event.key !== 'Enter') return;
     event.preventDefault();
-    setShaking(true);
+    if (!valid) {
+      setShaking(true);
+      return;
+    }
+    const form = event.currentTarget.form;
+    if (!form) return;
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   }
 
   function changeChoice(next: DateChoice | null): void {
@@ -287,7 +295,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
             projectId={projectId} setProjectId={setProjectId} icon={icon} setIcon={setIcon}
             recurrence={recurrence} setRecurrence={setRecurrence} offsets={offsets}
             onOffset={(offset) => { setOffsetsTouched(true); setOffsets((current) => toggleReminderOffset(current, offset)); }}
-            goalId={goalId} setGoalId={setGoalId} onReady={setSubmitLabel}
+            goalId={goalId} setGoalId={setGoalId}
           />}
         </div>
         <div className="ct-task-sheet__spacer" />
@@ -303,8 +311,9 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
         )}
         {/* Hors du défilement des champs : l'action reste au-dessus du clavier. */}
         <div className="ct-task-sheet__footer">
-          <Button type="submit" fullWidth disabled={!valid || !spaceId || submitLabel === null}>
-            {submitLabel ?? t('app.loading')}
+          {/* Q-05-FIX-01 : libellé du départ, jamais désactivé par le bloc des options chargé à la demande. */}
+          <Button type="submit" fullWidth disabled={!valid || !spaceId}>
+            {t('capture.sheetAdd')}
           </Button>
         </div>
       </form>
