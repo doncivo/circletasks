@@ -69,4 +69,10 @@ Avant push (commit 25d10876, build `--manifest` depuis un worktree complet, `nod
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `8d7d69e1..9ca427f6` (écran, sections, lignes, en-tête, rangée d'ajout, catalogue, domaine) et des tests rouges avant leur premier passage en CI.
+
+- **Trouvé et corrigé (49ca215f)** dans `tests/e2e/UI-REFONTE-03.spec.ts`, jamais exécuté en local (e2e en CI seule) : (1) la synthèse attendue disait « 6 tâches restantes » pour onze tâches dont quatre faites : sept restantes, puis huit après l'ajout ; (2) l'ordre attendu plaçait la tâche ajoutée sans heure avant celle déjà là : le domaine garde l'ordre manuel, la nouvelle vient en dernier ; (3) la zone de sécurité exigeait 16 px sous la rangée alors que le navigateur n'a pas de marge iOS : l'assertion vérifie que la rangée, son champ et son « + » tiennent dans l'écran ; la marge iOS vient de `--ct-safe-area-bottom`, vérifiée sur l'appareil par Ali.
+- **Vérifié sans remarque** : `WeekScreen` ne calcule la synthèse et l'heure courante que sur iPhone (`status === 'ready'`, intervalle d'une minute nettoyé) ; le jour visé retombe sur aujourd'hui ou le premier jour à chaque changement de semaine (état porteur de `weekStart`) ; `onAddTask` n'est plus passé sur iPhone, donc `WeekDayAdd` n'y est plus rendu ; la carte PC et le pied PC sont textuellement inchangés ; `buildTodayAgenda` est réutilisé tel quel (la ligne « maintenant » est ignorée) ; aucun texte en dur hors du catalogue à la demande ; aucune nouvelle paire de couleurs (jetons de UI-REFONTE-02) ; `Fab` reste importé pour le PC.
+- **Point d'attention laissé à la QA** : `WeekMoves` (glisser sur iPhone) et `WeekGestures` passent en local ; l'insertion visuelle pendant un réordonnancement (`insertBefore`) se fonde sur l'ordre `rows` + `doneRows`, légèrement différent de l'affichage iPhone quand un fait précède un à-faire à la même heure : repère décalé d'une ligne au pire, sans effet sur la position finale (le domaine la ramène). À observer en CI (S-02 iPhone) et sur l'appareil.
+
+Verdict : approuvée sous réserve de la CI complète (QA ci-dessus).
