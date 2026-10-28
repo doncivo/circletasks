@@ -84,6 +84,12 @@ export async function insertChecklists(page: Page, items: readonly DirectCheckli
   );
 }
 
+/** UI-REFONTE-06 : progression « 3 sur 6 » sur iPhone, « 3 / 6 » sur PC. */
+export const progressText = (testInfo: { project: { name: string } }, checked: number, total: number): string => (testInfo.project.name.startsWith('iphone') ? `${String(checked)} sur ${String(total)}` : `${String(checked)} / ${String(total)}`);
+
+/** UI-REFONTE-06 : « Supprimer les N éléments cochés » (iPhone, le compte dans le libellé) ou « Effacer les cochés » (PC). */
+export const clearCheckedButton = (page: Page, testInfo: { project: { name: string } }): Locator => (testInfo.project.name.startsWith('iphone') ? page.getByRole('button', { name: /^Supprimer (les|l’)/ }) : page.getByRole('button', { name: 'Effacer les cochés', exact: true }));
+
 /** Champ « Nouvel élément ». */
 export const addField = (page: Page): Locator => page.getByLabel('Nouvel élément');
 

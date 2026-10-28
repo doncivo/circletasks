@@ -25,7 +25,7 @@ describe('UI-REFONTE-06 — Checklists iPhone', () => {
   it('le sélecteur est le titre : un seul « Course maison », h1 avec le chevron, « + » et crayon à droite ; plus d’en-tête de détail ni de « Vue compacte » (critères 1 et 2)', async () => {
     await start('361');
     await seedCourses();
-    await seedChecklist(h, { title: 'Valise' });
+    const { checklist: valise } = await seedChecklist(h, { title: 'Valise' });
     renderChecklists(h.container);
     await screen.findByRole('heading', { level: 1, name: 'Course maison' });
     expect(screen.getAllByRole('heading', { name: 'Course maison' })).toHaveLength(1);
@@ -39,8 +39,7 @@ describe('UI-REFONTE-06 — Checklists iPhone', () => {
     expect(screen.queryByRole('button', { name: 'Vue compacte' })).toBeNull();
     expect(document.querySelector('.ct-fab')).toBeNull();
     // Changer de checklist par le sélecteur : le titre suit.
-    const valise = (await h.container.data.repos.checklists.listForFilter('all')).find((c) => c.title === 'Valise');
-    fireEvent.change(chooser, { target: { value: valise?.id } });
+    fireEvent.change(chooser, { target: { value: valise.id } });
     expect(await screen.findByRole('heading', { level: 1, name: 'Valise' })).toBeInTheDocument();
   });
 
@@ -70,7 +69,8 @@ describe('UI-REFONTE-06 — Checklists iPhone', () => {
     expect(clear).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByRole('button', { name: 'Effacer les cochés' })).toBeNull();
     fireEvent.click(within(batch()).getByRole('button', { name: 'Tout décocher' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 sur 3'));
+    // Le bandeau « Annuler » est aussi un `role="status"` : on lit celui de la progression.
+    await waitFor(() => expect(within(document.querySelector('.ct-checklist-progress') as HTMLElement).getByRole('status')).toHaveTextContent('0 sur 3'));
     expect(within(batch()).getByRole('button', { name: 'Supprimer les éléments cochés' })).toHaveAttribute('aria-disabled', 'true');
     expect(within(batch()).getByRole('button', { name: 'Tout décocher' })).toHaveAttribute('aria-disabled', 'true');
     // Un seul coché : singulier.
@@ -86,7 +86,7 @@ describe('UI-REFONTE-06 — Checklists iPhone', () => {
     fireEvent.click(within(batch()).getByRole('button', { name: 'Supprimer les 2 éléments cochés' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Effacer 2 éléments cochés ?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Effacer' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 sur 1'));
+    await waitFor(() => expect(within(document.querySelector('.ct-checklist-progress') as HTMLElement).getByRole('status')).toHaveTextContent('0 sur 1'));
     expect(screen.queryByText('Carotte')).toBeNull();
   });
 
@@ -98,7 +98,7 @@ describe('UI-REFONTE-06 — Checklists iPhone', () => {
     expect(screen.getByLabelText('Nouvel élément')).toHaveAttribute('placeholder', 'Ajouter un élément');
     typeItem('Pomme');
     await screen.findByText('Pomme');
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 sur 4'));
+    await waitFor(() => expect(within(document.querySelector('.ct-checklist-progress') as HTMLElement).getByRole('status')).toHaveTextContent('2 sur 4'));
     expect(screen.getByLabelText('Nouvel élément')).toHaveValue('');
     expect(document.querySelectorAll('.ct-checklist-add')).toHaveLength(1);
   });

@@ -1,6 +1,7 @@
+import { Pencil, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import { ConfirmDialog, DatePrompt, DropdownSelect, EmptyState, Fab, SpacePills, useLayout } from '../../ui';
+import { ConfirmDialog, DatePrompt, DropdownSelect, EmptyState, Icon, SpacePills, useLayout } from '../../ui';
 import { checklistProgress } from '../../domain/checklistRules';
 import type { ChecklistId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -282,11 +283,13 @@ export function ChecklistsScreen() {
 
   return (
     <div className="ct-checklists" data-layout="mobile">
+      {/* UI-REFONTE-06 (Checklists-v2.html) : le sélecteur est le titre ; « + » et crayon à sa droite ; une seule occurrence du nom. */}
       <div className="ct-checklists__topRow">
         {visible.length > 0 && displayedId ? (
           <DropdownSelect
             variant="pill"
-            className="ct-checklists__chooser"
+            textAs="h1"
+            className="ct-checklists__chooser ct-checklists__chooser--title"
             label={t('checklists.chooserLabel')}
             options={visible.map(({ checklist }) => ({
               value: checklist.id,
@@ -299,18 +302,30 @@ export function ChecklistsScreen() {
         ) : (
           <h1 className="ct-checklists__mobileTitle">{t('checklists.title')}</h1>
         )}
-        {displayed && (
-          <button type="button" className="ct-checklist-action" data-size="sm" aria-pressed={reordering} onClick={() => setReorderingFor(reordering ? null : displayedId)}>
-            {t(reordering ? 'checklists.actions.reorderDone' : 'checklists.actions.reorder')}
-          </button>
-        )}
+        <div className="ct-checklists__topActions">
+          {!projectFilter && (
+            <button type="button" className="ct-checklist-detail__iconButton" aria-label={t('checklists.add')} onClick={openCreate}>
+              <Icon icon={Plus} size={26} />
+            </button>
+          )}
+          {displayed && (
+            <button
+              type="button"
+              className="ct-checklist-detail__iconButton"
+              aria-label={t('checklists.edit')}
+              onClick={() => {
+                setFormError(null);
+                setEditor('edit');
+              }}
+            >
+              <Icon icon={Pencil} size={24} />
+            </button>
+          )}
+        </div>
       </div>
       {pills}
       {errors}
       {detail}
-      <div className="ct-checklists__bottomRow">
-        <Fab onClick={openCreate} label={t('checklists.add')} />
-      </div>
       {editorHost}
       {datePrompt}
       {confirm}
