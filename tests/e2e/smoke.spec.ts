@@ -11,5 +11,7 @@ test('la coquille démarre avec la base de développement et affiche l’écran 
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
 
   await expect(page.getByRole('navigation')).toBeVisible();
-  await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+  // UI-REFONTE-02 : sur iPhone, plus de badge « Aujourd’hui » ; le jour en grand (h1) tient lieu d'en-tête.
+  if (expectedLayout === 'mobile') await expect(page.locator('main h1.ct-today__day')).toBeVisible();
+  else await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
 });

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { filterPill } from './helpers/spaces';
-import { createTask, isPhone } from './helpers/today';
+import { clickTodayHeaderAction, createTask, isPhone } from './helpers/today';
 
 /**
  * F-03 — Je vois mon temps de concentration.
@@ -63,7 +63,7 @@ test.describe('F-03 — temps de concentration', () => {
     else await page.keyboard.press('Escape');
 
     // Critère 4 : le rapport.
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel'); // UI-REFONTE-02 : entrée du menu sur iPhone
     const section = page.getByRole('region', { name: 'CONCENTRATION' });
     await expect(section.getByRole('listitem').filter({ hasText: 'Aujourd’hui' })).toContainText('1 h 15');
     await expect(section.getByRole('listitem').filter({ hasText: 'Cette semaine' })).toContainText('1 h 15');
@@ -79,7 +79,7 @@ test.describe('F-03 — temps de concentration', () => {
     await filterPill(page, 'Perso').click();
     // Une tâche Perso : sans aucune donnée, le mois serait un écran vide (H-01 critère 9) et la section CONCENTRATION n'y figurerait pas.
     await createTask(page, testInfo, { title: 'Courses' });
-    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await clickTodayHeaderAction(page, 'Rapport mensuel'); // UI-REFONTE-02 : entrée du menu sur iPhone
     const section = page.getByRole('region', { name: 'CONCENTRATION' });
     await expect(section.getByText('Aucune session ce mois-ci.')).toBeVisible();
     await expect(section.getByRole('listitem').filter({ hasText: FACTURE })).toHaveCount(0);

@@ -4,7 +4,7 @@ import { insertFocusSessions } from './helpers/focus';
 import { insertGoals } from './helpers/goals';
 import { insertRoutines, openRoutines, reopenRoutines } from './helpers/routines';
 import { filterPill } from './helpers/spaces';
-import { insertTasks, openReport, reportButton, tileOf } from './helpers/stats';
+import { insertTasks, openReport, tileOf } from './helpers/stats';
 import { isPhone, todayTab } from './helpers/today';
 
 /**
@@ -108,13 +108,14 @@ test.describe('H-01 — rapport du mois', () => {
     expect(Math.abs((chart?.y ?? 0) - (routines?.y ?? 1000))).toBeLessThan(4);
   });
 
-  test('critère 9 : un mois sans donnée affiche « Rien à compter » et « Aller à Aujourd’hui »', async ({ page }) => {
+  test('critère 9 : un mois sans donnée affiche « Rien à compter » et « Aller à Aujourd’hui »', async ({ page }, testInfo) => {
     await openReport(page, 'septembre');
     await page.getByRole('button', { name: 'Mois précédent' }).click();
     // Août n'a qu'une tâche Pro : sous Perso, il n'y a rien à compter.
     await filterPill(page, 'Perso').click();
     await expect(page.getByRole('heading', { level: 2, name: 'Rien à compter en août.' })).toBeVisible();
     await page.getByRole('button', { name: 'Aller à Aujourd’hui' }).click();
-    await expect(reportButton(page)).toBeVisible();
+    // UI-REFONTE-02 : sur iPhone, « Rapport mensuel » est dans le menu ; le bouton « Plus d’options » dit qu'Aujourd'hui est revenu.
+    await expect(page.getByRole('button', { name: isPhone(testInfo) ? 'Plus d’options' : 'Rapport mensuel' })).toBeVisible();
   });
 });

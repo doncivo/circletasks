@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { lunarTableDate } from '../../src/domain/holidays';
 import { openApp } from './helpers/app';
-import { eventRow, openEvents } from './helpers/events';
+import { eventRow, openEvents, todayEventBand } from './helpers/events';
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { isPhone } from './helpers/today';
 import { dayOf, openWeek } from './helpers/week';
@@ -74,7 +74,7 @@ test.describe('E-03 — jours fériés', () => {
     await page.clock.setFixedTime(new Date('2026-11-01T10:00:00+01:00'));
     await openApp(page, { holidays: true });
     await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Tâches', exact: true }).click();
-    const band = page.getByRole('list', { name: 'Événements du jour' }).locator('li').filter({ hasText: 'Toussaint' });
+    const band = todayEventBand(page, 'Toussaint'); // UI-REFONTE-02 : ligne de l'agenda sur iPhone, bandeau sur PC
     await expect(band).toContainText('Férié FR');
     await expect(band.getByRole('button')).toHaveCount(0);
     await openWeek(page);

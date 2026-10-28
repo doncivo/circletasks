@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addProject, filterPill, openSpacesScreen, projectFilterMenu } from './helpers/spaces';
-import { closeSomeday, insertSomeday, openSomeday, somedayButton, somedayList, somedayPane, somedayTitles } from './helpers/someday';
-import { isPhone, openToday, todayTab } from './helpers/today';
+import { closeSomeday, insertSomeday, openSomeday, somedayLabel, somedayList, somedayPane, somedayTitles } from './helpers/someday';
+import { isPhone, openToday, todayTab, todayViewState } from './helpers/today';
 import { weekTab } from './helpers/week';
 
 /**
@@ -86,9 +86,9 @@ test.describe('SD-04 — organiser « Un jour »', () => {
     await projectFilterMenu(page).selectOption({ label: 'Mission client' });
     await expect.poll(() => somedayTitles(page)).toEqual(['Tâche projet']);
     await closeSomeday(page, testInfo);
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 1 tâche');
+    expect(await somedayLabel(page)).toBe('Un jour, 1 tâche');
     await filterPill(page, 'Tout').click();
-    await expect(somedayButton(page)).toHaveAccessibleName('Un jour, 3 tâches');
+    expect(await somedayLabel(page)).toBe('Un jour, 3 tâches');
   });
 
   test('mode édition : sélection, barre, « Planifier » par lot annulable, suppression avec confirmation (critères 5, 6 et 8)', async ({ page }, testInfo) => {
@@ -151,7 +151,7 @@ test.describe('SD-04 — organiser « Un jour »', () => {
     await expect(somedayList(page).locator('.ct-list-row[data-compact="true"]')).toHaveCount(2);
     await closeSomeday(page, testInfo);
     // Aujourd'hui garde sa propre vue : le bouton « Vue compacte » de la page n'est pas enfoncé.
-    await expect(page.getByRole('main').getByRole('button', { name: 'Vue compacte' }).first()).toHaveAttribute('aria-pressed', 'false');
+    expect(await todayViewState(page, 'Vue compacte')).toBe(false); // UI-REFONTE-02 : sur iPhone la bascule est dans le menu « Plus d’options »
     await openSomeday(page, testInfo);
     await expect(compactToggle(page)).toHaveAttribute('aria-pressed', 'true');
   });

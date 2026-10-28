@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { addEventButton, eventRow, insertEvents, openEvents, reopenEvents } from './helpers/events';
+import { addEventButton, eventRow, insertEvents, openEvents, reopenEvents, todayEventBand, todayEventTag } from './helpers/events';
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { dayOf, openWeek } from './helpers/week';
 
@@ -79,8 +79,8 @@ test.describe('E-04 — compte à rebours', () => {
     await expect(dayOf(page, '2026-09-25').locator('.ct-week-event').filter({ hasText: 'Réunion ordinaire' }).locator('.ct-week-event__tag')).toHaveCount(0);
     await expect(dayOf(page, '2026-09-23').locator('.ct-week-event').filter({ hasText: 'Échéance du jour' })).toContainText('Aujourd’hui');
     await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Tâches', exact: true }).click();
-    const band = page.getByRole('list', { name: 'Événements du jour' }).locator('li').filter({ hasText: 'Échéance du jour' });
-    await expect(band.locator('.ct-today-event__tag')).toContainText('Aujourd’hui');
+    const band = todayEventBand(page, 'Échéance du jour'); // UI-REFONTE-02 : ligne de l'agenda sur iPhone, bandeau sur PC
+    await expect(todayEventTag(band)).toContainText('Aujourd’hui');
   });
 
   test('passage de minuit : le tag se met à jour sans relancer l’app (critère 3)', async ({ page }) => {

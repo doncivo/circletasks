@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { addEventButton, disableHolidays, eventRow, insertEvents, openEvents, reopenEvents } from './helpers/events';
+import { addEventButton, disableHolidays, eventRow, insertEvents, openEvents, reopenEvents, todayEventBand } from './helpers/events';
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { isPhone } from './helpers/today';
 import { dayOf, openWeek } from './helpers/week';
@@ -76,7 +76,7 @@ test.describe('E-01 — événements datés', () => {
     await expect(eventRow(page, 'Dîner de famille')).toContainText('Aujourd’hui');
 
     await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Tâches', exact: true }).click();
-    await expect(page.getByRole('list', { name: 'Événements du jour' }).getByText('Dîner de famille')).toBeVisible();
+    await expect(todayEventBand(page, 'Dîner de famille')).toBeVisible(); // UI-REFONTE-02 : ligne de l'agenda sur iPhone
     await openWeek(page);
     await expect(dayOf(page, today).getByText('Dîner de famille')).toBeVisible();
   });
