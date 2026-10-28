@@ -2,7 +2,7 @@
 
 Module : M12 Réglages · Palier : refontes après la 1.0.2, huitième et dernière des huit dans l'ordre d'Ali du 2026-10-27 · Agent : settings-personalization avec ui-design-system · Ouverte le 2026-10-28 par Claude Code.
 
-Statut : **ouverte, passe product-owner écrite.** Estimation : 6 à 9 h actives ; alerte à 12 h.
+Statut : **en CI, passes product-owner, module et revue écrites.** Estimation : 6 à 9 h actives ; alerte à 12 h.
 
 Références : `docs/maquettes-refonte/PC-Reglages.html`, huit règles transversales du README du même dossier. Écran de départ : `src/features/settings/SettingsScreen.tsx`, `SettingsScreen.css`, `AboutSection.tsx`, `src/features/shortcuts/ShortcutsSettingsSection.tsx` (+ `.css`), `src/features/sync/SyncSettingsSection.tsx`, lignes partagées (`BackupRow`, `ImportRow`, `SampleDataRow`, `SecuritySection`, `QuietHoursRows`, `SpacesSummaryRow`, `CalendarsSummaryRow`, `HolidaysSummaryRow`, `FocusSoundSetting`). Écran à la demande (`lazyScreens.tsx`) : rien n'entre dans le départ.
 
@@ -51,7 +51,20 @@ Le PRD ; l'iPhone ; les écrans de second niveau ; la fenêtre d'appairage ; tou
 
 ## Passe agent du module
 
-À écrire après la preuve rouge.
+- **Preuve rouge** : commit 7d7b2b70 (tests seuls) : `src/features/settings/SettingsPc.test.tsx` (5 tests, 4 rouges ; « iPhone inchangé » vert dès le départ, attendu), `tests/e2e/UI-REFONTE-09.spec.ts` (2 tests sur `pc`, clair et sombre, joués par la CI seule).
+- **Vert ensuite** : commit 7287609b.
+- **Aiguillage** (`SettingsScreen.tsx`) : `useLayout` ; PC → `SettingsScreenPc`, iPhone → l'écran existant renommé `SettingsScreenMobile`, inchangé.
+- **Écran PC** (`SettingsScreenPc.tsx`) : `.ct-settings--pc` en deux colonnes ; sommaire collant (`h1` « Réglages », `nav` « Sections des réglages », huit boutons, `aria-current` sur la section courante, `scrollIntoView` au clic, `IntersectionObserver` au défilement avec un verrou de 800 ms après un clic) ; colonne `.ct-settings__content` bornée à 660 px ; huit `section` nommées par leur `h2`. « Général » : Thème, Début de semaine (jour en majuscule initiale), Format de l'heure (trois `LinkRow` vers Apparence, libellé accessible « étiquette : valeur »), Fuseau horaire en lecture seule (« Suit celui de Windows » sous l'étiquette, valeur sans « (automatique) »), Onglets visibles (`useTabCounts`, « 5 sur 5 »), Démarrer avec Windows avec sa mention. « Tâches », « Rappels », « Espaces et agendas » (Jours fériés y rejoint les agendas), « Synchronisation » (section et entrée du sommaire seulement si `useSyncAvailable()`), « Sauvegardes et données », « Clavier », « À propos » réutilisent les lignes et sections existantes.
+- **Sections à titre optionnel** : `SyncSettingsSection`, `ShortcutsSettingsSection`, `AboutSection` reçoivent `heading?: boolean` (vrai par défaut : l'iPhone et les tests isolés ne changent pas) ; `useSyncAvailable` exporté par `SyncSettingsSection.tsx` ; `useTabCounts` par `TabsScreen.tsx`.
+- **Clavier** (`ShortcutsSettingsSection.tsx`, PC seulement) : « Tous les raccourcis » devient une ligne cliquable (`.ct-settings__rowButton`, libellé accessible inchangé « Afficher les raccourcis clavier », `Kbd` « Ctrl / ») ; une combinaison prise (`status === 'unavailable'`) s'explique sous l'étiquette (`.ct-settings__hint[data-tone="warning"]`, « Ctrl+Alt+Espace est utilisé par une autre application. Choisissez-en un autre. »), touche en ambre (jetons `--ct-color-warning-*`), plus de barré ni de note « Indisponible : … ». Textes `helpRow`, `helpOpen`, `unavailableNote` retirés de `fr.shortcuts.ts` / `en.shortcuts.ts` (départ allégé).
+- **Textes** : catalogue à la demande `src/i18n/settingsRefonteText.ts` (fr et en), chargé avec l'écran ; aucune clé nouvelle dans le départ.
+- **Feuille de style** (`SettingsScreen.css`, bloc UI-REFONTE-09 ; `ShortcutsSettingsSection.css`) : sommaire, entrées, colonne, groupes (34 px), titres Fraunces 22, lignes de 46 px, chevron Lucide « chevron-right » en masque CSS sur chaque ligne cliquable, mention ambre, touche ambre.
+- **Tests adaptés, avec trace « UI-REFONTE-09 »** : DOM `SettingsScreen.test` (joué à 440 : c'est l'écran iPhone), `SettingsScreen.desktop.test` (titres « Général » / « À propos » par rôle), `AppearanceScreen.test` (trois lignes), `TabsScreen.test` (« 5 sur 5 »), `shortcuts.dom.test` (phrase du conflit, « Tous les raccourcis ») ; e2e : aide `tests/e2e/helpers/settings.ts` (`settingsSectionTitle`, `settingsSectionHeading`, `appearanceRow`, `expectTimeZone`), `A-03`, `T-06`, `ES-01`, `ES-07`, `N-04`, `D-04`, `D-01`, `P-05`, `P-04`, `T-08`, `T-11`, `P-02`, `P-03`, capture `PC-Reglages` (`tests/visual/capture.spec.ts`).
+- **Local** : suites `settings`, `shortcuts`, `sync`, `security`, `reminders`, `spaces`, `calendars`, `events` (1 705), `i18n`, `tests/unit`, `app` vertes ; lint ; typage. E2e en CI seulement (règle du 2026-10-28).
+
+## Mesure du bundle
+
+Avant push (commit 7287609b, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 432 octets normalisés** (brute 337 393), **marge 20 968** ; **−28** face à `main` 337 460 (textes `helpRow`, `helpOpen`, `unavailableNote` retirés du départ ; l'écran, ses sections et son catalogue sont à la demande ; garde 66/66). Mesure de `main` après fusion : à consigner.
 
 ## Passe QA
 
@@ -59,4 +72,11 @@ Le PRD ; l'iPhone ; les écrans de second niveau ; la fenêtre d'appairage ; tou
 
 ## Passe code-reviewer
 
-À écrire.
+Relecture à froid du diff `7d7b2b70..7287609b` (aiguillage, écran PC, sections à titre optionnel, Clavier, catalogue, feuilles de style, tests) avant le premier passage en CI.
+
+- **Vérifié sans remarque** : l'iPhone rend exactement l'ancien composant (renommé, corps inchangé) ; les trois sections qui portaient un titre gardent leur titre par défaut (`heading = true`), si bien que leurs tests isolés et l'iPhone ne changent pas ; les libellés accessibles des interrupteurs et boutons sont ceux d'avant (« Démarrer avec Windows », « Ouvrir la corbeille », « Afficher les raccourcis clavier », « Rechercher une mise à jour ») ; `LinkRow` reprend la forme « étiquette : valeur » des lignes existantes (`QuietHoursRows`, `SpacesSummaryRow`) ; le fuseau en lecture seule n'a pas de chevron (règle 3) ; la section « Synchronisation » et son entrée du sommaire disparaissent ensemble quand la plateforme ne la propose pas ; le verrou de 800 ms empêche l'observateur de défilement de reprendre une autre section juste après un clic du sommaire ; l'observateur est ignoré quand `IntersectionObserver` n'existe pas (jsdom) ; `scrollIntoView?.()` est optionnel pour la même raison.
+- **Bundle** : aucun module nouveau dans le départ ; −28 octets (trois textes retirés). Le catalogue `settingsRefonteText.ts` n'est importé que par `SettingsScreenPc.tsx` et `ShortcutsSettingsSection.tsx`, tous deux hors du départ.
+- **Point d'attention laissé à la QA** : le masque CSS du chevron (SVG en URL de données) dépend de `mask` / `-webkit-mask` (Chromium et WebKit : pris en charge) ; à vérifier à l'œil sur le PC avec la capture `PC-Reglages`. La position du sommaire (`position: sticky; top: 0`) suppose que `main` reste l'ancêtre défilant (c'est le cas de la coquille, `AppShell.css`).
+- **Écart signalé au product-owner** : « Onglets visibles » affiche « 5 sur 5 » (Réglages non compté) là où la maquette montrait « 5 sur 6 » ; consigné dans le tableau des écarts.
+
+Verdict : approuvée sous réserve de la CI complète (QA à consigner).
