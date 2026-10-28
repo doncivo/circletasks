@@ -11,7 +11,7 @@ Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et
 
 ### En vol
 
-- **UI-REFONTE-09** (Réglages PC, dernière des huit) : PR #107, branche `ui-refonte-09-reglages-pc` (worktree `.claude/worktrees/codex-main-validation`), rouge 7d7b2b70, vert 7287609b, bundle −28 ; le critère 4 de BUNDLE-01 (écart normalisé / brut 143 > 100 octets) a été tranché par Ali le 28 au soir : borne asymétrique 100 / 300, garde adaptée, dette BUNDLE-02 inscrite ; CI relancée. Au vert : fusionner, mesurer `main`, fermer la ligne du backlog.
+- **UI-REFONTE-09** (Réglages PC, dernière des huit) : PR #107, branche `ui-refonte-09-reglages-pc` (worktree `.claude/worktrees/codex-main-validation`), rouge 7d7b2b70, vert 7287609b, bundle −28 ; **fusionnée (#107, a17c9ada)** après la décision d'Ali sur le critère 4 de BUNDLE-01 (borne asymétrique 100 / 300, dette BUNDLE-02). `main` : 337 895 normalisés, marge 20 505. Compilation iPhone du lot verte (run 40750480780, sans publication ; IPA 7 383 017 octets, SHA-256 e85a4e1f…c8ec) ; contrôles natifs dans `docs/essais-iphone.md`, séance d'Ali à venir ; publication avec REL-01 à REL-03.
 
 ### Reste à faire
 
