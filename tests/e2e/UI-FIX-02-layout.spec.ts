@@ -20,9 +20,11 @@ test('UI-FIX-02 : les statuts restent dans la même colonne malgré les noms et 
   const rowStyles = ['src/features/sync/SyncDetailsScreen.css', 'src/features/settings/SettingsScreen.css'].map((file) => readFileSync(file, 'utf8')).join('\n');
   const rows = ['Cet iPhone', 'Mon ordinateur du bureau avec un nom long', 'Ancien PC'].map((name, i) => `<li class="ct-settings__row ct-sync__device"><div class="ct-sync__deviceIdentity"><span>${name}</span><span class="ct-sync__deviceRead">Dernière modification lue : hier à 10:00</span></div><span class="ct-settings__value ct-sync__deviceState">${i === 2 ? 'Oublié' : 'Actif'}</span></li>`).join('');
   await page.setContent(`${viewport}<style>${styles}${rowStyles}</style><div class="ct-sync"><ul class="ct-sync__devices">${rows}</ul></div>`);
+  // UI-REFONTE-04 : les statuts sont des pastilles (largeur de leur texte) alignées à droite dans la même colonne : même bord droit, et toujours à droite de l'identité.
   const positions = await page.locator('.ct-sync__deviceState').evaluateAll((nodes) => nodes.map((el) => ({ x: el.getBoundingClientRect().x, right: el.getBoundingClientRect().right })));
-  expect(new Set(positions.map((p) => Math.round(p.x))).size).toBe(1);
+  const identities = await page.locator('.ct-sync__deviceIdentity').evaluateAll((nodes) => nodes.map((el) => el.getBoundingClientRect().right));
   expect(new Set(positions.map((p) => Math.round(p.right))).size).toBe(1);
+  for (const [i, p] of positions.entries()) expect(p.x).toBeGreaterThanOrEqual(identities[i] ?? Number.POSITIVE_INFINITY);
 });
 
 test('UI-FIX-02 : le défilement de chaque écran reste sous la barre d’état', async ({ page }) => {

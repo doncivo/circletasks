@@ -64,7 +64,7 @@ test.afterEach(async () => {
   room = '';
 });
 
-test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit dans le journal des deux côtés, « Restaurer », même valeur partout', async ({ browser }) => {
+test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit dans le journal des deux côtés, « Rétablir », même valeur partout', async ({ browser }) => {
   start('pc', PARCOURS_BUDGET_MS);
   // PC : premier appareil (dossier et clé), synchronisé une fois.
   const pc = await openSyncedPage(browser, room, 'pc', 'first');
@@ -120,24 +120,24 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
   await syncNow(iphone.page);
   await propagate(room);
 
-  // Le même conflit est dans le journal des deux côtés (Synchro.html : « 09:00 gardée · iPhone », « 10:00 écartée · PC »).
+  // Le même conflit est dans le journal des deux côtés (Synchro-v4.html, UI-REFONTE-04 : « Heure prévue de « … » », « 09:00 Appliquée · iPhone », « 10:00 PC », « Rétablir »).
   for (const side of [pc, iphone]) {
     await expect(side.page.getByText('1 conflit cette semaine')).toBeVisible();
     await expect(conflictItems(side.page)).toHaveCount(1);
     const item = conflictItems(side.page).first();
     await expect(item).toHaveAccessibleName(`Conflit : ${TITLE}, heure prévue`);
-    await expect(item).toContainText(`${TITLE} · heure prévue`);
-    await expect(item.locator('.ct-conflicts__value--kept')).toContainText('09:00 gardée');
+    await expect(item).toContainText(`Heure prévue de « ${TITLE} »`);
+    await expect(item.locator('.ct-conflicts__value--kept')).toContainText(/^09:00Appliquée · iPhone/);
     await expect(item.locator('.ct-conflicts__value--kept')).toContainText(/iPhone · \d{2}:\d{2}/);
-    await expect(item.locator('.ct-conflicts__value--discarded')).toContainText('10:00 écartée');
+    await expect(item.locator('.ct-conflicts__value--discarded')).toContainText(/^10:00PC/);
     await expect(item.locator('.ct-conflicts__value--discarded')).toContainText(/PC · \d{2}:\d{2}/);
   }
 
-  // « Restaurer » sur le PC : valeur écartée remise, annoncée dans la ligne, annulable 5 s.
+  // « Rétablir » sur le PC : valeur écartée remise, annoncée dans la ligne, annulable 5 s.
   const onPc = conflictItems(pc.page).first();
-  await onPc.getByRole('button', { name: `Restaurer la valeur écartée : ${TITLE}, heure prévue` }).click();
-  await expect(onPc.getByRole('status')).toHaveText(`Valeur restaurée : ${TITLE}, heure prévue`);
-  await expect(onPc).toContainText(/Restaurée le \d{1,2} /);
+  await onPc.getByRole('button', { name: `Rétablir la valeur écartée : ${TITLE}, heure prévue` }).click();
+  await expect(onPc.getByRole('status')).toHaveText(`Valeur rétablie : ${TITLE}, heure prévue`);
+  await expect(onPc).toContainText(/Rétablie le \d{1,2} /);
   await expect(onPc).toBeFocused();
   await expect(pc.page.getByText('Valeur restaurée', { exact: true })).toBeVisible();
   await expect(pc.page.getByRole('dialog')).toHaveCount(0);
