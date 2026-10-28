@@ -86,9 +86,14 @@ export const todayEventTag = (band: Locator): Locator => band.locator('.ct-today
 
 export const eventRow = (page: Page, title: string): Locator => page.locator('.ct-event-row').filter({ has: page.locator('.ct-event-row__title', { hasText: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) });
 
-/** Bouton « + » de l'onglet Événements (le bouton flottant ; l'état vide P-06 porte un autre bouton « Ajouter un événement »). */
+/**
+ * Bouton d'ajout de l'onglet Événements : sur PC le bouton flottant « Ajouter » ; sur iPhone (UI-REFONTE-07, Evenements.html) le bouton
+ * « Événement » de la rangée du bas (libellé accessible « Ajouter un événement » ; l'état vide P-06 porte un autre bouton du même nom).
+ */
 export const addEventButton = (page: Page, testInfo: { project: { name: string } }): Locator =>
-  page.locator('.ct-fab').and(page.getByRole('button', { name: testInfo.project.name === 'iphone' ? 'Ajouter un événement' : 'Ajouter', exact: true }));
+  testInfo.project.name === 'iphone'
+    ? page.locator('.ct-events__addButton').and(page.getByRole('button', { name: 'Ajouter un événement', exact: true }))
+    : page.locator('.ct-fab').and(page.getByRole('button', { name: 'Ajouter', exact: true }));
 
 /**
  * Désactive les deux calendriers de jours fériés (réglage `holidays.countries`, E-03) : les listes et la grille d'un test d'événements

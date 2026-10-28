@@ -57,7 +57,8 @@ Avant push (commit 67af8e20, build `--manifest`, `node tests/bundle/measureStart
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI, premier passage (run 40715955055, head bdbc5368)** : 44 contrôles verts, `e2e iphone (1/4)` rouge : `E-01` (2 tests), `E-02` (2), `E-04` (1) attendaient le bouton flottant `.ct-fab` « Ajouter un événement » par `tests/e2e/helpers/events.ts` (`addEventButton`), supprimé sur iPhone par la refonte (critère 6). Cause : l'aide n'avait pas été adaptée, seule `E-01` l'était pour « Vue calendrier ». Correction : sur `iphone`, `addEventButton` vise `.ct-events__addButton` (libellé accessible inchangé « Ajouter un événement ») ; sur `pc`, le bouton flottant « Ajouter » reste. Aucun test désactivé ni allongé.
+- **CI, second passage** : à consigner.
 
 ## Passe code-reviewer
 
