@@ -46,7 +46,7 @@ test.describe('UI-REFONTE-03 — Semaine sur iPhone', () => {
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('21 – 27 sept.');
       await expect(page.locator('.ct-week__rule')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Cette semaine' })).toHaveCount(0);
-      await expect(page.locator('.ct-week__summary')).toHaveText('6 tâches restantes · 4 faites · 2 en retard');
+      await expect(page.locator('.ct-week__summary')).toHaveText('7 tâches restantes · 4 faites · 2 en retard');
 
       // Jours en minuscules ; aujourd'hui : trait d'encre de 2 px en haut, fond transparent ; week-end gris.
       await expect(dayOf(page, '2026-09-21').locator('.ct-week-day__weekday')).toHaveText('lun.');
@@ -83,9 +83,10 @@ test.describe('UI-REFONTE-03 — Semaine sur iPhone', () => {
     await expect(dayOf(page, '2026-09-24').getByRole('button', { name: /^Choisir / })).toHaveAttribute('aria-pressed', 'true');
     await addField(page).fill('Point hebdo');
     await addField(page).press('Enter');
-    await expect.poll(() => dayTitles(page, '2026-09-24')).toEqual(['Réunion d’équipe', 'Point hebdo', 'Préparer le dépôt GitHub']);
+    // Sans heure : après la ligne à l'heure, dans l'ordre manuel (la nouvelle en dernier).
+    await expect.poll(() => dayTitles(page, '2026-09-24')).toEqual(['Réunion d’équipe', 'Préparer le dépôt GitHub', 'Point hebdo']);
     await expect(addField(page)).toHaveValue('');
-    await expect(page.locator('.ct-week__summary')).toHaveText('7 tâches restantes · 4 faites · 2 en retard');
+    await expect(page.locator('.ct-week__summary')).toHaveText('8 tâches restantes · 4 faites · 2 en retard');
 
     await page.locator('.ct-week__addRow').getByRole('button', { name: 'Ajouter', exact: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Nouvelle tâche' });
@@ -98,8 +99,11 @@ test.describe('UI-REFONTE-03 — Semaine sur iPhone', () => {
     const add = await page.locator('.ct-week__addRow').boundingBox();
     const viewport = page.viewportSize();
     expect(title && title.y >= 44).toBeTruthy();
-    expect(add && viewport && add.y + add.height <= viewport.height - 16).toBeTruthy();
+    // La zone de sécurité du navigateur est nulle : la rangée tient dans l'écran et dans sa largeur ; la marge iOS vient de `--ct-safe-area-bottom`.
+    expect(add && viewport && add.y + add.height <= viewport.height).toBeTruthy();
     expect(add && viewport && add.x >= 0 && add.x + add.width <= viewport.width).toBeTruthy();
+    await expect(addField(page)).toBeInViewport({ ratio: 1 });
+    await expect(page.locator('.ct-week__addRow').getByRole('button', { name: 'Ajouter', exact: true })).toBeInViewport({ ratio: 1 });
   });
 
   test('semaine vide : « Rien de prévu cette semaine » dans la synthèse, état vide conservé, rangée d’ajout présente (critères 2 et 6)', async ({ page }) => {

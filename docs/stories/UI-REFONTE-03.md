@@ -59,9 +59,13 @@ Les six autres refontes ; le PRD (PRD-02) ; toute écriture en base ; le rendu n
 - **Tests adaptés, avec trace « UI-REFONTE-03 »** : `WeekScreen.test` (légende, tiret), `WeekNavigation.test` (légende ; « Cette semaine » après un passage à la semaine précédente), `WeekQa.test` (« semaine 53 », « semaine 1 · 2027 »), `WeekQuickAdd.test` (boucle PC seule ; test iPhone remplacé : aucun « + Ajouter », rangée « Ajouter à vendredi 2 »), `WeekExternalEvents.test` (rond au lieu de l'icône), `goals/GoalAttach.test` (plus de marque en ligne), e2e `S-01` (« lun. », légende) et `S-04` (aides iPhone : toucher sur le jour puis rangée d'ajout ; Échap sans objet sur iPhone), `tests/visual/capture.spec.ts` (maquette `Semaine-v2.html`).
 - **Vérifié en local** : typage, lint, suites Vitest `week` + `domain/week` + `weekSummary` + `formatWeek` (138 tests) et les douze suites DOM des modules voisins qui rendent la Semaine (146 tests) : vertes. La garde du bundle ne peut pas tourner dans ce worktree (`node_modules` partiel : « Fichier du repli OCR introuvable ») : mesure faite depuis un worktree complet avant le push (section « Mesure du bundle »).
 
+## Mesure du bundle
+
+Avant push (commit 25d10876, build `--manifest` depuis un worktree complet, `node tests/bundle/measureStart.ts`) : **337 586 octets normalisés** (brute 337 574, 83 blocs de départ), **marge 20 814** sous le plafond de 358 400 ; +36 face à la branche UI-REFONTE-02 (337 550) dont elle part : l'écran Semaine, `weekSummary.ts` et `weekRefonteText.ts` sont dans le bloc à la demande de la Semaine ; garde `startBundle.test.ts` 66/66 (deux assertions « hors du départ » ajoutées). Mesure de `main` après fusion : à consigner.
+
 ## Passe QA
 
-À écrire.
+À écrire après la CI complète (e2e joués par la CI seule).
 
 ## Passe code-reviewer
 
