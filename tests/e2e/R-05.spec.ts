@@ -18,7 +18,7 @@ test.describe('R-05 — pause et archivage', () => {
   });
 
   async function openEdit(page: Page, title: string) {
-    await cardOf(page, title).getByRole('button', { name: `Éditer la routine ${title}` }).click();
+    await cardOf(page, title).getByRole('button', { name: `Modifier la routine ${title}` }).click();
     return routineForm(page, 'Modifier la routine');
   }
 

@@ -431,7 +431,7 @@ const SCREENS: Screen[] = [
   { name: 'PC-Semaine', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareWeek(page) },
   // Semaine PC alimentée par le rafraîchissement réel d'un compte Google simulé (K-01, K-03, S-05 critère 10), comparée à la même maquette.
   { name: 'PC-Semaine-Agendas', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareWeek(page, true) },
-  { name: 'Routines', mockup: 'Routines.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareRoutines(page, ROUTINE_SEED) },
+  { name: 'Routines', mockup: '../maquettes-refonte/Routines-v2.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareRoutines(page, ROUTINE_SEED) },
   {
     name: 'PC-Routines',
     mockup: 'PC-Routines.html',
@@ -451,7 +451,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: async (page) => {
       await prepareRoutines(page, ROUTINE_SEED);
-      await page.getByRole('button', { name: 'Éditer la routine Sport' }).click();
+      await page.getByRole('button', { name: 'Modifier la routine Sport' }).click();
       await expect(page.getByRole('form', { name: 'Modifier la routine' })).toBeVisible();
     },
   },
@@ -462,7 +462,7 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: async (page) => {
       await prepareRoutines(page, [STRETCH]);
-      await page.getByRole('button', { name: "Éditer la routine Séance d'étirements" }).click();
+      await page.getByRole('button', { name: "Modifier la routine Séance d'étirements" }).click();
       await expect(page.getByRole('form', { name: 'Modifier la routine' })).toBeVisible();
     },
   },

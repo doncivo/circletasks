@@ -15,6 +15,9 @@ export async function openRoutines(page: Page): Promise<void> {
 }
 
 /** Carte d'une routine, par son titre exact. */
+/** UI-REFONTE-05 : compteur de la carte, « 2/7 » sur PC, « 2 sur 7 cette semaine » dans la ligne d'informations sur iPhone. */
+export const counterText = (testInfo: { project: { name: string } }, done: number, planned: number): string => (testInfo.project.name.startsWith('iphone') ? `${String(done)} sur ${String(planned)} cette semaine` : `${String(done)}/${String(planned)}`);
+
 export const cardOf = (page: Page, title: string): Locator =>
   page.locator('article.ct-routine-card').filter({ has: page.getByRole('heading', { level: 2, name: title, exact: true }) });
 

@@ -45,7 +45,7 @@ describe('Routines : rappel dans la plage silencieuse (N-FIX-04)', () => {
     await seedReminders(h, soir.id as RoutineId, [0]);
     renderRoutines(h.container);
     await screen.findByRole('heading', { name: 'Yoga du soir' });
-    fireEvent.click(within(card('Yoga du soir')).getByRole('button', { name: /Éditer la routine/ }));
+    fireEvent.click(within(card('Yoga du soir')).getByRole('button', { name: /Modifier la routine/ }));
     const form = await screen.findByRole('form', { name: 'Modifier la routine' });
     // Vendredi 2 octobre 20:00 : soir, puis week-end entier, puis dimanche soir : lundi 08:00. Une seule cause : celle de l'heure choisie.
     expect(within(form).getByRole('status')).toHaveTextContent('Rappel décalé au lundi 08:00 — aucun rappel Pro après 19:00');

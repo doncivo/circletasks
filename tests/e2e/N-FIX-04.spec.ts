@@ -33,7 +33,7 @@ test.describe('N-FIX-04 — rappel dans la plage silencieuse', () => {
   test('formulaire de modification d’une routine : la ligne apparaît à 20:00 et disparaît à 10:00', async ({ page }, testInfo) => {
     await insertRoutines(page, [{ title: 'Yoga du soir', space: 'pro', time: '20:00', reminders: [0] }]);
     await openRoutines(page);
-    await cardOf(page, 'Yoga du soir').getByRole('button', { name: /Éditer la routine/ }).click();
+    await cardOf(page, 'Yoga du soir').getByRole('button', { name: /Modifier la routine/ }).click();
     const form = routineForm(page, 'Modifier la routine');
     await expect(form.getByRole('status')).toHaveText(NOTICE);
     await setRoutineTime(page, form, testInfo, '10:00');
