@@ -102,7 +102,8 @@ export function formatTodayHeader(isoDate: string, style: 'short' | 'long'): { m
   const date = utcDate(isoDate);
   const monthLine = new Intl.DateTimeFormat(locale, { month: style === 'long' ? 'long' : 'short', year: 'numeric', timeZone: 'UTC' }).format(date);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: style === 'long' ? 'long' : 'short', timeZone: 'UTC' }).format(date);
-  return { monthLine, dayLine: `${String(date.getUTCDate())} ${weekday}` };
+  // PC (UI-REFONTE-08, PC-Jour.html) : « samedi 24 » ; iPhone : « 24 sam. » (Jour.html).
+  return { monthLine, dayLine: style === 'long' ? `${weekday} ${String(date.getUTCDate())}` : `${String(date.getUTCDate())} ${weekday}` };
 }
 
 /** Nom du jour de la semaine (« dimanche »), pour la phrase de l'état vide (Main-Vide.html). */

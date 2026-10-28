@@ -151,7 +151,7 @@ test('le binaire Windows démarre sur une base neuve et affiche l’écran du jo
     const today = new Date();
     const localIso = new Date(today.getTime() - today.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
     await expect(heading).toHaveText(formatTodayHeader(localIso, 'long').dayLine);
-    await expect(page.getByText(fr.tasks.todayBadge, { exact: true })).toBeVisible();
+    await expect(page.locator('main h1.ct-today__day')).toBeVisible(); // UI-REFONTE-08 : plus de badge sur PC, le jour en grand tient lieu d'en-tête
     await expect(page.getByRole('alert')).toHaveCount(0);
     expect(app.exitCode, exited()).toBeNull();
     await testInfo.attach('dom.png', { body: await page.screenshot(), contentType: 'image/png' });

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createTask, isPhone, openToday, rowOf, todayViewState, toggleTodayView } from './helpers/today';
+import { createTask, openToday, rowOf, todayViewState, toggleTodayView } from './helpers/today';
 
 /**
  * A-06 — Je replie la liste en vue compacte.
@@ -21,9 +21,8 @@ test.describe('A-06 — vue compacte', () => {
     await createTask(page, testInfo, { title: timed, time: '09:00' });
     await createTask(page, testInfo, { title: plain });
     // UI-REFONTE-02 : sur iPhone la bascule est dans le menu « Plus d’options » et l'heure est dans la colonne de l'agenda (sous-ligne « Pro », ou « En retard … · Pro »).
-    const phone = isPhone(testInfo);
     expect(await todayViewState(page, 'Vue compacte')).toBe(false);
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(phone ? /Pro$/ : '09:00 · Pro');
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/); // UI-REFONTE-08 : agenda sur PC aussi
 
     await toggleTodayView(page, 'Vue compacte');
     expect(await todayViewState(page, 'Vue compacte')).toBe(true);
@@ -36,7 +35,7 @@ test.describe('A-06 — vue compacte', () => {
 
     await toggleTodayView(page, 'Vue compacte');
     expect(await todayViewState(page, 'Vue compacte')).toBe(false);
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(phone ? /Pro$/ : '09:00 · Pro');
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Pro$/);
   });
 
   test('le choix est conservé au changement d’onglet ; terminer et mode édition fonctionnent (critères 5, 6)', async ({ page }, testInfo) => {

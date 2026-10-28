@@ -31,12 +31,13 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     expect(screen.getByRole('listitem', { name: /^Il est / })).toBeInTheDocument();
   });
 
-  it('en-tête PC : mois et jour en toutes lettres, badge AUJOURD’HUI (critère 2)', async () => {
+  it('en-tête PC : mois et jour en toutes lettres (« vendredi 2 »), plus de badge, ligne « maintenant » (critère 2 ; UI-REFONTE-08)', async () => {
     mockViewport(1440);
     renderToday(h.container);
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('2 vendredi');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('vendredi 2');
     expect(screen.getByText('octobre 2026')).toBeInTheDocument();
-    expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
+    expect(screen.queryByText('Aujourd’hui')).toBeNull();
+    expect(await screen.findByRole('listitem', { name: /^Il est / })).toBeInTheDocument();
   });
 
   it('chaque tâche affiche « HH:MM · Espace » en filtre Tout, l’heure seule en filtre Pro (critères 5, 6)', async () => {
@@ -250,28 +251,28 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Jour suivant' }));
       expect(await screen.findByRole('button', { name: 'Pour demain' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('3 samedi');
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('samedi 3');
       expect(screen.queryByText('Aujourd’hui')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Aujourd’hui seulement' })).toBeNull();
 
       fireEvent.click(screen.getByRole('button', { name: 'Jour précédent' }));
       expect(await screen.findByRole('button', { name: 'Aujourd’hui seulement' })).toBeInTheDocument();
-      expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
+      expect(await screen.findByRole('listitem', { name: /^Il est / })).toBeInTheDocument(); // UI-REFONTE-08 : plus de badge, la ligne « maintenant » dit le jour courant
 
       fireEvent.click(screen.getByRole('button', { name: 'Jour précédent' }));
-      await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('1 jeudi'));
+      await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('jeudi 1'));
       expect(await screen.findByText('Rien de prévu ce jeudi.')).toBeInTheDocument();
       expect(screen.queryByText('Aujourd’hui')).toBeNull();
     });
 
-    it('goToToday ramène au jour courant avec le badge', async () => {
+    it('goToToday ramène au jour courant, ligne « maintenant » de retour', async () => {
       mockViewport(1440);
       renderToday(h.container);
       fireEvent.click(await screen.findByRole('button', { name: 'Jour suivant' }));
       await screen.findByText('Rien de prévu ce samedi.');
       act(() => useNavigationStore.getState().goToToday());
       expect(await screen.findByText('Rien de prévu aujourd’hui.')).toBeInTheDocument();
-      expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
+      expect(screen.queryByText('Aujourd’hui')).toBeNull();
     });
 
     it('les flèches n’existent pas sur iPhone', async () => {

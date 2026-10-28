@@ -43,7 +43,8 @@ test.describe('Q-06 / Q-02 — saisie rapide', () => {
     await page.getByRole('button', { name: 'Jour suivant' }).click();
     const row = rowOf(page, title);
     await expect(row).toBeVisible();
-    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('10:00 · Perso');
+    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText(/Perso$/); // UI-REFONTE-08 : l'heure est dans la colonne de l'agenda
+    await expect(row.locator('xpath=ancestor::*[contains(@class, "ct-agenda__line")]').locator('.ct-agenda__hour')).toHaveText('10:00');
   });
 
   test('Échap ferme les suggestions sans effacer la saisie ; « #pro » seul ne crée rien', async ({ page }, testInfo) => {

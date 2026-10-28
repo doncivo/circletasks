@@ -612,6 +612,11 @@ export const fr = {
     selectedMany: '{count} sélectionnées',
     // UI-REFONTE-02 : agenda du jour (Jour.html).
     moreOptions: 'Plus d’options',
+    // UI-REFONTE-08 (barre PC) : les icônes portent leur nom.
+    barGoals: 'Objectif',
+    barReport: 'Rapport',
+    barEdit: 'Édition',
+    barCompact: 'Compacte',
     nowLabel: 'Il est {time}',
     lateMinutes: 'En retard de {minutes} min',
     lateHours: 'En retard de {hours} h',

@@ -1,5 +1,5 @@
 import { useDefaultReminderOffsets } from '../reminders';
-import { ChartColumn, EllipsisVertical, Target } from 'lucide-react';
+import { AlignJustify, ChartColumn, EllipsisVertical, Pencil, Plus, Target } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nowLocalTime, todayLocal } from '../../domain/clock';
 import { buildTodayAgenda } from '../../domain/todayAgenda';
@@ -8,10 +8,10 @@ import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
 import { matchesSpaceFilter } from '../../domain/spaceRules';
 import { buildTodayList } from '../../domain/todayList';
-import type { EventId, LocalDate, TaskId } from '../../domain/types';
+import type { LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, openNow, useDelayedFlag, useLayout } from '../../ui';
+import { Fab, Icon, openNow, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -24,12 +24,13 @@ import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectivePro
 import { lazyScreen, TaskDetail } from '../app/lazyScreens';
 import { TodayAddRow } from './TodayCreate';
 import type { TodayMoreMenuProps } from './TodayMoreMenu';
+import type { TodaySideProps } from './TodaySide';
 import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';
 import { TodayHeader } from './TodayHeader';
 import { TodayListView, type TodayGestures } from './TodayListView';
 import { GoalReviewCards } from '../goals/GoalReviewCards';
-import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard, TodayGoalLine } from './TodayParts';
+import { TodayChecklists, TodayEmpty, TodayGoalLine } from './TodayParts';
 import { useTodayRowActions } from './TodayRowActions';
 import { canToggleRoutines, subscribeToTodaySources } from './todaySources';
 import { selectTodayTasks, todayStore } from './todayStore';
@@ -41,12 +42,18 @@ import './TodayScreen.css';
  * Écran Aujourd'hui (A-01) : en-tête de date, pastilles d'espace, objectif et événements fournis par leurs modules, liste mêlée
  * routines + tâches, terminés, checklists, création rapide, mode édition (A-05), vue compacte (A-06) et fiche détail (A-08).
  * Rien n'est simulé pour les modules absents (`todaySources`).
+ *
+ * iPhone (UI-REFONTE-02, Jour.html) : l'agenda du jour, Rechercher et « Plus d’options » à droite de la date, rangée d'ajout en bas.
+ * PC (UI-REFONTE-08, PC-Jour.html) : barre fixe nommée (pastilles, Rechercher, Objectif, Rapport, Un jour, Ajouter, Édition, Compacte),
+ * colonne du jour bornée à 660 px avec le même agenda, seconde colonne « Demain · Cette semaine · Raccourcis » (bloc à la demande).
  */
 /** Liste du jour (D-04) : cible de ↑ / ↓ et d'Entrée. */
 const todayListRoot = (): HTMLElement | null => document.querySelector<HTMLElement>('.ct-today__list');
 
 /** Menu « Plus d’options » de l'iPhone (UI-REFONTE-02) : feuille et catalogue chargés à la demande, hors du départ. */
 const LazyTodayMoreMenu = lazyScreen<TodayMoreMenuProps>(() => import('./TodayMoreMenu').then((m) => ({ default: m.TodayMoreMenu })), undefined, { onDemand: true });
+/** Seconde colonne du PC (UI-REFONTE-08) : bloc et catalogue chargés à la demande, hors du départ. */
+const LazyTodaySide = lazyScreen<TodaySideProps>(() => import('./TodaySide').then((m) => ({ default: m.TodaySide })), undefined, { onDemand: true });
 
 export function TodayScreen() {
   const container = useAppContainer();
@@ -114,8 +121,9 @@ export function TodayScreen() {
     [dayTasks, extras, hideRoutines, projectFilter, viewDate, viewedDate, viewFilter],
   );
 
-  // UI-REFONTE-02 (iPhone) : agenda du jour sur la colonne des heures ; la ligne « maintenant » suit l'horloge à la minute, le jour courant seulement.
-  const agendaMode = layout === 'mobile';
+  // UI-REFONTE-02 (iPhone) puis UI-REFONTE-08 (PC) : l'agenda du jour sur la colonne des heures pour les deux mises en page ; la ligne
+  // « maintenant » suit l'horloge à la minute, le jour courant seulement.
+  const agendaMode = true;
   const [now, setNow] = useState(() => nowLocalTime(container.clock));
   useEffect(() => {
     if (!agendaMode) return undefined;
@@ -193,7 +201,7 @@ export function TodayScreen() {
     if (missing) void load(viewDate, viewFilter);
   }, [entities, taskIds, viewDate, viewFilter, status, load]);
 
-  // Création : saisie en ligne (PC) ou feuille « Nouvelle tâche » (iPhone).
+  // Création : saisie en ligne (PC) ou feuille « Nouvelle tâche » (iPhone) ; sur PC, « Ajouter » de la barre ouvre aussi la feuille.
   const inlineInputRef = useRef<HTMLInputElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const defaultOffsets = useDefaultReminderOffsets();
@@ -247,176 +255,159 @@ export function TodayScreen() {
         ? t('tasks.emptyToday')
         : t('today.emptyDay', { weekday: weekdayName });
 
-  // Icône cible et encadrés d'objectif (OB-01, OB-02) : ouvrent l'écran Objectif (panneau à droite sur PC, écran plein sur iPhone).
+  // Objectif (OB-01, OB-02) : ouvre l'écran Objectif (panneau à droite sur PC, écran plein sur iPhone).
   const openGoals = (): void => {
     closeDetail();
     navigate({ tab: 'tasks', screen: 'goals' });
   };
+  const openSomeday = (): void => {
+    closeDetail();
+    navigate({ tab: 'tasks', screen: 'someday' });
+  };
+  const openReport = (): void => navigate({ tab: 'tasks', screen: 'report' });
+  const openShortcuts = (): void => useNavigationStore.getState().openOverlay({ kind: 'shortcutsHelp' });
   const pills = <SpaceFilterBar />;
-  const goalButton = (
-    <button type="button" className="ct-today__iconButton" aria-label={t('goals.open')} onClick={openGoals}>
-      <Icon icon={Target} size={layout === 'pc' ? 24 : 26} />
-    </button>
+
+  /* UI-REFONTE-08 (PC-Jour.html) : barre fixe ; les icônes portent leur nom ; « Ajouter » remplace le bouton flottant ; les deux
+     bascules A-05 / A-06 y sont nommées (libellés accessibles inchangés : « Mode édition », « Vue compacte »). */
+  const topbar = (
+    <div className="ct-today__topbar">
+      {pills}
+      <SearchButton />
+      <span className="ct-today__topbarSpacer" />
+      <button type="button" className="ct-today__barButton" aria-label={t('goals.open')} onClick={openGoals}>
+        <Icon icon={Target} size={18} />
+        <span>{t('today.barGoals')}</span>
+      </button>
+      <button type="button" className="ct-today__barButton" aria-label={t('report.openFromToday')} onClick={openReport}>
+        <Icon icon={ChartColumn} size={18} />
+        <span>{t('today.barReport')}</span>
+      </button>
+      <SomedayButton showLabel />
+      <button type="button" className="ct-today__barButton" aria-label={t('common.add')} onClick={openCreate}>
+        <Icon icon={Plus} size={18} />
+        <span>{t('common.add')}</span>
+      </button>
+      <button type="button" className="ct-today__barButton" aria-label={t('today.editMode')} aria-pressed={edit.editMode} onClick={() => edit.setEditMode(!edit.editMode)}>
+        <Icon icon={Pencil} size={18} />
+        <span>{t('today.barEdit')}</span>
+      </button>
+      <button type="button" className="ct-today__barButton" aria-label={t('today.compactView')} aria-pressed={compact} onClick={() => void setCompact(!compact)}>
+        <Icon icon={AlignJustify} size={18} />
+        <span>{t('today.barCompact')}</span>
+      </button>
+    </div>
   );
-  const reportButton = (
-    <button type="button" className="ct-today__iconButton" aria-label={t('report.openFromToday')} onClick={() => navigate({ tab: 'tasks', screen: 'report' })}>
-      <Icon icon={ChartColumn} size={layout === 'pc' ? 24 : 26} />
-    </button>
+
+  const dayColumn = (
+    <>
+      <TodayHeader
+        date={viewedDate}
+        today={today}
+        layout={layout}
+        hideBadge={agendaMode}
+        hideRule={layout === 'pc'}
+        actions={
+          layout === 'mobile' ? (
+            <>
+              <SearchButton iconClassName="ct-today__iconButton" />
+              <button type="button" className="ct-today__iconButton" aria-label={t('today.moreOptions')} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => openNow(() => setMoreOpen(true))}>
+                <Icon icon={EllipsisVertical} size={26} />
+              </button>
+            </>
+          ) : null
+        }
+        {...(layout === 'pc' ? { onPreviousDay: () => goToDay(addDays(viewedDate, -1)), onNextDay: () => goToDay(addDays(viewedDate, 1)) } : {})}
+      />
+
+      {layout === 'mobile' && pills}
+
+      {actionErrorKey && <p className="ct-today__error" role="alert">{t(actionErrorKey)}</p>}
+      {carryOverFailed && <p className="ct-today__error" role="alert">{t('tasks.carryOverError')}</p>}
+      {recurrenceFailed && <p className="ct-today__error" role="alert">{t('tasks.recurrenceError')}</p>}
+      {extrasFailed && <p className="ct-today__error" role="alert">{t('today.sourceError')}</p>}
+      {status === 'error' && errorKey && <p className="ct-today__error" role="alert">{t(errorKey)}</p>}
+
+      {status === 'error' ? null : (
+        <>
+          {/* OB-05 : propositions « Reconduire / Clore » des objectifs non atteints, en tête de liste. */}
+          <GoalReviewCards hidden={projectFilter !== null} />
+          {/* Objectif en une ligne (UI-REFONTE-02, UI-REFONTE-08) ; les événements sont des lignes de l'agenda. */}
+          {list.goals.map((entry) => (
+            <TodayGoalLine key={entry.goal.id} entry={entry} onOpen={openGoals} />
+          ))}
+          {status === 'ready' && list.isEmpty && <TodayEmpty message={emptyMessage} somedayCount={somedayCount} onOpenSomeday={openSomeday} onAdd={openCreate} />}
+          <TodayListView
+            list={list}
+            layout={layout}
+            compact={compact}
+            loading={status === 'loading'}
+            showSkeleton={showSkeleton}
+            spaces={spaces}
+            spaceFilter={spaceFilter}
+            recurrences={recurrences}
+            routinesCheckable={canToggleRoutines()}
+            routinesDisabled={viewedDate > today}
+            openedTaskId={layout === 'pc' && detail?.type === 'task' ? detail.id : null}
+            edit={edit}
+            rowActions={rowActions}
+            reorder={reorder}
+            onToggleDone={(id) => void toggleDone(id)}
+            onToggleRoutine={(id) => void toggleRoutine(id)}
+            onOpen={(id) => openDetail({ type: 'task', id })}
+            gestures={gestures}
+            agenda={agendaLines ? { lines: agendaLines, date: viewDate ?? viewedDate, today, onOpenEvent: (id) => openDetail({ type: 'event', id }) } : null}
+          />
+          <TodayChecklists items={list.checklists} spaces={spaces} showSpace={spaceFilter === 'all'} onOpen={(id) => navigate({ tab: 'checklists', checklistId: id })} />
+          {/* Annonce aux lecteurs d'écran : déplacement (A-02), chargement (A-09) ; ni role="status" (réservé au bandeau « Annuler »). */}
+          <div key={reorder.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="reorder-announcer">
+            {showSkeleton ? t('status.loading') : reorder.announcement?.text}
+          </div>
+        </>
+      )}
+
+      <TodaySelectionBar edit={edit} />
+
+      {layout === 'mobile' ? (
+        /* Jour.html : champ « Ajouter une tâche », Scanner et « + » sur une seule rangée, au-dessus de la zone de sécurité ; la bascule édition est dans le menu. */
+        <div className="ct-agenda__add">
+          <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} scanInline />
+          <Fab onClick={openCreate} label={t('common.add')} />
+        </div>
+      ) : (
+        /* PC-Jour.html : champ d'ajout avec « Date » (T-14) et « Scanner » (Q-04) en bas de la colonne du jour ; plus de bouton flottant. */
+        <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} />
+      )}
+
+      {moreOpen && (
+        <LazyTodayMoreMenu
+          somedayCount={somedayCount}
+          compact={compact}
+          editMode={edit.editMode}
+          onSomeday={openSomeday}
+          onGoals={openGoals}
+          onReport={openReport}
+          onCompact={(value) => void setCompact(value)}
+          onEditMode={edit.setEditMode}
+          onClose={() => setMoreOpen(false)}
+        />
+      )}
+    </>
   );
 
   return (
     <div className="ct-today-shell" data-layout={layout}>
       <div className="ct-today" data-layout={layout}>
-        {/* PC (PC-Aujourdhui.html) : pastilles à gauche de la rangée du haut, icônes à droite ; iPhone (Main.html) : icônes en haut,
-            pastilles sous le filet. L'icône « Un jour » (SD-01) est la première des icônes ; la recherche (RC-01) est le champ « Rechercher  Ctrl K » sur
-            PC et la dernière icône sur iPhone. */}
-        {/* iPhone (Jour.html, UI-REFONTE-02) : plus de rangée d'icônes ; Rechercher et « Plus d’options » sont à droite de la date. */}
-        {layout === 'pc' && (
-          <div className="ct-today__quickIcons" data-layout={layout}>
-            {pills}
-            <SearchButton />
-            <SomedayButton />
-            {goalButton}
-            {reportButton}
-          </div>
-        )}
-
-        <TodayHeader
-          date={viewedDate}
-          today={today}
-          layout={layout}
-          hideBadge={agendaMode}
-          actions={
-            agendaMode ? (
-              <>
-                <SearchButton iconClassName="ct-today__iconButton" />
-                <button type="button" className="ct-today__iconButton" aria-label={t('today.moreOptions')} aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => openNow(() => setMoreOpen(true))}>
-                  <Icon icon={EllipsisVertical} size={26} />
-                </button>
-              </>
-            ) : (
-              <CompactToggle active={compact} onChange={(value) => void setCompact(value)} label={t('today.compactView')} />
-            )
-          }
-          {...(layout === 'pc' ? { onPreviousDay: () => goToDay(addDays(viewedDate, -1)), onNextDay: () => goToDay(addDays(viewedDate, 1)) } : {})}
-        />
-
-        {layout === 'mobile' && pills}
-
-        {actionErrorKey && <p className="ct-today__error" role="alert">{t(actionErrorKey)}</p>}
-        {carryOverFailed && <p className="ct-today__error" role="alert">{t('tasks.carryOverError')}</p>}
-        {recurrenceFailed && <p className="ct-today__error" role="alert">{t('tasks.recurrenceError')}</p>}
-        {extrasFailed && <p className="ct-today__error" role="alert">{t('today.sourceError')}</p>}
-        {status === 'error' && errorKey && <p className="ct-today__error" role="alert">{t(errorKey)}</p>}
-
-        {status === 'error' ? null : (
+        {layout === 'pc' ? (
           <>
-            {/* OB-05 : propositions « Reconduire / Clore » des objectifs non atteints, en tête de liste. */}
-            <GoalReviewCards hidden={projectFilter !== null} />
-            {/* iPhone (UI-REFONTE-02) : objectif en une ligne, événements dans l'agenda ; PC : encadré et bandeaux (PC-Aujourdhui.html). */}
-            {agendaMode
-              ? list.goals.map((entry) => <TodayGoalLine key={entry.goal.id} entry={entry} onOpen={openGoals} />)
-              : (list.goals.length > 0 || list.events.length > 0) && (
-                  <div className="ct-today-banners" data-layout={layout}>
-                    {list.goals.map((entry) => (
-                      <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
-                    ))}
-                    <TodayEventBands events={list.events} compact={compact} date={viewDate ?? viewedDate} today={today} onOpen={(entry) => entry.calendarName === null && openDetail({ type: 'event', id: entry.id as EventId })} />
-                  </div>
-                )}
-            {status === 'ready' && list.isEmpty && (
-              <TodayEmpty
-                message={emptyMessage}
-                somedayCount={somedayCount}
-                onOpenSomeday={() => {
-                  closeDetail();
-                  navigate({ tab: 'tasks', screen: 'someday' });
-                }}
-                onAdd={openCreate}
-              />
-            )}
-            <TodayListView
-              list={list}
-              layout={layout}
-              compact={compact}
-              loading={status === 'loading'}
-              showSkeleton={showSkeleton}
-              spaces={spaces}
-              spaceFilter={spaceFilter}
-              recurrences={recurrences}
-              routinesCheckable={canToggleRoutines()}
-              routinesDisabled={viewedDate > today}
-              openedTaskId={layout === 'pc' && detail?.type === 'task' ? detail.id : null}
-              edit={edit}
-              rowActions={rowActions}
-              reorder={reorder}
-              onToggleDone={(id) => void toggleDone(id)}
-              onToggleRoutine={(id) => void toggleRoutine(id)}
-              onOpen={(id) => openDetail({ type: 'task', id })}
-              gestures={gestures}
-              agenda={agendaLines ? { lines: agendaLines, date: viewDate ?? viewedDate, today, onOpenEvent: (id) => openDetail({ type: 'event', id }) } : null}
-            />
-            <TodayChecklists
-              items={list.checklists}
-              spaces={spaces}
-              showSpace={spaceFilter === 'all'}
-              onOpen={(id) => navigate({ tab: 'checklists', checklistId: id })}
-            />
-            {/* Annonce aux lecteurs d'écran : déplacement (A-02), chargement (A-09) ; ni role="status" (réservé au bandeau « Annuler »). */}
-            <div key={reorder.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="reorder-announcer">
-              {showSkeleton ? t('status.loading') : reorder.announcement?.text}
+            {topbar}
+            <div className="ct-today__columns">
+              <div className="ct-today__dayColumn">{dayColumn}</div>
+              <LazyTodaySide today={today} filter={spaceFilter} projectFilter={projectFilter} refreshKey={entities} onOpenShortcuts={openShortcuts} />
             </div>
           </>
-        )}
-
-        <TodaySelectionBar edit={edit} />
-
-        {agendaMode ? (
-          /* Jour.html : champ « Ajouter une tâche », Scanner et « + » sur une seule rangée, au-dessus de la zone de sécurité ; la bascule édition est dans le menu. */
-          <div className="ct-agenda__add">
-            <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} scanInline />
-            <Fab onClick={openCreate} label={t('common.add')} />
-          </div>
         ) : (
-          <TodayAddRow layout={layout} today={today} inputRef={inlineInputRef} onSubmit={submitInline} />
-        )}
-
-        {moreOpen && (
-          <LazyTodayMoreMenu
-            somedayCount={somedayCount}
-            compact={compact}
-            editMode={edit.editMode}
-            onSomeday={() => {
-              closeDetail();
-              navigate({ tab: 'tasks', screen: 'someday' });
-            }}
-            onGoals={openGoals}
-            onReport={() => navigate({ tab: 'tasks', screen: 'report' })}
-            onCompact={(value) => void setCompact(value)}
-            onEditMode={edit.setEditMode}
-            onClose={() => setMoreOpen(false)}
-          />
-        )}
-
-        {!agendaMode && (
-        <div className="ct-today__bottomRow">
-          <EditModeSwitch active={edit.editMode} onChange={edit.setEditMode} label={t('today.editMode')} />
-          {layout === 'pc' && (
-            <span className="ct-today__hint">
-              <Kbd keys="Ctrl+N" separator=" " /> {t('today.hintNewTask')}
-              {' · '}
-              <button
-                type="button"
-                className="ct-today__hintButton"
-                aria-label={t('shortcutsUi.openHelpLabel')}
-                onClick={() => useNavigationStore.getState().openOverlay({ kind: 'shortcutsHelp' })}
-              >
-                <Kbd keys="Ctrl+/" separator=" " /> {t('shortcutsUi.hintHelp')}
-              </button>
-            </span>
-          )}
-          <Fab onClick={openCreate} label={t('common.add')} />
-        </div>
+          dayColumn
         )}
 
         {sheetOpen && (

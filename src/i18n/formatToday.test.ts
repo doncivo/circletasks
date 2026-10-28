@@ -9,12 +9,12 @@ describe('formatTodayHeader (A-01 critère 2)', () => {
     expect(formatTodayHeader('2026-09-23', 'short')).toEqual({ monthLine: 'sept. 2026', dayLine: '23 mer.' });
   });
 
-  it('PC : « septembre 2026 » et « 23 mercredi »', () => {
-    expect(formatTodayHeader('2026-09-23', 'long')).toEqual({ monthLine: 'septembre 2026', dayLine: '23 mercredi' });
+  it('PC : « septembre 2026 » et « mercredi 23 » (UI-REFONTE-08, PC-Jour.html : jour en lettres d’abord)', () => {
+    expect(formatTodayHeader('2026-09-23', 'long')).toEqual({ monthLine: 'septembre 2026', dayLine: 'mercredi 23' });
   });
 
-  it('un autre jour (flèches PC) : « 24 jeudi »', () => {
-    expect(formatTodayHeader('2026-09-24', 'long').dayLine).toBe('24 jeudi');
+  it('un autre jour (flèches PC) : « jeudi 24 »', () => {
+    expect(formatTodayHeader('2026-09-24', 'long').dayLine).toBe('jeudi 24');
   });
 
   it('nom du jour pour l’état vide', () => {

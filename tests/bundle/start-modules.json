@@ -56,7 +56,6 @@
         "src/ui/Checkbox.tsx",
         "src/ui/ChoiceDialog.css",
         "src/ui/ChoiceDialog.tsx",
-        "src/ui/CompactToggle.tsx",
         "src/ui/ConfirmDialog.css",
         "src/ui/ConfirmDialog.tsx",
         "src/ui/DateField.tsx",
