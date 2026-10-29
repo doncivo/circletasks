@@ -2,7 +2,7 @@
 
 Module : M7 Événements, avec M12 Réglages (réglage local) · Palier : alignement PRD-02 décidé par Ali le 2026-10-28, à livrer dans l'IPA N+1 · Agent : checklists-events · Ouverte le 2026-10-28 par Claude Code.
 
-Statut : **en CI, passes product-owner, module et revue écrites.** Estimation : 1 h 30 active ; alerte à 2 h 30.
+Statut : **fusionnée (#113, 8ed535ac), quatre passes consignées.** Estimation : 1 h 30 active ; alerte à 2 h 30.
 
 ## Origine
 
@@ -35,11 +35,11 @@ Le PC ; les calendriers de fériés et leurs réglages ; les bandeaux d'Aujourd'
 
 ## Mesure du bundle
 
-Avant push (commit 023cee38, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 931 octets normalisés** (écart normalisé / brut +142, dans la borne large de 300), **marge 20 469** ; **+36** face à `main` 337 895 (définition du réglage et cas d'usage dans le départ) ; garde 66/66, aucun module nouveau. Mesure de `main` après fusion : à consigner.
+Avant push (commit 023cee38, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 931 octets normalisés** (écart normalisé / brut +142, dans la borne large de 300), **marge 20 469** ; **+36** face à `main` 337 895 (définition du réglage et cas d'usage dans le départ) ; garde 66/66, aucun module nouveau. Mesure de `main` après fusion (#113, 8ed535ac) : **338 017 octets normalisés** (brute 337 990), marge 20 383, lue dans le job « Performance et bundle » de la CI sur l'arbre de `main` après #112 et #113 (aucune mesure locale : mémoire du PC). +61 face à 337 956 (#110) pour #112 (+6) et #113 (+36) et le bruit de hachage.
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI** : trois passages, tous verts (48 contrôles) ; les deux premiers sur des têtes en retard sur `main` après les fusions voisines (#109, #110, #112), mises à jour sans modification de code. Fusionnée (#113, 8ed535ac). Aucune adaptation de test après coup.
 
 ## Passe code-reviewer
 

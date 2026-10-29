@@ -28,12 +28,12 @@ Matériel : l'IPA de laboratoire du lot (compilation 40750480780, 7 383 017 octe
 
 11. **Agenda du jour (UI-REFONTE-02), clair et sombre.** Colonne des heures, ligne « maintenant », passé atténué, dû en gros « En retard de … », sans heure derrière un tiret, aucun badge ; menu « Plus d'options » : Un jour (compte), Objectif, Rapport, Vue compacte, Mode édition ; rangée d'ajout au-dessus de la barre basse, clavier ouvert puis fermé.
 12. **Geste sur une ligne (A-07).** Balayer la tâche d'essai → actions terminer / reporter proposées, annulation 5 s après « Terminer » (T-04).
-13. **Capture rapide (Q-05).** « + » → feuille avec le titre actif ; taper « Acheter du pain #perso demain 10h » et **Entrée tout de suite** → tâche créée (si l'Entrée est ignorée : c'est Q-05-FIX-01, noter l'heure et la durée avant que le bouton s'active).
+13. **Capture rapide (Q-05).** « + » → feuille avec le titre actif ; taper « Acheter du pain #perso demain 10h » et **Entrée tout de suite**, sans attendre l'affichage des options → tâche créée du premier coup (Q-05-FIX-01 corrigé dans cette IPA : le bouton « Ajouter la tâche » est nommé et actif dès l'ouverture ; une Entrée sans effet est un défaut, noter l'heure).
 14. **Concentration (UI-FIX-06).** Détail › Focus → en-tête « Concentration », Pause en bouton plein puis Reprendre, « Terminer la tâche » au trait ; le pied « Aujourd'hui : … de concentration · session en cours » avance chaque seconde. Terminer la session (F-04 : son ou texte « Session terminée »).
 
 **Semaine (10 min)**
 
-15. **UI-REFONTE-03.** Heures en colonne, aujourd'hui au trait et en gras, jours en minuscules, week-end allégé, synthèse « N restantes · N faites · N en retard » ; toucher l'en-tête de jeudi → « Ajouter à jeudi N », ajout au bon jour ; clavier ouvert : rangée au-dessus de la barre basse ; semaine suivante puis retour → « Cette semaine » seulement hors de la semaine courante ; sombre lisible.
+15. **UI-REFONTE-03.** Heures en colonne, aujourd'hui au trait et en gras, jours en minuscules, week-end allégé, synthèse « N restantes · N faites · N en retard » ; toucher l'en-tête de jeudi → « Ajouter à jeudi N », ajout au bon jour ; une tâche rattachée à l'objectif de la semaine porte la **marque d'objectif** (cible) après son titre (UI-FIX-07, OB-03 rétabli) et une tâche non rattachée n'en porte pas ; clavier ouvert : rangée au-dessus de la barre basse ; semaine suivante puis retour → « Cette semaine » seulement hors de la semaine courante ; sombre lisible.
 
 **Routines (15 min)**
 
@@ -47,7 +47,7 @@ Matériel : l'IPA de laboratoire du lot (compilation 40750480780, 7 383 017 octe
 
 **Événements (10 min)**
 
-20. **UI-REFONTE-07.** Fériés en gris sans badge, « Jour férié en France / en Tunisie », événements propres en encre avec « J-N », pastille « Masquer les fériés » (session seulement), rangée du bas « Vue calendrier » + « Événement » ; tous fériés masqués et aucun événement → état vide avec le bouton d'ajout, pastille visible.
+20. **UI-REFONTE-07.** Fériés en gris sans badge, « Jour férié en France / en Tunisie », événements propres en encre avec « J-N », pastille « Masquer les fériés » **mémorisée par appareil** (UI-FIX-08) : la toucher, quitter l'app complètement, la rouvrir → toujours masqués, libellé « Afficher les fériés » ; rangée du bas « Vue calendrier » + « Événement » ; tous fériés masqués et aucun événement → état vide avec le bouton d'ajout, pastille visible.
 
 **Réglages et Synchronisation (25 min)**
 

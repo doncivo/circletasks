@@ -2,7 +2,7 @@
 
 Module : M3 Semaine, avec M17 Objectif (OB-03 critère 3) · Palier : alignement PRD-02 décidé par Ali le 2026-10-28, à livrer dans l'IPA N+1 · Agent : tasks-planning · Ouverte le 2026-10-28 par Claude Code.
 
-Statut : **en CI, passes product-owner, module et revue écrites.** Estimation : 1 h active ; alerte à 2 h.
+Statut : **fusionnée (#112, 3943f4b7), quatre passes consignées.** Estimation : 1 h active ; alerte à 2 h.
 
 ## Origine
 
@@ -34,11 +34,11 @@ L'agenda d'Aujourd'hui (iPhone et PC) ; l'icône de tâche ; le PRD (PRD-02 est 
 
 ## Mesure du bundle
 
-Avant push (commit a85f3c53, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 901 octets normalisés** (brute 337 754, écart +147 dans la borne large de 300), **marge 20 499** ; **+6** face à `main` 337 895 ; garde 66/66, aucun module nouveau. Mesure de `main` après fusion : à consigner.
+Avant push (commit a85f3c53, build `--manifest`, `node tests/bundle/measureStart.ts`) : **337 901 octets normalisés** (brute 337 754, écart +147 dans la borne large de 300), **marge 20 499** ; **+6** face à `main` 337 895 ; garde 66/66, aucun module nouveau. Mesure de `main` après fusion (#112, 3943f4b7) : non relevée isolément (le relevé local a été arrêté par le système, mémoire critique, et n'a pas été relancé sans demande) ; la CI de #113, testée sur l'arbre de `main` après #112 et #113, donne **338 017 octets normalisés**, marge 20 383 (voir UI-FIX-08).
 
 ## Passe QA
 
-À écrire après la CI complète.
+- **CI, premier passage** (head 00a1a564) : 48 verts mais branche en retard sur `main` (créée avant #109) ; mise à jour, **second passage** : 48 verts. Fusionnée (#112, 3943f4b7). Aucune adaptation de test après coup.
 
 ## Passe code-reviewer
 

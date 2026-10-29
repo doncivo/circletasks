@@ -2,7 +2,7 @@
 
 Module : M16 (transverse) · Palier : refontes après la 1.0.2 · Agent : product-owner, arbitrage par Ali · Ouverte le 2026-10-28 par Claude Code à la demande d'Ali (« présente-les-moi groupés, avec pour chacun ce que ça change pour moi à l'usage, je trancherai par lot »).
 
-Statut : **ouverte, arbitrage par lot attendu.** Le PRD n'est pas modifié tant qu'Ali n'a pas tranché ; chaque lot accepté donne lieu à une retouche des stories citées (formulation des critères), jamais à une fonction nouvelle ni à une sortie du périmètre.
+Statut : **tranchée par Ali le 2026-10-28 : oui aux six lots, deux réserves** : lot C sauf OB-03 (« la marque d'objectif dans la Semaine est de l'information, pas de la décoration », rétablie par UI-FIX-07) ; lot F avec « Masquer les fériés » **mémorisé** (« un filtre d'affichage qui s'oublie à chaque ouverture ne sert à rien ; choisir quels pays suivre et choisir de les masquer sont deux réglages différents », UI-FIX-08). PRD aligné dans cette PR (en-tête de révision, stories T-03, T-11, A-05, A-06, S-01, S-03, S-04, C-02, C-05, E-03, P-01, P-03, P-08, D-04, Y-04, OB-01, OB-02, SD-01, section 5 Aujourd'hui et Checklists) ; OB-03 inchangé. Les deux correctifs partent dans l'IPA N+1 avec Q-05-FIX-01.
 
 Sources : le tableau « Écarts avec le PRD et les maquettes, assumés » de chaque fiche `UI-REFONTE-02` à `UI-REFONTE-09`. Les écarts purement internes (classes CSS, aides e2e) ne sont pas repris ici. Ce qui n'a pas changé n'est pas listé : les réglages, les données, les raccourcis clavier, l'enregistrement, les libellés accessibles.
 

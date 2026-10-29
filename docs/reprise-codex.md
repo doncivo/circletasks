@@ -2,28 +2,36 @@
 
 Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et les décisions applicables, rien d'autre. Chaque jalon remplace la section « État au … » au lieu d'empiler un nouveau « point prioritaire ». L'historique du 19 au 27 octobre 2026, tel qu'il a été écrit au fil des reprises, est archivé dans `docs/reprise-historique-2026-10.md` ; en cas de désaccord entre les deux fichiers, celui-ci l'emporte. Règles de travail : `AGENTS.md`. Stack et architecture : `CLAUDE.md`.
 
-## État au 2026-10-28, soir (Claude Code)
+## État au 2026-10-29, midi (Claude Code)
 
-### Fusionné le 28 octobre dans `main`, dans l'ordre
+### Fusionné dans `main`
 
-- #99 UI-REFONTE-02 (Aujourd'hui iPhone, 9e97ee21), #100 AGENTS (tests unitaires et DOM en local, e2e en CI, a520624b), #101 UI-REFONTE-03 (Semaine, c9507aa1), #102 UI-REFONTE-04 (Synchronisation, 9f010ec5), #103 UI-REFONTE-05 (Routines, de6d486a), #104 UI-REFONTE-06 (Checklists, c5a8ac20), #105 UI-REFONTE-07 (Événements, e9d094b4), #106 UI-REFONTE-08 (Aujourd'hui PC, e4fb9e9a). Bundle de `main` : 337 922 normalisés, marge 20 478.
-- Chaque fiche `docs/stories/UI-REFONTE-0x.md` porte les quatre passes, les identifiants rouge et vert, les mesures avant push et sur `main`, et son tableau d'écarts (matière de PRD-02).
+- Les huit refontes (#99 à #107), #100 (AGENTS : tests unitaires et DOM en local, e2e en CI), #108 (clôture), #109 (séance unique) ; puis les trois correctifs décidés par Ali : **#110 Q-05-FIX-01** (c3a09d1c), **#112 UI-FIX-07** (3943f4b7), **#113 UI-FIX-08** (8ed535ac). Bundle de `main` : **338 017** normalisés, marge 20 383 (relevé dans la CI : le relevé local a été arrêté par le système, mémoire critique, et non relancé sans demande). Garde du bundle à borne asymétrique 100 / 300 (décision d'Ali).
+- Compilation iPhone du lot des refontes (run 40750480780, IPA de laboratoire 7 383 017 octets) : **périmée** ; l'IPA N+1 reste à compiler (une seule fois) sur `main`.
+
+### Décisions d'Ali (28 au soir)
+
+- Q-05-FIX-01 maintenant ; PRD-02 : oui aux six lots, sauf OB-03 conservé (marque d'objectif dans la Semaine : UI-FIX-07) et « Masquer les fériés » mémorisé (UI-FIX-08) ; borne du critère 4 de BUNDLE-01 : 100 octets quand la mesure est plus petite que le build réel, 300 dans l'autre sens. Les trois correctifs et les alignements partent dans l'IPA N+1.
+- Procédure : je ne m'arrête que pour une décision tranchée à rouvrir, un défaut qui perd des données ou affiche un état faux, une estimation qui dérape de plus de 50 %, ou un besoin physique de l'iPhone.
 
 ### En vol
 
-- **UI-REFONTE-09** (Réglages PC, dernière des huit) : PR #107, branche `ui-refonte-09-reglages-pc` (worktree `.claude/worktrees/codex-main-validation`), rouge 7d7b2b70, vert 7287609b, bundle −28 ; **fusionnée (#107, a17c9ada)** après la décision d'Ali sur le critère 4 de BUNDLE-01 (borne asymétrique 100 / 300, dette BUNDLE-02). `main` : 337 895 normalisés, marge 20 505. Compilation iPhone du lot verte (run 40750480780, sans publication ; IPA 7 383 017 octets, SHA-256 e85a4e1f…c8ec) ; contrôles natifs dans `docs/essais-iphone.md`, séance d'Ali à venir ; publication avec REL-01 à REL-03.
+| Élément | État |
+| --- | --- |
+| #111 PRD-02 (PRD aligné, point d'état, journal, fiches, guide de séance, backlog) | documentation seule ; CI relancée après chaque mise à jour de `main` ; **à fusionner au vert** |
+| Y-05-OBS | une tâche longue isolée de 1 476 ms (Y-05, @perf) sur #110, non reproduite à la relance, cause non établie ; journal du 2026-10-29 et backlog ; si l'échec revient : défaut du publieur, Ali prévenu avant tout e2e local |
 
-### Reste à faire
+### Reste à faire, dans l'ordre
 
-1. Fusionner #107 (ci-dessus).
-2. **PRD-02** : à ouvrir par Ali ; la liste des écarts est dans le backlog et dans chaque fiche.
-3. Une compilation iPhone du lot des refontes (une seule), les contrôles natifs du guide (dont N-FIX-03, N-FIX-04, UI-FIX-04 à 06 et le rendu natif de UI-REFONTE-01 à 07), puis REL-01 à REL-03.
-4. Q-05-FIX-01 attend la décision d'Ali (fiche et backlog).
+1. Fusionner #111 au vert.
+2. **Une** compilation iPhone du lot (`build-ios.yml` lancé à la main sur `main`, sans publication) ; relever taille et SHA-256 de l'IPA N+1 et les mettre dans la séance unique (`docs/essais-iphone.md`) ; **prévenir Ali : c'est le signal de sa séance**.
+3. Séance d'Ali (36 lignes) ; ses résultats ; puis REL-01, REL-02, REL-03 (publication par tag `ios-v*`, source SideStore, mise à jour N → N+1) et rapport final.
 
-### Règles ajoutées le 28 octobre
+### Règles en vigueur
 
-- Tests unitaires et DOM en local seulement ; e2e Playwright en CI ; prévenir Ali avant tout e2e local ; jamais `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP` (`AGENTS.md`, #100).
-- Les PR doivent être à jour de `main` pour fusionner : mettre la branche à jour (`gh api -X PUT repos/doncivo/circletasks/pulls/N/update-branch`) dès qu'une PR voisine est fusionnée, puis attendre la CI.
+- Tests unitaires et DOM en local seulement ; e2e Playwright en CI ; prévenir Ali avant tout e2e local ; jamais `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP` (`AGENTS.md`). Un travail lourd arrêté par le système pour manque de mémoire n'est pas relancé sans demande.
+- Une PR doit être à jour de `main` pour fusionner : mettre la branche à jour par l'API (`gh api -X PUT repos/doncivo/circletasks/pulls/N/update-branch`) après chaque fusion voisine ; ordre de fusion : code d'abord, documentation en dernier.
+- Un seul build iPhone par lot terminé, jamais pour de la documentation. Test rouge avant le code pour tout défaut de l'app ; mesure du bundle après chaque fusion ; plafond 358 400 octets.
 
 ## État au 2026-10-27, nuit (Claude Code, reprise après le redémarrage du PC)
 
