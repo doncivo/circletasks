@@ -5,6 +5,7 @@ import type { CalendarAccount, CalendarEvent, ExternalEvent, Holiday } from '../
 import type { IsoDateTime, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSettingsUseCases } from '../settings/settingsUseCases';
 import { onEventsChanged } from './eventEvents';
 import { loadHolidayData } from './holidayUseCases';
 
@@ -29,6 +30,12 @@ export interface EventsState {
   readonly syncedAt: IsoDateTime | null;
   readonly status: EventsStatus;
   readonly errorKey: PlainMessageKey | null;
+  /** UI-FIX-08 : fériés masqués dans la liste iPhone (réglage local `events.hideHolidays`), lu au chargement. */
+  readonly hideHolidays: boolean;
+  /** UI-FIX-08 : échec d'écriture du réglage, dit à l'écran ; effacé à la bascule suivante. */
+  readonly settingErrorKey: PlainMessageKey | null;
+  /** UI-FIX-08 : bascule « Masquer les fériés » et la mémorise ; en cas d'échec, revient à la valeur enregistrée. Ne rejette jamais. */
+  setHideHolidays(value: boolean): Promise<void>;
   /** (Re)charge l'année pour le filtre d'espace. Ne rejette jamais. */
   load(year: number, filter: SpaceFilter): Promise<void>;
   /** Relit sans repasser par `loading` (une suppression annulée ailleurs). Ne rejette jamais. */
@@ -38,6 +45,8 @@ export interface EventsState {
 export const eventsStore = defineFeatureStore<EventsState>((container: AppContainer) => {
   // Jeton de requête : le résultat d'une lecture dépassée par une plus récente est ignoré (changement d'année rapide).
   let requestId = 0;
+  const settingsUseCases = createSettingsUseCases(container);
+  const readHideHolidays = (): Promise<boolean> => container.data.repos.settings.get('events.hideHolidays').catch(() => false);
 
   const read = async (year: number, filter: SpaceFilter) => {
     const from = makeLocalDate(year, 1, 1);
@@ -51,7 +60,8 @@ export const eventsStore = defineFeatureStore<EventsState>((container: AppContai
     ]).catch((): [readonly ExternalEvent[], readonly CalendarAccount[]] => [[], []]);
     const holidays = await loadHolidayData(container, from, to);
     const syncedAt = externalEvents.reduce<IsoDateTime | null>((latest, event) => (latest === null || event.syncedAt > latest ? event.syncedAt : latest), null);
-    return { events, externalEvents, accounts, syncedAt, holidayCountries: holidays.countries, holidayRows: holidays.rows };
+    const hideHolidays = await readHideHolidays();
+    return { events, externalEvents, accounts, syncedAt, holidayCountries: holidays.countries, holidayRows: holidays.rows, hideHolidays };
   };
 
   const store = createStore<EventsState>()((set, get) => ({
@@ -65,6 +75,18 @@ export const eventsStore = defineFeatureStore<EventsState>((container: AppContai
     syncedAt: null,
     status: 'idle',
     errorKey: null,
+    hideHolidays: false,
+    settingErrorKey: null,
+
+    async setHideHolidays(value) {
+      const previous = get().hideHolidays;
+      set({ hideHolidays: value, settingErrorKey: null });
+      try {
+        await settingsUseCases.setHideHolidays(value);
+      } catch {
+        set({ hideHolidays: previous, settingErrorKey: 'events.holidaySettings.saveError' });
+      }
+    },
 
     async load(year, filter) {
       const id = ++requestId;

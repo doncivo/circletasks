@@ -18,7 +18,7 @@ La liste par mois reste (jour en Fraunces et jour de la semaine, titre, sous-lig
 | --- | --- | --- |
 | E-03 (fiche) | « tags « Férié FR » / « Férié TN » » dans la liste | plus de badge sur iPhone ; sous-ligne « Jour férié en France » (clé commune, le PC la reçoit aussi : « Jour férié · France » → « Jour férié en France ») ; les bandeaux d'Aujourd'hui et de la Semaine gardent leur étiquette (hors périmètre) |
 | Maquette | compte à rebours « dans 40 j » | « J-40 » conservé : forme du PRD E-04, partagée avec l'agenda d'Aujourd'hui et la Semaine (`countdownText`) ; à revoir dans la refonte PC si Ali le veut |
-| Maquette | « Masquer les fériés » | pastille d'affichage, mémorisée le temps de la session (état de l'écran), pas un réglage : les calendriers se règlent dans Réglages (E-03 critère 3) |
+| Maquette | « Masquer les fériés » | **Révisé le 2026-10-28 (PRD-02, lot F, réserve d'Ali ; UI-FIX-08)** : le choix est mémorisé par appareil (réglage local `events.hideHolidays`). Avant UI-FIX-08 : pastille d'affichage, mémorisée le temps de la session (état de l'écran), pas un réglage : les calendriers se règlent dans Réglages (E-03 critère 3) |
 | Maquette | « Vue calendrier » | remplace « Calendrier » (le titre de la feuille reste « Calendrier ») |
 
 À ajouter à PRD-02 : E-03 (sous-ligne des fériés, pastille d'affichage).

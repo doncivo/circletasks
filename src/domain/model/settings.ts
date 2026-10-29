@@ -32,6 +32,8 @@ export interface SettingsValues {
   'search.recent': readonly string[];
   /** ES-03 : dernier filtre choisi (mémorisé par appareil). */
   'spaces.filter': SpaceFilter;
+  /** UI-FIX-08 (PRD-02, lot F) : fériés masqués dans la liste Événements de l'iPhone ; choix d'affichage propre à l'appareil. */
+  'events.hideHolidays': boolean;
   /** ES-02 : espace des nouveaux éléments quand le filtre vaut « Tout ». */
   'spaces.defaultSpaceId': SpaceId | null;
   /** N-02 : avances proposées par défaut à la création (sous-ensemble de REMINDER_OFFSETS_MIN). */
@@ -130,6 +132,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'view.compact': { scope: 'local', defaultValue: { today: false, routines: false, checklists: false, someday: false } },
   'search.recent': { scope: 'local', defaultValue: [] },
   'spaces.filter': { scope: 'local', defaultValue: 'all' },
+  'events.hideHolidays': { scope: 'local', defaultValue: false },
   'spaces.defaultSpaceId': { scope: 'shared', defaultValue: null },
   'reminders.defaultOffsets': { scope: 'shared', defaultValue: [0] },
   'reminders.morningRecap': { scope: 'shared', defaultValue: { enabled: true, time: '07:30' as LocalTime } },
