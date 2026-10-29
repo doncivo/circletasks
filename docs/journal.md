@@ -1,5 +1,13 @@
 # Journal de développement CircleTasks
 
+## 2026-10-29 — Y-05 (@perf) : une tâche longue isolée de 1 476 ms sur #110, cause non établie
+
+Constat : run 40786557564 (PR #110 Q-05-FIX-01, branche à jour de `main` 1af404f0), job « Performance et bundle », `J10-conflit-hors-ligne.spec.ts:188` : tâches longues relevées `[1476, 53, 56, 51, 51, 50, 54, 50, 50, 50, 52, 51, 50, 50, 57]` ; le seuil est 250 ms. La garde du bundle du même job passe (66/66). Le diff de #110 ne touche ni `src/sync`, ni `src/domain/sync`, ni la base ni le test : feuille « Nouvelle tâche », deux catalogues de textes, un test DOM.
+
+Ce que les données disent : quatorze tâches à 50–57 ms (le budget de pause du publieur, `yieldToEventLoop`, fonctionne) et une seule à 1 476 ms, la première relevée après l'installation de l'observateur, donc dans le premier cycle (interrompu) ou juste après le remplissage de 5 000 lignes. Ce n'est pas la signature d'une régression de mise en forme (qui ferait grossir toutes les tâches) mais d'un appel synchrone non découpé (SQLite Wasm dans la page, ramasse-miettes ou arrêt du runner). Ce test a passé dans toutes les exécutions précédentes du 28 octobre (au moins quinze). **Cause non établie** : aucun e2e local (règle d'Ali du 2026-10-28), pas de trace de tâche longue dans l'artefact.
+
+Décision : le test n'est ni modifié, ni allongé, ni désactivé. Le job est relancé une fois comme **mesure de reproductibilité**, non comme réparation : si l'échec revient (sur cette PR ou une autre), il est traité comme un défaut du publieur (appel non découpé à chercher, avec relevé des tâches longues par entrée `attribution`), et Ali est prévenu avant tout e2e local ; s'il ne revient pas, l'occurrence reste ici comme donnée et un point d'instrumentation est inscrit au backlog (Y-05-OBS : consigner `entry.attribution` dans l'échec du test).
+
 ## 2026-10-28 — Refontes 02 à 09 : sept fusionnées, la huitième en CI
 
 Dans l'ordre d'Ali, chaque refonte a eu sa branche, sa fiche, son commit de tests rouges avant le code, ses quatre passes et sa mesure du bundle avant push et sur `main` après fusion. Fusions : #99 (02, 9e97ee21), #101 (03, c9507aa1), #102 (04, 9f010ec5), #103 (05, de6d486a), #104 (06, c5a8ac20), #105 (07, e9d094b4), #106 (08, e4fb9e9a). UI-REFONTE-09 (Réglages PC) est en PR #107.
