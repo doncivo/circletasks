@@ -7,7 +7,7 @@ import { tWeekRefonte } from '../../i18n/weekRefonteText';
 import { Checkbox, IconView, resolveIconRefColor, spaceTextColor, type Layout } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
 import type { CountdownTag } from '../events/countdownText';
-import { routineSubtitle, taskSubtitle } from '../tasks/taskLine';
+import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Éléments d'un jour de la Semaine (S-01) : présentation seule, les actions viennent de l'écran. PC (PC-Semaine.html) : cartes
@@ -67,6 +67,8 @@ export function WeekTaskItem({ task, layout, spaces, showSpace, rule, opened, la
         <HourCell time={task.time} />
         {checkbox}
         {title}
+        {/* UI-FIX-07 (PRD-02, lot C, réserve d'Ali) : la marque d'objectif est de l'information, elle reste sur la ligne iPhone (OB-03 critère 3). */}
+        {task.goalId && <TaskGoalMark size={14} />}
         {late && <span className="ct-week-item__late">{tWeekRefonte('lateMark')}</span>}
       </div>
     );
