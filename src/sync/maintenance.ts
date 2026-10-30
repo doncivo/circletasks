@@ -9,7 +9,7 @@ import { isStrictHlc } from '../domain/sync/format';
 import { SYNC_TABLES, isPurgeable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import type { DeviceScan } from '../platform/sync/types';
-import { CARRY_HELD_MARK, applyOps } from './apply';
+import { CARRY_HELD_MARK, applyOpsIsolated } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
@@ -118,7 +118,7 @@ export async function retryParked(deps: SyncDeps, stats: { carryHeld: number; re
     }
     const now = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
     await guarded(deps.data, async (repos) => {
-      const result = await applyOps(repos, ops, { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, noPark: true });
+      const result = await applyOpsIsolated(repos, ops, { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, noPark: true });
       const done = parked.filter((_, i) => result.outcomes[i] !== 'parked' && !marked[i]).map((p) => p.id);
       for (const [i, p] of parked.entries()) {
         if (!marked[i]) continue;

@@ -511,6 +511,78 @@ function addTouched(touched: Map<string, Set<string>>, table: string, id: string
   touched.set(table, set);
 }
 
+/**
+ * TRI-24 : application d'un lot où une opération refusée par la base locale (contrainte : unicité, NOT NULL, CHECK, clé étrangère) ne bloque
+ * plus tout le reste. Le lot entier est d'abord tenté dans un point de sauvegarde (cas normal, un seul passage) ; sur une erreur de contrainte
+ * seulement, il est annulé puis rejoué opération par opération, chacune dans son point de sauvegarde. L'opération fautive est écartée,
+ * journalisée (table et code, jamais le contenu) et mémorisée dans `sync_meta.applyRejected` : `received-unapplied` reste visible jusqu'à la
+ * reprise complète. Toute autre erreur (verrou, transaction perdue, E/S) est relancée telle quelle : jamais prise pour une donnée fautive.
+ * Le curseur avance avec le lot : l'enregistrement reste dans le journal, une reprise complète le rejoue.
+ */
+export async function applyOpsIsolated(repos: Repositories, ops: readonly SyncOp[], ctx: ApplyContext): Promise<ApplyResult> {
+  const sync = repos.sync;
+  await sync.savepoint(BATCH_SAVEPOINT);
+  try {
+    const result = await applyOps(repos, ops, ctx);
+    await sync.releaseSavepoint(BATCH_SAVEPOINT);
+    return result;
+  } catch (error) {
+    if (!isConstraintFailure(error)) throw error;
+    await sync.rollbackToSavepoint(BATCH_SAVEPOINT);
+    await sync.releaseSavepoint(BATCH_SAVEPOINT);
+  }
+  const touched = new Map<string, Set<string>>();
+  const outcomes: OpOutcome[] = [];
+  const rejected: SyncOp[] = [];
+  let conflicts = 0;
+  for (const op of ops) {
+    await sync.savepoint(OP_SAVEPOINT);
+    try {
+      const result = await applyOps(repos, [op], ctx);
+      await sync.releaseSavepoint(OP_SAVEPOINT);
+      mergeTouched(touched, result.touched);
+      conflicts += result.conflicts;
+      outcomes.push(...result.outcomes);
+    } catch (error) {
+      if (!isConstraintFailure(error)) throw error;
+      await sync.rollbackToSavepoint(OP_SAVEPOINT);
+      await sync.releaseSavepoint(OP_SAVEPOINT);
+      rejected.push(op);
+      outcomes.push('rejected');
+    }
+  }
+  if (rejected.length > 0) await recordRejected(sync, ctx.logger, rejected);
+  return { touched, conflicts, outcomes };
+}
+
+const BATCH_SAVEPOINT = 'apply_batch';
+const OP_SAVEPOINT = 'apply_op';
+/** Nombre maximal de noms de tables mémorisés avec le compteur. */
+const REJECTED_TABLES_MAX = 16;
+
+const isConstraintFailure = (error: unknown): boolean => error instanceof Error && (error as { code?: unknown }).code === 'constraint';
+
+async function recordRejected(sync: Repositories['sync'], logger: SyncLogger, rejected: readonly SyncOp[]): Promise<void> {
+  let n = 0;
+  const tables = new Set<string>();
+  const raw = await sync.getMeta(META.applyRejected);
+  if (raw !== null) {
+    try {
+      const value = JSON.parse(raw) as { n?: unknown; tables?: unknown };
+      if (typeof value.n === 'number') n = value.n;
+      if (Array.isArray(value.tables)) for (const t of value.tables) if (typeof t === 'string') tables.add(t);
+    } catch {
+      // valeur illisible : on repart de zéro, l'avertissement est de toute façon levé par les rejets de ce lot
+    }
+  }
+  for (const op of rejected) {
+    const table = syncTable(op.t)?.name ?? 'inconnue';
+    tables.add(table);
+    logger.log('apply-rejected', { table, code: 'constraint' });
+  }
+  await sync.setMeta(META.applyRejected, JSON.stringify({ n: n + rejected.length, tables: [...tables].sort().slice(0, REJECTED_TABLES_MAX) }));
+}
+
 export function mergeTouched(into: Map<string, Set<string>>, from: ReadonlyMap<string, ReadonlySet<string>>): void {
   for (const [table, ids] of from) for (const id of ids) addTouched(into, table, id);
 }
