@@ -39,29 +39,21 @@ jobs:
           key: cargo-swift-check-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: cargo-swift-check-${{ runner.os }}-
 
-      # Le build.rs de chaque plugin dépose le paquet Swift « Tauri » dans <plugin>/.tauri/tauri-api, dont dépend son Package.swift.
-      # Une compilation cargo du seul plugin suffit à le produire ; le Rust lui-même n'est pas ce qu'on contrôle ici.
-      - name: Préparer les paquets Swift des plugins
+      # Le build.rs de chaque plugin (tauri-plugin, ios_path) lance `swift build` sur son paquet Swift, pour l'iPhone : une erreur de
+      # compilation Swift fait donc échouer `cargo build` du plugin. La cible de déploiement est celle de l'IPA (sans elle, SwiftPM retombe
+      # sur un iOS trop ancien et rejette des API iOS 14 que l'IPA compile sans souci). Chaque plugin est essayé, les échecs sont cumulés.
+      - name: Compiler le Swift de chaque plugin pour l'iPhone
         working-directory: src-tauri
+        env:
+          IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         run: |
-          set -euo pipefail
-          for dir in plugins/*/ios; do
-            crate=$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/../Cargo.toml" | head -n 1)
-            cargo build --locked --target aarch64-apple-ios -p "$crate"
-            test -d "$dir/../.tauri/tauri-api" || { echo "::error::$crate : paquet Swift Tauri non généré"; exit 1; }
-          done
-
-      - name: Compiler chaque plugin Swift pour l'iPhone
-        working-directory: src-tauri
-        run: |
-          set -euo pipefail
+          set -uo pipefail
           fail=0
           for dir in plugins/*/ios; do
-            name=$(sed -n 's/^  name: "\(.*\)",/\1/p' "$dir/Package.swift" | head -n 1)
-            echo "::group::$name"
-            if ! (cd "$dir" && xcodebuild build -scheme "$name" -sdk iphoneos -destination 'generic/platform=iOS' \
-                  CODE_SIGNING_ALLOWED=NO IPHONEOS_DEPLOYMENT_TARGET=18.0 -quiet); then
-              echo "::error::$name ne compile pas"
+            crate=$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/../Cargo.toml" | head -n 1)
+            echo "::group::$crate"
+            if ! cargo build --locked --target aarch64-apple-ios -p "$crate"; then
+              echo "::error::$crate : le Swift ne compile pas"
               fail=1
             fi
             echo "::endgroup::"
