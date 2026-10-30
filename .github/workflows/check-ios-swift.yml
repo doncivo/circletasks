@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           for dir in plugins/*/ios; do
-            crate="tauri-plugin-$(basename "$(dirname "$dir")")"
+            crate=$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/../Cargo.toml" | head -n 1)
             cargo build --locked --target aarch64-apple-ios -p "$crate"
             test -d "$dir/../.tauri/tauri-api" || { echo "::error::$crate : paquet Swift Tauri non généré"; exit 1; }
           done
@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           fail=0
           for dir in plugins/*/ios; do
-            name="tauri-plugin-$(basename "$(dirname "$dir")")"
+            name=$(sed -n 's/^  name: "\(.*\)",/\1/p' "$dir/Package.swift" | head -n 1)
             echo "::group::$name"
             if ! (cd "$dir" && xcodebuild build -scheme "$name" -sdk iphoneos -destination 'generic/platform=iOS' \
                   CODE_SIGNING_ALLOWED=NO IPHONEOS_DEPLOYMENT_TARGET=18.0 -quiet); then
