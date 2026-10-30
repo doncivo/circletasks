@@ -1,5 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createManualClock } from '../../../src/domain/clock';
+import { DbError } from '../../../src/db/driver';
+import type { Repositories } from '../../../src/db/repositories';
+import type { SyncOp } from '../../../src/domain/sync/format';
+import { applyOpsIsolated, type ApplyContext } from '../../../src/sync/apply';
 import { createSimDevice, pair, setupFirst, syncFolders, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -84,5 +88,27 @@ describe('TRI-24 : une opération refusée par la base locale ne bloque pas le r
     expect(await titlesOf(b)).toEqual(['Deux', 'Un']);
     expect(status.warnings ?? []).not.toContain('received-unapplied');
     expect(b.logger.entries.some((e) => e.event === 'apply-rejected')).toBe(false);
+  });
+});
+
+describe('TRI-24 : seule une erreur de contrainte est isolée', () => {
+  it('un verrou ou une erreur d’E/S est relancé tel quel : jamais pris pour une donnée fautive, rien n’est mémorisé', async () => {
+    const calls: string[] = [];
+    const busy = new DbError('busy', 'database is locked');
+    const sync = {
+      savepoint: (name: string) => Promise.resolve(void calls.push(`savepoint ${name}`)),
+      rollbackToSavepoint: (name: string) => Promise.resolve(void calls.push(`rollback ${name}`)),
+      releaseSavepoint: (name: string) => Promise.resolve(void calls.push(`release ${name}`)),
+      setMeta: () => Promise.resolve(void calls.push('setMeta')),
+      getMeta: () => Promise.resolve(null),
+      readRows: () => Promise.reject(busy),
+      readClocks: () => Promise.resolve(new Map()),
+      pendingFields: () => Promise.resolve(new Map()),
+      tombstones: () => Promise.resolve(new Map()),
+    };
+    const op = { t: 'task', id: '11111111-1111-4111-8111-111111111111', at: '2026-10-30T10:00:00.000Z', f: new Map() } as unknown as SyncOp;
+    const ctx = { localSv: 1, remoteSv: 1, now: '2026-10-30T10:00:00.000Z', knows: () => true, logger: { log: () => undefined } } as unknown as ApplyContext;
+    await expect(applyOpsIsolated({ sync } as unknown as Repositories, [op], ctx)).rejects.toBe(busy);
+    expect(calls).toEqual(['savepoint apply_batch']);
   });
 });

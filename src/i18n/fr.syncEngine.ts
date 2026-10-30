@@ -99,7 +99,7 @@ export const syncEngineFr = {
     warnTooManyDevices: 'Plus de 16 appareils dans le dossier de synchro : les plus anciens sont ignorés',
     warnScanIncomplete: 'Dossier de synchro encombré : certains fichiers n’ont pas été lus',
     warnPublishBlocked: 'Cet appareil n’a pas encore publié son état : vos autres appareils ne voient pas ses modifications. Synchronisez de nouveau ; si cela persiste, associez l’appareil de nouveau',
-    warnReceivedUnapplied: 'Des modifications reçues n’ont pas pu être appliquées (élément manquant) : synchronisez de nouveau sur l’autre appareil',
+    warnReceivedUnapplied: 'Des modifications reçues n’ont pas pu être appliquées (élément manquant, ou refusé par la base) : synchronisez de nouveau sur l’autre appareil, ou lancez une reprise complète',
     incomplete: 'Synchro incomplète : voir les avertissements',
     warnAwaitingOthers: 'En attente des fichiers des autres appareils dans iCloud',
     warnCarryHeld: 'Éléments mis de côté : leur liste ou routine a été remplacée par une restauration',

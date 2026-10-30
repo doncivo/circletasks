@@ -726,6 +726,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (resume && (await repos.sync.getMeta(META.orphanTraceAck)) !== null) {
       await writeJson(repos, META.orphanTraces, null);
       await writeJson(repos, META.orphanTraceHit, null);
+      await writeJson(repos, META.applyRejected, null);
       await writeJson(repos, META.orphanTraceAck, null);
     }
     if (resume) await doResume();
@@ -947,6 +948,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // La garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon : ensuite les traces mémorisées sont vidées.
     if (resumed && allRead && (await repos.sync.getMeta(META.orphanTraces)) !== null) await writeJson(repos, META.orphanTraces, null);
     if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+    // TRI-24 : des opérations reçues ont été refusées par la base locale et écartées : visible jusqu'à la reprise complète (jamais muet).
+    if ((await repos.sync.getMeta(META.applyRejected)) !== null && !(seen.warnings ?? []).includes('received-unapplied')) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
     // Y-TECH-05 : compte rendu du changement d'époque non acquitté qui lève le bandeau (lignes rétablies, recréées, rattachées à « Sans projet »),
     // ou échec d'enregistrement du compte rendu : visible jusqu'à « J'ai vu » (remplace la dérivation de Y-FIX-04 depuis la notice).
     // Contre-revue 5 : le chargement du bloc peut lui-même échouer : journalisé, avertissement levé, jamais un cycle en échec.
