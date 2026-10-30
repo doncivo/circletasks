@@ -1,0 +1,69 @@
+# CI-IOS-SWIFT-01 : contrôle de compilation des plugins Swift, sans IPA, sans signature, sans publication.
+# Il existe parce qu'aucun Mac local ne compile le Swift : sans lui, une erreur n'apparaîtrait qu'à la dernière IPA.
+# Déclenché par une PR qui touche un fichier Swift ou ce workflow, et à la main (gh workflow run check-ios-swift.yml --ref <branche>).
+# Ce n'est pas la compilation d'un lot (AGENTS.md) : build-ios.yml reste la seule voie vers une IPA.
+name: Contrôle Swift iOS
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src-tauri/plugins/**/*.swift"
+      - "src-tauri/plugins/**/Package.swift"
+      - ".github/workflows/check-ios-swift.yml"
+
+concurrency:
+  group: check-ios-swift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust stable et cible iOS
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (branche stable au 2026-10-07)
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-swift-check-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-swift-check-${{ runner.os }}-
+
+      # Le build.rs de chaque plugin dépose le paquet Swift « Tauri » dans <plugin>/.tauri/tauri-api, dont dépend son Package.swift.
+      # Une compilation cargo du seul plugin suffit à le produire ; le Rust lui-même n'est pas ce qu'on contrôle ici.
+      - name: Préparer les paquets Swift des plugins
+        working-directory: src-tauri
+        run: |
+          set -euo pipefail
+          for dir in plugins/*/ios; do
+            crate="tauri-plugin-$(basename "$(dirname "$dir")")"
+            cargo build --locked --target aarch64-apple-ios -p "$crate"
+            test -d "$dir/../.tauri/tauri-api" || { echo "::error::$crate : paquet Swift Tauri non généré"; exit 1; }
+          done
+
+      - name: Compiler chaque plugin Swift pour l'iPhone
+        working-directory: src-tauri
+        run: |
+          set -euo pipefail
+          fail=0
+          for dir in plugins/*/ios; do
+            name="tauri-plugin-$(basename "$(dirname "$dir")")"
+            echo "::group::$name"
+            if ! (cd "$dir" && xcodebuild build -scheme "$name" -sdk iphoneos -destination 'generic/platform=iOS' \
+                  CODE_SIGNING_ALLOWED=NO IPHONEOS_DEPLOYMENT_TARGET=18.0 -quiet); then
+              echo "::error::$name ne compile pas"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
