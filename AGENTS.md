@@ -21,6 +21,7 @@ Lis d'abord `CLAUDE.md` (stack, commandes, architecture, bundle de départ : il 
 - Si une estimation dérape de plus de 50 %, arrête-toi à un point de commit et préviens Ali avant de continuer.
 - Mesure le bundle de départ (`npm run test:bundle`) avant tout push, même pour un texte déplacé.
 - Interface en français, heures en 24 h, textes dans `src/i18n`, jamais en dur.
+- **Aucune boucle de surveillance en arrière-plan sur ce PC (règle d'Ali du 2026-10-30).** Tu lis l'état d'une CI une fois, quand tu en as besoin, par une seule requête (`gh pr checks <n>`, `gh run view <id>`). Si elle n'est pas finie, tu fais autre chose et tu relis plus tard. Tu ne crées jamais de processus qui attend (boucle `until`/`while`, `sleep` répété, tâche de fond qui interroge GitHub) : chaque tour de boucle lance un processus, et la machine a déjà manqué de mémoire à cause de cela. GitHub exécute la CI de son côté, que tu la regardes ou non. Un travail arrêté par le système pour manque de mémoire n'est pas relancé sans demande, et `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP` n'est jamais utilisé.
 
 ## Périmètre d'écriture et de lecture (décision d'Ali du 2026-10-27)
 
