@@ -139,3 +139,60 @@ describe('transaction perdue (connexion remplacée en cours de transaction)', ()
     expect(sent).toEqual(['BEGIN IMMEDIATE', 'UPDATE t SET x = 1', 'COMMIT', 'ROLLBACK']);
   });
 });
+
+/**
+ * TRI-22 (audit 1.0, « transaction-lost laisse sync_guard ») : quand la connexion est remplacée en cours de transaction, chaque instruction
+ * est validée seule. Une garde posée (`INSERT … sync_guard`) puis une erreur, et le ROLLBACK ne trouve plus de transaction : la garde reste,
+ * les déclencheurs de capture sont coupés et les écritures locales suivantes n'entrent plus dans `sync_outbox`, sans signe, jusqu'au
+ * redémarrage. Le pilote la retire AVANT de rendre la file : aucune écriture d'un autre appelant ne passe sous une garde orpheline.
+ */
+describe('TRI-22 : garde de synchro retirée quand la transaction est perdue', () => {
+  const NO_TX = 'error returned from database: (code: 1) cannot rollback - no transaction is active';
+  const GUARD_DELETE = 'DELETE FROM sync_guard';
+
+  function lostDriver(failing: { readonly rollback?: boolean; readonly commit?: boolean; readonly guardDelete?: boolean }): { readonly driver: SqlDriver; readonly sent: string[] } {
+    const sent: string[] = [];
+    const driver = createSerializedDriver('sqlite-wasm', {
+      execute: (sql) => {
+        sent.push(sql);
+        if (sql === 'ROLLBACK' && failing.rollback) return Promise.reject(NO_TX);
+        if (sql === 'COMMIT' && failing.commit) return Promise.reject('error returned from database: (code: 1) cannot commit - no transaction is active');
+        if (sql === GUARD_DELETE && failing.guardDelete) return Promise.reject('disk I/O error');
+        return Promise.resolve({ rowsAffected: 0, lastInsertId: null });
+      },
+      select: () => Promise.resolve([]),
+      close: () => Promise.resolve(),
+    });
+    return { driver, sent };
+  }
+
+  it('erreur du travail puis ROLLBACK sans transaction : la garde est retirée avant toute autre instruction', async () => {
+    const { driver, sent } = lostDriver({ rollback: true });
+    await expect(
+      driver.transaction(async (tx) => {
+        await tx.execute('INSERT OR IGNORE INTO sync_guard (id) VALUES (1)');
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    await driver.execute('SELECT 1');
+    expect(sent).toEqual(['BEGIN IMMEDIATE', 'INSERT OR IGNORE INTO sync_guard (id) VALUES (1)', 'ROLLBACK', GUARD_DELETE, 'SELECT 1']);
+  });
+
+  it('COMMIT perdu : la garde est retirée, l’échec `transaction-lost` reste visible', async () => {
+    const { driver, sent } = lostDriver({ commit: true });
+    await expect(driver.transaction(async (tx) => { await tx.execute('UPDATE t SET x = 1'); })).rejects.toMatchObject({ code: 'transaction-lost' });
+    expect(sent).toContain(GUARD_DELETE);
+    expect(sent.indexOf(GUARD_DELETE)).toBeGreaterThan(sent.indexOf('COMMIT'));
+  });
+
+  it('l’échec du nettoyage ne masque pas l’erreur d’origine', async () => {
+    const { driver } = lostDriver({ rollback: true, guardDelete: true });
+    await expect(driver.transaction(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+  });
+
+  it('garde-fou : une transaction annulée normalement ne touche pas à la garde', async () => {
+    const { driver, sent } = lostDriver({});
+    await expect(driver.transaction(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    expect(sent).toEqual(['BEGIN IMMEDIATE', 'ROLLBACK']);
+  });
+});
