@@ -12,7 +12,7 @@ import type { DeviceScan } from '../platform/sync/types';
 import { CARRY_HELD_MARK, applyOpsIsolated } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
-import { META, readJson, writeJson } from './meta';
+import { META, bumpLossCounter, readJson, writeJson } from './meta';
 import { purgeRows } from './purge';
 
 /**
@@ -219,4 +219,7 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
     conflictsBefore: before.toISOString() as IsoDateTime,
   });
   for (const item of dropped) logger.log('cap-dropped', { kind: item.kind, table: item.table, id: item.rowId, reason: item.reason });
+  // TRI-04 : une opération reçue abandonnée au plafond n'est plus rejouable que par la reprise complète : même avertissement que TRI-24.
+  const lostOps = dropped.filter((item) => item.kind === 'parked');
+  if (lostOps.length > 0) await bumpLossCounter(data.repos.sync, META.applyRejected, lostOps.length, lostOps.map((item) => item.table));
 }
