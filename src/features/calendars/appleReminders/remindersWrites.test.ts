@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IsoDateTime, LocalDate, LocalTime } from '../../../domain/types';
 import { useAppStatusStore } from '../../app/appStatus';
 import { useNoticeStore } from '../../app/notice';
@@ -379,5 +379,27 @@ describe('rappel récurrent : aucune écriture vers Rappels, refus dans CircleTa
     const repeat = await uc().setRecurrence(task.id, { freq: 'daily', interval: 1, weekdays: [], monthDay: null, nthWeekday: null, until: null, count: null });
     expect(repeat).toEqual({ ok: false, error: 'apple-linked' });
     expect((await h.task(task.id))?.recurrenceId).toBeNull();
+  });
+});
+
+describe('TRI-13 : les écritures vers Rappels portent la référence externe du lien', () => {
+  it('suppression, modification et complétion : l’appel reçoit id ET externalRef (sans elle, un identifiant changé par iCloud fait « réussir » la suppression sans rien supprimer)', async () => {
+    const { reminder, task } = await linked('Identifiant changé');
+    expect(reminder.externalRef).toEqual(expect.any(String));
+    const upsert = vi.spyOn(h.reminders, 'upsert');
+    const setCompleted = vi.spyOn(h.reminders, 'setCompleted');
+    const del = vi.spyOn(h.reminders, 'delete');
+    h.db.clock.advance(60_000);
+    await uc().update(task.id, { title: 'Identifiant changé v2' });
+    await h.pass('push');
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ id: reminder.id, externalRef: reminder.externalRef }));
+    h.db.clock.advance(60_000);
+    await uc().complete(task.id);
+    await h.pass('push');
+    expect(setCompleted).toHaveBeenCalledWith(expect.objectContaining({ id: reminder.id, externalRef: reminder.externalRef }));
+    h.db.clock.advance(60_000);
+    await h.container.data.repos.tasks.softDelete([task.id]);
+    await h.pass('push');
+    expect(del).toHaveBeenCalledWith({ id: reminder.id, externalRef: reminder.externalRef });
   });
 });
