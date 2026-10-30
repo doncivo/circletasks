@@ -45,6 +45,8 @@ describe('TRI-03 : état refusé juste après un instantané', () => {
     expect(a.logger.entries.some((e) => e.event === 'snapshot-written')).toBe(true);
     expect(a.logger.entries.some((e) => e.event === 'write-state-failed')).toBe(true);
     expect(status.warnings ?? []).toContain('publish-blocked');
+    // Même cause nommée qu'à l'étape 6.
+    expect(a.logger.entries.filter((e) => e.event === 'publish-deferred').map((e) => e.detail)).toEqual([expect.objectContaining({ reason: 'state-refused' })]);
   });
 
   it('un état accepté après l’instantané ne lève rien (garde-fou contre un avertissement permanent)', async () => {

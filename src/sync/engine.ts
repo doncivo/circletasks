@@ -1029,7 +1029,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: snapshotPages(repos, currentEpoch, covers, deps.sv) });
         snapshotMeta = { seq, endHlc };
         await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment, covers: Object.fromEntries(covers) });
-        await writeState(await nextState(head), true);
+        // TRI-03 : état refusé juste après l'instantané (`state-mismatch`, plus de 64 accusés) : visible comme à l'étape 6, jamais « À jour ».
+        if (!(await writeState(await nextState(head), true))) await deferPublish(true);
         logger.log('snapshot-written', { epoch: currentEpoch, seq });
       }
       // Y-IOS-02-FIX-01 : retenter aussi les anciens instantanés revenus sans attendre un nouvel instantané.
