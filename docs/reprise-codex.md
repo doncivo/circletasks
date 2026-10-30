@@ -7,7 +7,7 @@ Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et
 ### Fusionné dans `main`
 
 - Les huit refontes (#99 à #107), #100 (AGENTS : tests unitaires et DOM en local, e2e en CI), #108 (clôture), #109 (séance unique) ; puis les trois correctifs décidés par Ali : **#110 Q-05-FIX-01** (c3a09d1c), **#112 UI-FIX-07** (3943f4b7), **#113 UI-FIX-08** (8ed535ac). Bundle de `main` : **338 017** normalisés, marge 20 383 (relevé dans la CI : le relevé local a été arrêté par le système, mémoire critique, et non relancé sans demande). Garde du bundle à borne asymétrique 100 / 300 (décision d'Ali).
-- Compilation iPhone du lot des refontes (run 40750480780, IPA de laboratoire 7 383 017 octets) : **périmée** ; l'IPA N+1 reste à compiler (une seule fois) sur `main`.
+- **IPA N+1 prête** : compilation iPhone unique du lot, run 40798967224 sur `main` e2c2f45a (après #111), verte, publication non lancée ; artefact `CircleTasks-ipa` : CircleTasks.ipa, 7 383 697 octets, SHA-256 `86a18af5fdbe5e238bbc4c78f0a27b2ef61f403eefdcdd074d9ec7a71e8c364d`. Elle remplace l'IPA du run 40750480780 (périmée). **Signal de la séance d'Ali envoyé le 2026-10-29.**
 
 ### Décisions d'Ali (28 au soir)
 
@@ -18,14 +18,13 @@ Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et
 
 | Élément | État |
 | --- | --- |
-| #111 PRD-02 (PRD aligné, point d'état, journal, fiches, guide de séance, backlog) | documentation seule ; CI relancée après chaque mise à jour de `main` ; **à fusionner au vert** |
+| #111 PRD-02 (PRD aligné, point d'état, journal, fiches, guide de séance, backlog) | **fusionnée** (e2c2f45a) |
 | Y-05-OBS | une tâche longue isolée de 1 476 ms (Y-05, @perf) sur #110, non reproduite à la relance, cause non établie ; journal du 2026-10-29 et backlog ; si l'échec revient : défaut du publieur, Ali prévenu avant tout e2e local |
 
 ### Reste à faire, dans l'ordre
 
-1. Fusionner #111 au vert.
-2. **Une** compilation iPhone du lot (`build-ios.yml` lancé à la main sur `main`, sans publication) ; relever taille et SHA-256 de l'IPA N+1 et les mettre dans la séance unique (`docs/essais-iphone.md`) ; **prévenir Ali : c'est le signal de sa séance**.
-3. Séance d'Ali (36 lignes) ; ses résultats ; puis REL-01, REL-02, REL-03 (publication par tag `ios-v*`, source SideStore, mise à jour N → N+1) et rapport final.
+1. Séance d'Ali sur l'IPA N+1 (36 lignes de `docs/essais-iphone.md`) ; recueillir ses résultats ; chaque écart devient une story de correction avec sa preuve rouge (puis, si du code change, une nouvelle IPA : une seule, à la fin).
+2. REL-01, REL-02, REL-03 : publication de la 1.0 par tag `ios-v*`, source SideStore, mise à jour N → N+1 (A3, A7, A10 de I-06) ; rapport final : livré, ouvert et pourquoi, liste de ce qu'Ali fait avec l'IPA publiée.
 
 ### Règles en vigueur
 
