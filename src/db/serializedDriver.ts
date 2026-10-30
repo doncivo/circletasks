@@ -129,6 +129,7 @@ export function createSerializedDriver(
         };
         await rawExecute('BEGIN IMMEDIATE');
         inTransaction = true;
+        let lost = false;
         try {
           const result = await fn(tx);
           try {
@@ -137,13 +138,21 @@ export function createSerializedDriver(
             // Connexion remplacée en cours de transaction (ping en échec côté sqlx) : les écritures ont été validées une à une sur la
             // nouvelle connexion, le COMMIT n'a plus de transaction. Échec visible de la transaction, jamais rattrapé en silence.
             if (/no transaction is active/i.test(error instanceof Error ? error.message : String(error))) {
+              lost = true;
               throw new DbError('transaction-lost', 'Transaction perdue : connexion remplacée avant le COMMIT', { cause: error });
             }
             throw error;
           }
           return result;
         } catch (error) {
-          await rawExecute('ROLLBACK').catch(() => undefined);
+          // Un ROLLBACK qui ne trouve plus de transaction dit la même chose qu'un COMMIT perdu : la connexion a été remplacée.
+          const rollbackLost = await rawExecute('ROLLBACK').then(
+            () => false,
+            (rollbackError: unknown) => /no transaction is active/i.test(rollbackError instanceof Error ? rollbackError.message : String(rollbackError)),
+          );
+          // TRI-22 : chaque instruction a été validée seule, y compris la pose de `sync_guard` ; elle est retirée AVANT de rendre la file, sinon
+          // les écritures des autres appelants passeraient sans entrer dans `sync_outbox`. Échec du retrait : l'erreur d'origine reste rendue.
+          if (lost || rollbackLost) await rawExecute('DELETE FROM sync_guard').catch(() => undefined);
           throw error;
         } finally {
           active = false;
