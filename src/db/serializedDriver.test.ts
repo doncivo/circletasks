@@ -136,7 +136,8 @@ describe('transaction perdue (connexion remplacée en cours de transaction)', ()
       close: () => Promise.resolve(),
     });
     await expect(driver.transaction(async (tx) => { await tx.execute('UPDATE t SET x = 1'); })).rejects.toMatchObject({ name: 'DbError', code: 'transaction-lost' });
-    expect(sent).toEqual(['BEGIN IMMEDIATE', 'UPDATE t SET x = 1', 'COMMIT', 'ROLLBACK']);
+    // TRI-22 : la garde de synchro est retirée en dernier, avant de rendre la file.
+    expect(sent).toEqual(['BEGIN IMMEDIATE', 'UPDATE t SET x = 1', 'COMMIT', 'ROLLBACK', 'DELETE FROM sync_guard']);
   });
 });
 
