@@ -111,8 +111,8 @@ async function sendDueFields(container: AppContainer, context: SendContext, tall
     if (late(container, tally) || held(container, tally, write.localAt)) continue;
     try {
       const item = onlyStatus(write.toApple)
-        ? await platform.setCompleted({ id: write.item.id, completed: write.next.completed, completedAt: write.next.doneAt })
-        : await platform.upsert({ id: write.item.id, listId: write.item.listId, title: write.next.title, due: dueOf(write.next), completed: write.next.completed, completedAt: write.next.doneAt });
+        ? await platform.setCompleted({ id: write.item.id, externalRef: write.item.externalRef, completed: write.next.completed, completedAt: write.next.doneAt })
+        : await platform.upsert({ id: write.item.id, externalRef: write.item.externalRef, listId: write.item.listId, title: write.next.title, due: dueOf(write.next), completed: write.next.completed, completedAt: write.next.doneAt });
       await recordWritten(container, write, item);
       tally.sent += 1;
       tally.touched.add(write.task.id);
@@ -356,7 +356,7 @@ async function deleteOne(container: AppContainer, { link, task }: DeletionCandid
   }
   try {
     if (link.state !== 'deleting') await container.data.transaction((tx) => tx.appleLinks.upsert({ ...link, state: 'deleting', startedAt: now }));
-    await container.reminders.delete({ id: link.reminderId });
+    await container.reminders.delete({ id: link.reminderId, externalRef: link.externalRef });
     await finishDeletion(container, task, link);
     tally.sent += 1;
     if (task !== null) tally.touched.add(task.id);

@@ -73,6 +73,8 @@ export interface FakeReminders extends RemindersPlatform {
   /** Modification faite dans l'app Rappels : `modifiedAt` avance. */
   edit(id: string, patch: { readonly title?: string; readonly due?: ReminderDue | null; readonly completed?: boolean; readonly listId?: string; readonly recurring?: boolean }): ReminderItem;
   remove(id: string): void;
+  /** iCloud change l'identifiant d'un rappel après une resynchro ; sa référence externe reste la même (TRI-13). */
+  reidentify(id: string, newId: string): ReminderItem;
   get(id: string): ReminderItem | undefined;
   all(): ReminderItem[];
   /** Déclenche `changed` chez les abonnés. */
@@ -98,6 +100,9 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
   const calls: FakeRemindersCall[] = [];
   const writes: FakeRemindersWrite[] = [];
   let counter = 0;
+  /** Comme le plugin Swift (`findReminder`) : par identifiant, sinon par référence externe (TRI-13). */
+  const find = (id: string, externalRef: string | null | undefined): ReminderItem | undefined =>
+    items.get(id) ?? (externalRef === null || externalRef === undefined || externalRef === '' ? undefined : [...items.values()].find((item) => item.externalRef === externalRef));
 
   const nextId = (): string => `R-${String(++counter).padStart(4, '0')}`;
   const record = (name: FakeCommand, args?: unknown): void => {
@@ -216,7 +221,7 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
           };
           write({ kind: 'create', id, at: iso(now()), title, due: input.due, completed: input.completed });
         } else {
-          const existing = items.get(input.id);
+          const existing = find(input.id, input.externalRef);
           if (!existing) throw new RemindersError('not-found');
           if (existing.recurring) throw new RemindersError('recurring-refused');
           if (!lists.get(existing.listId)?.writable) throw new RemindersError('read-only-list');
@@ -232,7 +237,7 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
       return attempt(() => {
         record('setCompleted', input);
         requireFull();
-        const existing = items.get(input.id);
+        const existing = find(input.id, input.externalRef);
         if (!existing) throw new RemindersError('not-found');
         if (existing.recurring) throw new RemindersError('recurring-refused');
         if (!lists.get(existing.listId)?.writable) throw new RemindersError('read-only-list');
@@ -247,12 +252,12 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
       return attempt(() => {
         record('delete', input);
         requireFull();
-        const existing = items.get(input.id);
+        const existing = find(input.id, input.externalRef);
         if (!existing) return;
         if (existing.recurring) throw new RemindersError('recurring-refused');
         if (!lists.get(existing.listId)?.writable) throw new RemindersError('read-only-list');
-        items.delete(input.id);
-        write({ kind: 'delete', id: input.id, at: iso(now()) });
+        items.delete(existing.id);
+        write({ kind: 'delete', id: existing.id, at: iso(now()) });
         changed();
       });
     },
@@ -318,6 +323,14 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
     },
     remove(id) {
       items.delete(id);
+    },
+    reidentify(id, newId) {
+      const existing = items.get(id);
+      if (!existing) throw new Error(`rappel inconnu : ${id}`);
+      const item = { ...existing, id: newId };
+      items.delete(id);
+      items.set(newId, item);
+      return item;
     },
     get: (id) => items.get(id),
     all: () => [...items.values()],

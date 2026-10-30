@@ -81,9 +81,9 @@ describe('adaptateur Tauri : réponses analysées strictement (K-05 critère 5)'
     await platform.delete({ id: 'R1' });
     expect(calls.map((call) => call.command)).toEqual(['plugin:reminders|status', 'plugin:reminders|request_access', 'plugin:reminders|lists', 'plugin:reminders|fetch', 'plugin:reminders|upsert', 'plugin:reminders|set_completed', 'plugin:reminders|delete']);
     expect(calls[3]?.args).toEqual({ listIds: ['L1'], scopeListIds: ['L1'], includeCompleted: false, limitPerList: 500, ids: [{ id: 'R1', externalRef: null }] });
-    expect(calls[4]?.args).toEqual({ id: null, listId: 'L1', title: 'T', due: { date: '2026-10-09', time: null }, completed: false, completedAt: null });
-    expect(calls[5]?.args).toEqual({ id: 'R1', completed: true, completedAt: AT });
-    expect(calls[6]?.args).toEqual({ id: 'R1' });
+    expect(calls[4]?.args).toEqual({ id: null, listId: 'L1', title: 'T', due: { date: '2026-10-09', time: null }, completed: false, completedAt: null, externalRef: null });
+    expect(calls[5]?.args).toEqual({ id: 'R1', completed: true, completedAt: AT, externalRef: null });
+    expect(calls[6]?.args).toEqual({ id: 'R1', externalRef: null });
   });
 
   it('une réponse hors forme ou un rejet inconnu font échouer la commande (aucun silence)', async () => {
@@ -185,6 +185,24 @@ describe('faux EventKit (même règles que le plugin Swift)', () => {
     await expect(fake.setCompleted({ id: series.id, completed: true, completedAt: null })).rejects.toMatchObject({ code: 'recurring-refused' });
     await expect(fake.delete({ id: series.id })).rejects.toMatchObject({ code: 'recurring-refused' });
     expect(fake.writes.map((write) => write.kind)).toEqual(['create']);
+  });
+
+  it('TRI-13 : après un changement d’identifiant par iCloud, la suppression, la complétion et la modification retrouvent le rappel par sa référence externe', async () => {
+    const fake = store();
+    const reminder = fake.add({ listId: 'L1', title: 'Pain' });
+    const moved = fake.reidentify(reminder.id, 'R-NOUVEAU');
+    expect(moved.externalRef).toBe(reminder.externalRef);
+    // Sans référence externe : introuvable, la suppression « réussit » sans rien supprimer (le défaut), la complétion échoue.
+    await fake.delete({ id: reminder.id });
+    expect(fake.get('R-NOUVEAU')).toBeDefined();
+    await expect(fake.setCompleted({ id: reminder.id, completed: true, completedAt: null })).rejects.toMatchObject({ code: 'not-found' });
+    // Avec la référence externe : trouvé.
+    await fake.setCompleted({ id: reminder.id, externalRef: reminder.externalRef, completed: true, completedAt: null });
+    expect(fake.get('R-NOUVEAU')?.completed).toBe(true);
+    await fake.upsert({ id: reminder.id, externalRef: reminder.externalRef, listId: 'L1', title: 'Pain complet', due: null, completed: true, completedAt: null });
+    expect(fake.get('R-NOUVEAU')?.title).toBe('Pain complet');
+    await fake.delete({ id: reminder.id, externalRef: reminder.externalRef });
+    expect(fake.get('R-NOUVEAU')).toBeUndefined();
   });
 
   it('terminer, rouvrir, supprimer (idempotent) ; modifications faites dans Rappels avancent modifiedAt sans écriture journalisée', async () => {
