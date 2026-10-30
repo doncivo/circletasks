@@ -234,6 +234,12 @@ export interface SyncRepository {
   exportUnknown(afterRowid: number, limit: number): Promise<(UnknownField & { readonly rowid: number })[]>;
   clearUnknown(): Promise<void>;
 
+  // --- points de sauvegarde (TRI-24) -----------------------------------------------------------------------------------------------
+  /** Point de sauvegarde nommé dans la transaction en cours : un échec n'annule que ce qui suit, jamais le lot entier. */
+  savepoint(name: string): Promise<void>;
+  rollbackToSavepoint(name: string): Promise<void>;
+  releaseSavepoint(name: string): Promise<void>;
+
   // --- opérations mises de côté ---------------------------------------------------------------------------------------------------
   park(reason: ParkReason, table: string, rowId: string, hlc: Hlc, op: string, at: IsoDateTime): Promise<void>;
   parked(reasons: readonly ParkReason[], afterId: number, limit: number): Promise<ParkedOp[]>;

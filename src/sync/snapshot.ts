@@ -5,7 +5,7 @@ import { hlcIso, parseSnapshotRecord, snapshotRecordToText, snapshotRowToJson } 
 import { isTooFarAhead } from '../domain/sync/drift';
 import { FIXED_SPACE_IDS, SYNC_TABLES, settingKeyScope, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc } from '../domain/types';
-import { applyOps, mergeTouched, type ApplyContext } from './apply';
+import { applyOpsIsolated, mergeTouched, type ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
 import { purgeRows, type PurgeItem } from './purge';
@@ -217,7 +217,7 @@ export async function mergeSnapshot(
   for (let i = 0; i < ops.length; i += APPLY_BATCH_OPS) {
     testHooks.beforeBatch?.(i / APPLY_BATCH_OPS);
     const batch = ops.slice(i, i + APPLY_BATCH_OPS);
-    const result = await guarded(deps.data, (repos) => applyOps(repos, batch, { ...ctx, fromSnapshot: true }));
+    const result = await guarded(deps.data, (repos) => applyOpsIsolated(repos, batch, { ...ctx, fromSnapshot: true }));
     mergeTouched(touched, result.touched);
     conflicts += result.conflicts;
     onProgress?.(Math.min(ops.length, i + APPLY_BATCH_OPS), ops.length);

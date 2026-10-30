@@ -47,6 +47,8 @@ export const META = {
   orphanTraces: 'orphanTraces',
   /** Y-IOS-02 : une opération reçue a visé l'une de ces traces ; levé en avertissement `received-unapplied` au cycle suivant. */
   orphanTraceHit: 'orphanTraceHit',
+  /** TRI-24 : opérations reçues refusées par la base locale (contrainte) et écartées : `{ n, tables }`, jamais de contenu ; levé en `received-unapplied`, effacé par la reprise complète. */
+  applyRejected: 'applyRejected',
   /** Y-IOS-02 : reprise complète demandée par l'utilisateur : acquitte `orphanTraceHit` (effacé au cycle qui reprend). */
   orphanTraceAck: 'orphanTraceAck',
   /** Y-IOS-02 : « Démarrer la synchro depuis cet appareil » confirmé : lève l'attente des autres appareils (clé importée). */

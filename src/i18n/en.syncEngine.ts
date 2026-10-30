@@ -92,7 +92,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status'> = {
     warnTooManyDevices: 'More than 16 devices in the sync folder: the oldest are ignored',
     warnScanIncomplete: 'Cluttered sync folder: some files were not read',
     warnPublishBlocked: 'This device has not published its state yet: your other devices cannot see its changes. Sync again; if it persists, pair the device again',
-    warnReceivedUnapplied: 'Some received changes could not be applied (missing item): sync again on the other device',
+    warnReceivedUnapplied: 'Some received changes could not be applied (missing item, or refused by the database): sync again on the other device, or run a full resume',
     incomplete: 'Sync incomplete: see warnings',
     warnAwaitingOthers: 'Waiting for the other devices’ files in iCloud',
     warnCarryHeld: 'Items set aside: their list or routine was replaced by a restore',

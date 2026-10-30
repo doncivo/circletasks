@@ -5,7 +5,7 @@ import type { DeviceId, Hlc } from '../domain/types';
 import { syncErrorCodeOf } from '../platform/sync/types';
 import { syncErrorFamily } from '../domain/sync/errorFamily';
 import { compareCursors } from '../domain/sync/epoch';
-import { applyOps, mergeTouched, type ApplyContext } from './apply';
+import { applyOpsIsolated, mergeTouched, type ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
 import { runRepairs } from './repair';
@@ -96,7 +96,7 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
     const result = await guarded(deps.data, async (repos) => {
       let applied = { touched: new Map<string, Set<string>>(), conflicts: 0 };
       for (const item of items) {
-        const r = await applyOps(repos, item.record.ops, { localSv: deps.sv, remoteSv: item.record.sv, now, knows: request.knows, logger: deps.logger });
+        const r = await applyOpsIsolated(repos, item.record.ops, { localSv: deps.sv, remoteSv: item.record.sv, now, knows: request.knows, logger: deps.logger });
         mergeTouched(applied.touched, r.touched);
         applied = { touched: applied.touched, conflicts: applied.conflicts + r.conflicts };
       }
