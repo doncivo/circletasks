@@ -44,6 +44,18 @@ describe('adaptateur Tauri : réponses analysées strictement (K-05 critère 5)'
     expect(failureOf(known)).toBe(known);
   });
 
+  it('TRI-13 : upsert, set_completed et delete transmettent externalRef (l’identifiant change après une resynchro iCloud, la référence externe le retrouve)', async () => {
+    const calls: { command: string; args: Record<string, unknown> | undefined }[] = [];
+    const platform = createTauriReminders((command, args) => {
+      calls.push({ command, args });
+      return Promise.resolve(command.endsWith('|delete') ? {} : { item: item() });
+    });
+    await platform.upsert({ id: 'R1', externalRef: 'EXT-1', listId: 'L1', title: 'T', due: null, completed: false, completedAt: null });
+    await platform.setCompleted({ id: 'R1', externalRef: 'EXT-1', completed: true, completedAt: AT as IsoDateTime });
+    await platform.delete({ id: 'R1', externalRef: 'EXT-1' });
+    expect(calls.map((call) => [call.command, call.args?.['externalRef']])).toEqual([['plugin:reminders|upsert', 'EXT-1'], ['plugin:reminders|set_completed', 'EXT-1'], ['plugin:reminders|delete', 'EXT-1']]);
+  });
+
   it('les commandes portent les noms et les champs du contrat ; aucun champ de plus', async () => {
     const calls: { command: string; args: Record<string, unknown> | undefined }[] = [];
     const answers: Record<string, unknown> = {
