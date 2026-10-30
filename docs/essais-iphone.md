@@ -77,6 +77,10 @@ Matériel : **l'IPA N+1 du lot** ([compilation 40798967224](https://github.com/d
 35. **Détails des deux appareils** cohérents avec ce qui a été observé ; **exporter le journal** depuis l'app (iCloud Drive) et le joindre aux résultats.
 36. **PC, écrans 08 et 09.** Aujourd'hui en deux colonnes (barre nommée, colonne 660 px, seconde colonne « Demain / Cette semaine / Raccourcis », « Ajouter » met le focus) ; Réglages : sommaire à gauche, chevrons, « Général » en six lignes, « Tous les raccourcis · Ctrl / » ; fenêtre à 1 024 px : rien ne se recouvre, sommaire collant.
 
+**Contrôle ajouté le 2026-10-30 (TRI-18, audit 1.0) — « Autorisé » dit-il vrai ? (15 min)**
+
+37. **Rappel qui doit réellement sonner, dans trois situations.** Pour chacune : créer une tâche d'essai avec rappel « À l'heure » dans 3 ou 4 minutes, noter ce que dit Réglages › Rappels (« Autorisé », « Planifiés jusqu'au … ») **avant** l'heure, puis attendre. (a) **Écran verrouillé et aperçus** : iPhone verrouillé, Réglages iOS › Notifications › CircleTasks avec « Écran verrouillé » décoché, puis avec aperçus « Jamais » → la notification apparaît-elle, avec quel texte ? (b) **Concentration active** (mode Ne pas déranger ou Travail, CircleTasks non autorisée dans ce mode) → sonne-t-elle ? (c) **Cas normal**, réglages d'origine rétablis → sonne à l'heure, une seule fois. **Résultat attendu : si l'app affiche « Autorisé » ou « Planifiés » pendant que l'iPhone n'affiche rien, c'est le défaut TRI-18, et il passe avant la 1.0.** Noter pour chaque situation l'heure prévue, l'heure de sonnerie ou « rien », et la capture de Réglages › Rappels. Remettre ensuite tous les réglages iOS.
+
 Après la séance : chaque ligne verte ferme sa référence (backlog « en attente de vérification appareil » → fait, critères physiques de C-FIX-01 et Y-IOS-06, N-IOS-CHK-01, rendu natif de UI-REFONTE-01 à 07) ; chaque écart devient une story de correction avec sa preuve rouge. Reste pour REL-03 : I-06 A3 / A7 / A10 avec l'IPA publiée N+1.
 
 ## Refontes 02 à 09 — lot des huit refontes, compilation unique du 2026-10-28
