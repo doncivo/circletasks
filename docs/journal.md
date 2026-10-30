@@ -522,3 +522,11 @@ Bundle avant le premier push : 58/58, 339 198 normalisés, 339 199 bruts, marge 
 ### UI-REFONTE-01 — diagnostic du banc de fuseaux
 
 La passe ciblée locale en threads compte 871 verts et cinq échecs : quatre anciens accès aux options repliées/chargées à la demande, adaptés puis 63/63 verts ; un test floatingTime modifie process.env.TZ. Sous worker thread Windows, cette mutation ne change pas le fuseau de Date comme dans un processus indépendant. Même fichier inchangé exécuté avec le pool forks habituel : 3/3 verts. Aucun test sauté, aucun délai augmenté, aucune relance automatique ni changement du pool CI. La passe threads n'est pas revendiquée comme suite complète verte.
+
+## 2026-10-30 — N-FIX-04 : test e2e dépendant de l'heure réelle (main rouge)
+
+Rouge : run 41022914875 sur `main` 515baaae (fusion de #114, documentation seule), 07:54 UTC : `tests/e2e/N-FIX-04.spec.ts:33` échoue sur `pc` et `iphone` (`form.getByRole('status')` : un élément au lieu de zéro après avoir ramené l'heure à 10:00) ; les mêmes PR documentaires #115 et #116, lancées entre 08:40 et 09:50 (Paris), échouent identiquement, alors que les runs de nuit du 29 octobre étaient verts.
+
+Cause (établie par lecture du code, confirmée par la CI de la correction) : le formulaire affiche aussi, en `role="status"`, l'avertissement N-07 (`IphoneReminderWarning` : un rappel qui sonne dans moins de 2 h et aucun iPhone associé). Avec l'horloge réelle, le rappel de 10:00 entre dans cette fenêtre de 08:00 à 10:00, celui de 20:00 de 18:00 à 20:00 (le test 3 a la même exposition). Ce n'est pas une régression de l'app : l'avertissement est correct. Le test ne fixait pas l'horloge, contrairement à `E-03`, `E-04` et `ES-08`.
+
+Correctif : `page.clock.setFixedTime` un mercredi à midi (2026-10-28T12:00+01:00) avant `openApp`, dans le `beforeEach` de la spec. Aucun délai, aucun seuil, aucun test sauté ; l'assertion est inchangée. Vert : la CI de la PR. Les autres specs qui lisent l'heure réelle ne sont pas auditées ici : à traiter si une autre échoue dans une fenêtre horaire.
