@@ -15,6 +15,9 @@ const NOTICE = /^Rappel décalé (au [a-zé]+ |à )08:00 — aucun rappel Pro (a
 
 test.describe('N-FIX-04 — rappel dans la plage silencieuse', () => {
   test.beforeEach(async ({ page }) => {
+    // Mercredi midi, heure de Paris : l'avertissement N-07 (rappel dans moins de 2 h, aucun iPhone associé) est aussi un `status` du formulaire ;
+    // avec l'horloge réelle, le test échouait chaque jour entre 08:00 et 10:00 (rappel de 10:00) et entre 18:00 et 20:00 (rappel de 20:00).
+    await page.clock.setFixedTime(new Date('2026-10-28T12:00:00+01:00'));
     await openApp(page);
   });
 
