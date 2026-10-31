@@ -112,10 +112,10 @@ export function createTauriReminders(
     fetch: async (input) =>
       parseFetch(await run('fetch', { listIds: input.listIds, scopeListIds: input.scopeListIds ?? input.listIds, includeCompleted: input.includeCompleted === true, limitPerList: input.limitPerList, ids: input.ids.map((ref) => ({ id: ref.id, externalRef: ref.externalRef })) })),
     upsert: async (input) =>
-      parseWritten(await run('upsert', { id: input.id, listId: input.listId, title: input.title, due: input.due === null ? null : { date: input.due.date, time: input.due.time }, completed: input.completed, completedAt: input.completedAt })),
-    setCompleted: async (input) => parseWritten(await run('set_completed', { id: input.id, completed: input.completed, completedAt: input.completedAt })),
+      parseWritten(await run('upsert', { id: input.id, listId: input.listId, title: input.title, due: input.due === null ? null : { date: input.due.date, time: input.due.time }, completed: input.completed, completedAt: input.completedAt, externalRef: input.externalRef ?? null })),
+    setCompleted: async (input) => parseWritten(await run('set_completed', { id: input.id, completed: input.completed, completedAt: input.completedAt, externalRef: input.externalRef ?? null })),
     delete: async (input) => {
-      await run('delete', { id: input.id });
+      await run('delete', { id: input.id, externalRef: input.externalRef ?? null });
     },
     onChanged: async (listener) => {
       try {

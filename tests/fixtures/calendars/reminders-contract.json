@@ -57,7 +57,8 @@
         "title",
         "due",
         "completed",
-        "completedAt"
+        "completedAt",
+        "externalRef"
       ],
       "output": [
         "item"
@@ -69,7 +70,8 @@
       "input": [
         "id",
         "completed",
-        "completedAt"
+        "completedAt",
+        "externalRef"
       ],
       "output": [
         "item"
@@ -79,7 +81,8 @@
       "name": "delete",
       "swiftMethod": "delete",
       "input": [
-        "id"
+        "id",
+        "externalRef"
       ],
       "output": []
     }

@@ -63,16 +63,19 @@ private struct UpsertArgs: Decodable {
   let due: DueArgs?
   let completed: Bool
   let completedAt: String?
+  let externalRef: String?
 }
 
 private struct CompletedArgs: Decodable {
   let id: String
   let completed: Bool
   let completedAt: String?
+  let externalRef: String?
 }
 
 private struct DeleteArgs: Decodable {
   let id: String
+  let externalRef: String?
 }
 
 private struct ChangedPayload: Encodable {
@@ -463,7 +466,7 @@ class RemindersPlugin: Plugin {
       let newDue: DateComponents? = try input.due.map { try components($0) }
       let reminder: EKReminder
       if let id = input.id {
-        guard let existing = self.findReminder(store, id, nil) else {
+        guard let existing = self.findReminder(store, id, input.externalRef) else {
           throw Failure(code: .notFound)
         }
         if existing.hasRecurrenceRules {
@@ -517,7 +520,7 @@ class RemindersPlugin: Plugin {
     }
     done(invoke) {
       let store = self.store()
-      guard let reminder = self.findReminder(store, input.id, nil) else {
+      guard let reminder = self.findReminder(store, input.id, input.externalRef) else {
         throw Failure(code: .notFound)
       }
       if reminder.hasRecurrenceRules {
@@ -540,8 +543,9 @@ class RemindersPlugin: Plugin {
     }
     done(invoke) {
       let store = self.store()
-      // Idempotent : un rappel déjà absent est un succès.
-      guard let reminder = self.findReminder(store, input.id, nil) else {
+      // Idempotent : un rappel déjà absent est un succès. TRI-13 : absent signifie introuvable par l'identifiant ET par la référence externe
+      // (iCloud change l'identifiant après une resynchro) ; sans elle, une suppression « réussissait » sans rien supprimer.
+      guard let reminder = self.findReminder(store, input.id, input.externalRef) else {
         return [:]
       }
       if reminder.hasRecurrenceRules {

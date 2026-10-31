@@ -92,6 +92,7 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'too-many-devices':
     case 'scan-incomplete':
     case 'publish-blocked':
+    case 'publish-dropped':
     case 'received-unapplied':
     case 'awaiting-other-devices':
     case 'carry-held':

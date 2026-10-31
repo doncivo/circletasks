@@ -47,6 +47,10 @@ export const META = {
   orphanTraces: 'orphanTraces',
   /** Y-IOS-02 : une opération reçue a visé l'une de ces traces ; levé en avertissement `received-unapplied` au cycle suivant. */
   orphanTraceHit: 'orphanTraceHit',
+  /** TRI-24 : opérations reçues refusées par la base locale (contrainte) et écartées : `{ n, tables }`, jamais de contenu ; levé en `received-unapplied`, effacé par la reprise complète. */
+  applyRejected: 'applyRejected',
+  /** TRI-06 : opérations locales trop grosses pour être publiées (plus de 256 Kio) et retirées de la file : `{ n, tables }`, jamais de contenu ; levé en `publish-dropped`, effacé par la reprise complète. */
+  publishDropped: 'publishDropped',
   /** Y-IOS-02 : reprise complète demandée par l'utilisateur : acquitte `orphanTraceHit` (effacé au cycle qui reprend). */
   orphanTraceAck: 'orphanTraceAck',
   /** Y-IOS-02 : « Démarrer la synchro depuis cet appareil » confirmé : lève l'attente des autres appareils (clé importée). */
@@ -66,4 +70,27 @@ export async function readJson<T>(repos: Repositories, key: string, log: StoredS
 
 export async function writeJson(repos: Repositories, key: string, value: unknown): Promise<void> {
   await repos.sync.setMeta(key, value === null || value === undefined ? null : JSON.stringify(value));
+}
+
+/** Nombre maximal de noms de tables mémorisés avec un compteur de pertes. */
+const LOSS_TABLES_MAX = 16;
+
+/**
+ * Compteur persistant d'une perte à rendre visible (TRI-24, TRI-04, TRI-06) : `{ n, tables }` dans `sync_meta`, jamais de contenu.
+ * Une valeur illisible repart de zéro : la perte qui l'appelle relève de toute façon l'avertissement.
+ */
+export async function bumpLossCounter(sync: Repositories['sync'], key: string, count: number, tables: Iterable<string>): Promise<void> {
+  let n = 0;
+  const names = new Set<string>(tables);
+  const raw = await sync.getMeta(key);
+  if (raw !== null) {
+    try {
+      const value = JSON.parse(raw) as { n?: unknown; tables?: unknown };
+      if (typeof value.n === 'number') n = value.n;
+      if (Array.isArray(value.tables)) for (const t of value.tables) if (typeof t === 'string') names.add(t);
+    } catch {
+      // valeur illisible : on repart de zéro
+    }
+  }
+  await sync.setMeta(key, JSON.stringify({ n: n + count, tables: [...names].sort().slice(0, LOSS_TABLES_MAX) }));
 }

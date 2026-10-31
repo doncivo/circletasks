@@ -177,6 +177,16 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
   };
 
   return {
+    // --- points de sauvegarde (TRI-24) : noms fixes du code, jamais une donnée reçue -----------------------------------------------------
+    async savepoint(name) {
+      await db.execute(`SAVEPOINT ${name}`);
+    },
+    async rollbackToSavepoint(name) {
+      await db.execute(`ROLLBACK TO ${name}`);
+    },
+    async releaseSavepoint(name) {
+      await db.execute(`RELEASE ${name}`);
+    },
     // --- garde ----------------------------------------------------------------------------------------------------------------------
     async setGuard() {
       await db.execute('INSERT OR IGNORE INTO sync_guard (id) VALUES (1)');

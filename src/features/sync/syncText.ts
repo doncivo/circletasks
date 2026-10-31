@@ -216,7 +216,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'idle':
       // Jamais « À jour » tant que cet appareil n'a pas publié son état, que des modifications reçues restent inappliquées ou qu'un autre
       // appareil a des fichiers illisibles (Y-FIX-03, ADR 0011 §31).
-      if (status.warnings?.some((code) => code === 'own-delete-failed' || code === 'publish-blocked' || code === 'received-unapplied' || code === 'awaiting-other-devices' || code === 'carry-held' || code === 'carry-report') || status.devices.some((d) => !d.self && d.status === 'corrupt')) return t('sync.status.incomplete');
+      if (status.warnings?.some((code) => code === 'own-delete-failed' || code === 'publish-blocked' || code === 'publish-dropped' || code === 'received-unapplied' || code === 'awaiting-other-devices' || code === 'carry-held' || code === 'carry-report') || status.devices.some((d) => !d.self && d.status === 'corrupt')) return t('sync.status.incomplete');
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
 }
@@ -249,6 +249,8 @@ export function warningText(code: SyncWarningCode): string {
       return t('sync.status.warnScanIncomplete');
     case 'publish-blocked':
       return t('sync.status.warnPublishBlocked');
+    case 'publish-dropped':
+      return t('sync.status.warnPublishDropped');
     case 'received-unapplied':
       return t('sync.status.warnReceivedUnapplied');
     case 'awaiting-other-devices':

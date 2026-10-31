@@ -76,6 +76,8 @@ export interface UpsertInput {
   readonly due: ReminderDue | null;
   readonly completed: boolean;
   readonly completedAt: IsoDateTime | null;
+  /** TRI-13 : référence externe du rappel (stable quand iCloud change son identifiant) ; absente ou nulle : recherche par identifiant seulement. */
+  readonly externalRef?: string | null;
 }
 
 export interface RemindersPlatform {
@@ -89,9 +91,9 @@ export interface RemindersPlatform {
   fetch(input: FetchInput): Promise<FetchResult>;
   /** Rend l'élément RELU après enregistrement (`modifiedAt` compris : base de l'anti-boucle). */
   upsert(input: UpsertInput): Promise<ReminderItem>;
-  setCompleted(input: { readonly id: string; readonly completed: boolean; readonly completedAt: IsoDateTime | null }): Promise<ReminderItem>;
-  /** Idempotent : un rappel déjà absent est un succès. */
-  delete(input: { readonly id: string }): Promise<void>;
+  setCompleted(input: { readonly id: string; readonly completed: boolean; readonly completedAt: IsoDateTime | null; readonly externalRef?: string | null }): Promise<ReminderItem>;
+  /** Idempotent : un rappel absent (introuvable par l'identifiant et par `externalRef`) est un succès. */
+  delete(input: { readonly id: string; readonly externalRef?: string | null }): Promise<void>;
   /** Événement `changed` (EKEventStoreChanged), sans contenu ; renvoie le désabonnement. */
   onChanged(listener: () => void): Promise<() => void>;
 }
