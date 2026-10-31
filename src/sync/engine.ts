@@ -727,6 +727,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await writeJson(repos, META.orphanTraces, null);
       await writeJson(repos, META.orphanTraceHit, null);
       await writeJson(repos, META.applyRejected, null);
+      await writeJson(repos, META.publishDropped, null);
       await writeJson(repos, META.orphanTraceAck, null);
     }
     if (resume) await doResume();
@@ -930,8 +931,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       // Y-IOS-02 (point de contrôle 0.2.3, étape 4) : tout est lu jusqu'aux têtes et des opérations attendent encore une ligne qui manque :
       // un enregistrement a été sauté (curseur posé trop loin). Une reprise depuis l'instantané (fusion, rien n'est effacé) replace les
       // curseurs aux positions couvertes et relit les journaux ; une seule demande par époque, ensuite l'avertissement reste visible.
-      if (allRead && (await repos.sync.parkedCount(['missing-row'])) > 0) {
-        seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+      // TRI-04 : un parent qui manque encore après lecture complète est visible comme une ligne qui manque (même avertissement) ; la reprise
+      // automatique reste réservée aux lignes manquantes (un parent absent n'est pas un enregistrement sauté).
+      const missingRow = (await repos.sync.parkedCount(['missing-row'])) > 0;
+      if (allRead && (missingRow || (await repos.sync.parkedCount(['missing-parent'])) > 0)) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+      if (allRead && missingRow) {
         const tried = await readJson<{ epoch: EpochId }>(repos, META.parkedResume);
         if (tried?.epoch !== currentEpoch && !resumed) {
           await data.transaction(async (tx) => {
@@ -975,6 +979,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     } else {
       await deferPublish(false);
     }
+
+    // TRI-06 : (après la publication, pour le même cycle) des modifications locales trop grosses n'ont jamais été publiées : visible jusqu'à la reprise complète (jamais muet).
+    if ((await repos.sync.getMeta(META.publishDropped)) !== null) seen.warnings = [...(seen.warnings ?? []), 'publish-dropped'];
 
     // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers). Y-11 : l'annonce de l'appareil qui réinitialise est
     // toujours publiée (forcée) tant que l'époque visée n'est pas ouverte.

@@ -17,7 +17,7 @@ export function SyncDetailsRescue() {
   const [busy, setBusy] = useState(false);
   const sync = container.sync;
   const awaiting = warnings.includes('awaiting-other-devices');
-  const unapplied = warnings.includes('received-unapplied');
+  const unapplied = warnings.includes('received-unapplied') || warnings.includes('publish-dropped');
   if (!sync || (!awaiting && !unapplied)) return null;
 
   const run = async (kind: 'start' | 'resume'): Promise<void> => {

@@ -6,7 +6,7 @@ import type { DeviceId, Hlc } from '../domain/types';
 import type { PublishRotation } from '../domain/sync/publishRotation';
 import { syncErrorCodeOf } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
-import { META, readJson, writeJson } from './meta';
+import { META, bumpLossCounter, readJson, writeJson } from './meta';
 
 /**
  * Publication de la file d'envoi (ADR 0011, sections 3.3, 10.2 étape 5 et 1.3 ; Y-02 critère 5, Y-05 critères 1, 3, 5 et 6).
@@ -415,14 +415,29 @@ export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: Device
   // Entrées lues sans rien à publier : retirées par numéro (une écriture faite depuis la lecture a un nouveau numéro et reste).
   if (material.stale.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(material.stale));
   if (material.ops.length === 0) return { published: 0, head, error: null };
-  const records = await buildRecordsSliced(material.ops, sv, (op) => logger.log('publish-too-large', { table: op.t }), slicer);
+  // TRI-06 : une opération trop grosse n'est jamais publiée : compteur persistant (table seulement) et avertissement `publish-dropped`.
+  const tooLarge = new Set<string>();
+  let tooLargeCount = 0;
+  const records = await buildRecordsSliced(
+    material.ops,
+    sv,
+    (op) => {
+      tooLarge.add(op.t);
+      tooLargeCount += 1;
+      logger.log('publish-too-large', { table: op.t });
+    },
+    slicer,
+  );
   const refused = new Set<Hlc>();
   const batches = batchRecords(records, (hlc) => {
     refused.add(hlc);
+    tooLargeCount += 1;
     logger.log('publish-too-large', { table: 'group' });
   });
   // Opération trop grosse pour un appel : refusée et journalisée, ses entrées sont retirées (par numéro) au lieu de bloquer la file.
   const refusedEntries = material.entries.filter((e) => refused.has(e.hlc)).map((e) => e.entry);
+  // Le compteur est écrit avant le retrait : un arrêt entre les deux laisse l'avertissement, jamais une perte muette.
+  if (tooLargeCount > 0) await bumpLossCounter(data.repos.sync, META.publishDropped, tooLargeCount, tooLarge);
   if (refusedEntries.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(refusedEntries));
   // Entrées à retirer après le lot qui porte leur plus grand hlc.
   const pending = material.entries.filter((e) => !refused.has(e.hlc)).sort((a, b) => (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
