@@ -62,7 +62,7 @@ const SCAN_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan
  * échec de son enregistrement : interdit « À jour » (la ligne d'état dit « Synchro incomplète : voir les avertissements »), reste jusqu'à « J'ai vu » ; remplace `carry-reattached` de Y-FIX-04, dont la
  * notice reste écrite mais ne lève plus rien seule). Placés avant ceux du scan (les données d'abord).
  */
-export const SYNC_WARNINGS = ['carry-held', 'carry-report', ...SCAN_WARNINGS, 'own-delete-failed', 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
+export const SYNC_WARNINGS = ['carry-held', 'carry-report', ...SCAN_WARNINGS, 'own-delete-failed', 'publish-blocked', 'publish-dropped', 'received-unapplied', 'awaiting-other-devices'] as const;
 export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
 /**
  * Y-FIX-02 (ADR 0011 §30) : cause nommée jointe à `publish-blocked` dans `warnings` (texte de la section AVERTISSEMENTS de Détails, catalogue à

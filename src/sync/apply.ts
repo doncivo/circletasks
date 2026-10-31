@@ -7,7 +7,7 @@ import { isNaturalId, type NaturalIdTable } from '../domain/sync/naturalIds';
 import { hlcDevice } from '../domain/sync/parse';
 import { TECHNICAL_COLUMNS, isValidRowId, isValidValue, settingKeyScope, syncColumn, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { SyncLogger } from './log';
-import { META } from './meta';
+import { META, bumpLossCounter } from './meta';
 
 /**
  * Application d'un lot d'opérations reçues (ADR 0011, sections 3.3, 4, 5.4, 7.2 et 8 ; Y-02 critères 2, 6 et 8, Y-09 critères 1 et 4).
@@ -557,30 +557,17 @@ export async function applyOpsIsolated(repos: Repositories, ops: readonly SyncOp
 
 const BATCH_SAVEPOINT = 'apply_batch';
 const OP_SAVEPOINT = 'apply_op';
-/** Nombre maximal de noms de tables mémorisés avec le compteur. */
-const REJECTED_TABLES_MAX = 16;
 
 const isConstraintFailure = (error: unknown): boolean => error instanceof Error && (error as { code?: unknown }).code === 'constraint';
 
 async function recordRejected(sync: Repositories['sync'], logger: SyncLogger, rejected: readonly SyncOp[]): Promise<void> {
-  let n = 0;
   const tables = new Set<string>();
-  const raw = await sync.getMeta(META.applyRejected);
-  if (raw !== null) {
-    try {
-      const value = JSON.parse(raw) as { n?: unknown; tables?: unknown };
-      if (typeof value.n === 'number') n = value.n;
-      if (Array.isArray(value.tables)) for (const t of value.tables) if (typeof t === 'string') tables.add(t);
-    } catch {
-      // valeur illisible : on repart de zéro, l'avertissement est de toute façon levé par les rejets de ce lot
-    }
-  }
   for (const op of rejected) {
     const table = syncTable(op.t)?.name ?? 'inconnue';
     tables.add(table);
     logger.log('apply-rejected', { table, code: 'constraint' });
   }
-  await sync.setMeta(META.applyRejected, JSON.stringify({ n: n + rejected.length, tables: [...tables].sort().slice(0, REJECTED_TABLES_MAX) }));
+  await bumpLossCounter(sync, META.applyRejected, rejected.length, tables);
 }
 
 export function mergeTouched(into: Map<string, Set<string>>, from: ReadonlyMap<string, ReadonlySet<string>>): void {
