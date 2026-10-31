@@ -329,3 +329,10 @@ Le rappel d’une erreur générique ne suffit pas : la réintégration actuelle
 Paquet A9-seance-4-IPA.zip : 29 328 763 octets ; SHA-256 e8b7d51a8d129a9b4e203ff047daca4bb51d403e155ef7c138cd8aa3db9d880a, identique au digest GitHub. Quatre IPA internes relues et hachées depuis le ZIP : chacune concorde avec son empreinte ; deux guides, mémo et SHA256SUMS inclus, huit entrées. Brouillon non publié a9-20261021-cff59f5c ; aucun ajout à la source SideStore publique (blob 5a8af39e2a3f10209bf965f131ca1483b95dcd39 inchangé).
 
 Guide et paquet transmis à Ali ; créneau physique de 60 à 75 minutes. A9 reste **non exécuté sur appareil** et bloque la livraison. Après A9 restent les frontières natives du guide et le verdict final REL-01/REL-02/REL-03. A6b : « vérifié en usage après la 1.0 », futur, non fait, non bloquant. Aucun worktree supprimé.
+
+## Suivi — instabilité de la suite en CI (ouvert le 2026-10-31, décision d'Ali)
+
+**CI-FLAKE-01 (suivi, pas une story)** : compter, sur les dix prochaines exécutions de la suite complète (`tests.yml`), combien échouent pour une raison qui n'est pas un défaut de l'app (charge du runner, miroir lent, course de timing d'un test). **Seuil : plus de une sur cinq** (soit 3 sur 10 ou plus) → la suite elle-même devient une story, après la 1.0 mais ouverte au backlog. Règle inchangée : aucun délai allongé, aucun test désactivé ; chaque cas est tracé au journal avec sa cause si on la trouve.
+Relevé (exécutions de la suite complète, hors branches de documentation seule) :
+- Observations avant ouverture : job WebKit annulé à 20 min (2026-10-29), horloge de N-FIX-04 (2026-10-30, cause trouvée, corrigée), smoke Windows `navigation` absente 5 s après `ready` (#126, 2026-10-30), `e2e pc 4/4` SD-03 « bloc jamais chargé » (#125, 2026-10-30) : les deux derniers verts à la relance, cause non établie.
+- Comptage des dix : 0/0 au 2026-10-31 (à tenir à jour ici, une ligne par exécution : run, résultat, cause).

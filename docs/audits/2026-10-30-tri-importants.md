@@ -23,8 +23,8 @@ Heures : estimation de l'audit, au milieu de la fourchette ; elle date du 16 oct
 |---|---|---|
 | A — à corriger sans demander | 35 | 75,5 h, soit 4 à 5 lots de 7 à 9 |
 | B — à corriger si ça te gêne | 13 | 51 h, à engager au cas par cas |
-| C — à ne pas corriger | 15 | 0 h (l'audit en chiffrait environ 105 h) |
-| D — bloquants sortis du tri, à valider | 14 | 57 h |
+| C — à ne pas corriger | 16 | 0 h (l'audit en chiffrait environ 105 h) |
+| D — bloquants sortis du tri, à valider | 13 | 54 h |
 | F — déjà corrigés | 8 | déjà payés |
 | X — attendent Ali | 3 | 12 h après ta réponse |
 | **Total** | **88** | |
@@ -157,7 +157,7 @@ Heures : estimation de l'audit, au milieu de la fourchette ; elle date du 16 oct
 | TRI-77 | ADR 0011 contradictoire (nombre de commandes, §9.1 / §24.6, maîtrise Rust/TS) et consolidation des ADR | C | — | « consolidation des ADR » reportée après la 1.0 par Ali (audit, section 5) ; §9.1 déjà récrite par Y-TECH-04 |
 | TRI-78 | Backlog et dettes faux (stories livrées « à faire ») | F | 2 | réconcilié le 2026-10-19 |
 | TRI-79 | Commandes de sauvegarde absentes de tout ADR | A | 1 | avenant ADR 0009 |
-| TRI-80 | Marqueur de restauration écrit avant l'échange ; `local:true` restaure n'importe quelle sauvegarde pré-migration sans marqueur | D | 3 | restauration d'une ancienne base sans garde : perte possible |
+| TRI-80 | Marqueur de restauration écrit avant l'échange ; `local:true` restaure une sauvegarde pré-migration sans marqueur | C | — | **reclassé après la 1.0 par Ali le 2026-10-30** : rien n'est perdu (`restore_backup_file` copie d'abord la base en place en sauvegarde « avant restauration »), le comportement est délibéré depuis la revue I-06 (test `i06_update_restore_is_a_local_rollback_without_any_sync_marker`), et une garde toucherait le chemin de récupération qu'A9 n'a pas vérifié sur appareil : on ne restreint pas ce qu'on ne sait pas tester |
 | TRI-81 | ADR 0002 périmé, plugin SQL copié sans procédure, pont JS `^2.5.0` | A | 2 | avenant et test de cohérence des versions |
 | TRI-82 | Règle métier Rappels Apple dans une feature, avec `localeCompare` | A | 4 | contraire à « règles métier dans `src/domain` » |
 | TRI-83 | `import('@tauri-apps/api/window')` dans une feature | A | 1 | port dans `src/platform` et règle ESLint |
@@ -166,3 +166,7 @@ Heures : estimation de l'audit, au milieu de la fourchette ; elle date du 16 oct
 | TRI-86 | Licences incomplètes | A | 1,5 | obligation légale avant la 1.0 |
 | TRI-87 | Somme des têtes non surveillée côté moteur | C | — | risque faible (~2^21 sur dix ans) |
 | TRI-88 | `engine.ts` de 860 lignes à découper | C | — | « reporté après la 1.0 » dans l'audit ; geler le fichier |
+
+## Suites du 2026-10-30 (arbitrage d'Ali)
+
+Avant la 1.0 : TRI-03 (fait, #117), TRI-22 (fait, #120), TRI-24 (PR #121), TRI-13 (PR #123). Échec rendu visible seulement : TRI-06 et TRI-04. Après la 1.0 : TRI-02, TRI-17, TRI-28, TRI-56, TRI-01, TRI-05, TRI-18 (réserve : ligne 37 de la séance), TRI-80 (voir sa ligne). Le paquet A attend la fin des bloquants.

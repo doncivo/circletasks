@@ -2,35 +2,44 @@
 
 Fichier court, pour tout agent (Codex, Claude Code ou autre) : l'état vivant et les décisions applicables, rien d'autre. Chaque jalon remplace la section « État au … » au lieu d'empiler un nouveau « point prioritaire ». L'historique du 19 au 27 octobre 2026, tel qu'il a été écrit au fil des reprises, est archivé dans `docs/reprise-historique-2026-10.md` ; en cas de désaccord entre les deux fichiers, celui-ci l'emporte. Règles de travail : `AGENTS.md`. Stack et architecture : `CLAUDE.md`.
 
-## État au 2026-10-29, midi (Claude Code)
+## État au 2026-10-30, midi (Claude Code)
 
 ### Fusionné dans `main`
 
-- Les huit refontes (#99 à #107), #100 (AGENTS : tests unitaires et DOM en local, e2e en CI), #108 (clôture), #109 (séance unique) ; puis les trois correctifs décidés par Ali : **#110 Q-05-FIX-01** (c3a09d1c), **#112 UI-FIX-07** (3943f4b7), **#113 UI-FIX-08** (8ed535ac). Bundle de `main` : **338 017** normalisés, marge 20 383 (relevé dans la CI : le relevé local a été arrêté par le système, mémoire critique, et non relancé sans demande). Garde du bundle à borne asymétrique 100 / 300 (décision d'Ali).
-- **IPA N+1 prête** : compilation iPhone unique du lot, run 40798967224 sur `main` e2c2f45a (après #111), verte, publication non lancée ; artefact `CircleTasks-ipa` : CircleTasks.ipa, 7 383 697 octets, SHA-256 `86a18af5fdbe5e238bbc4c78f0a27b2ef61f403eefdcdd074d9ec7a71e8c364d`. Elle remplace l'IPA du run 40750480780 (périmée). **Signal de la séance d'Ali envoyé le 2026-10-29.**
+- Jusqu'au 29 octobre : les huit refontes (#99 à #107), #100, #108, #109, les correctifs **#110 Q-05-FIX-01**, **#112 UI-FIX-07**, **#113 UI-FIX-08**, **#111 PRD-02**, **#114** (IPA N+1 documentée, 515baaae).
+- Le 30 octobre : **#118** (spec e2e N-FIX-04 à horloge fixée : `main` était rouge depuis 515baaae parce que l'avertissement N-07 est un `status` du formulaire entre 08:00 et 10:00 ; journal du 2026-10-30), **#117 TRI-03** (état refusé juste après un instantané, 10b712d0), **#120 TRI-22** (garde de synchro retirée quand la transaction est perdue, 02616df4), **#122** (documentation regroupée : tri des 88 défauts importants `docs/audits/2026-10-30-tri-importants.md`, **ligne 37 de la séance unique** « Autorisé dit-il vrai ? » pour TRI-18, règle « aucune boucle de surveillance » dans `AGENTS.md`, 5f2df537).
+- Bundle de `main` : **338 023** normalisés, marge 20 377 (mesure locale sur les branches de TRI-22 et TRI-13, plafond 358 400).
+- **IPA N+1 inchangée** : run 40798967224 sur `main` e2c2f45a, CircleTasks.ipa 7 383 697 octets, SHA-256 `86a18af5fdbe5e238bbc4c78f0a27b2ef61f403eefdcdd074d9ec7a71e8c364d`. **Elle ne contient aucun correctif du 30 octobre** (TRI-03, TRI-22, TRI-24, TRI-13, TRI-06, TRI-04) : ils partent dans la dernière IPA, une seule, à la fin. Séance d'Ali en cours sur cette IPA (guide : `docs/essais-iphone.md`, 38 lignes ; la 38 est à jouer sur la dernière IPA).
 
-### Décisions d'Ali (28 au soir)
+### Décisions d'Ali du 30 octobre
 
-- Q-05-FIX-01 maintenant ; PRD-02 : oui aux six lots, sauf OB-03 conservé (marque d'objectif dans la Semaine : UI-FIX-07) et « Masquer les fériés » mémorisé (UI-FIX-08) ; borne du critère 4 de BUNDLE-01 : 100 octets quand la mesure est plus petite que le build réel, 300 dans l'autre sens. Les trois correctifs et les alignements partent dans l'IPA N+1.
-- Procédure : je ne m'arrête que pour une décision tranchée à rouvrir, un défaut qui perd des données ou affiche un état faux, une estimation qui dérape de plus de 50 %, ou un besoin physique de l'iPhone.
+- **Tri des 88 importants** : paquet A (35 défauts objectifs, 75,5 h) attend la fin des bloquants ; B (13) seulement sur signalement ; C (15) non corrigés avec raison.
+- **Bloquants avant la 1.0** : TRI-03 (fait), TRI-22 (fait), TRI-24 (fait, #121), TRI-13 (fait, #123). **Rendre l'échec visible seulement** : TRI-06 (PR #126 ; notes de plus de 256 Kio jamais publiées : compteur persistant et ligne d'avertissement, pas de traitement du cas) et TRI-04 (`missing-parent` : étendre `received-unapplied`). **Après la 1.0** : TRI-02 (horloge en avance, tracée au journal des conflits), TRI-17 et TRI-28 (N-07), TRI-56 (roue des minutes), TRI-01, TRI-05, TRI-18 (réserve : si la ligne 37 montre « Autorisé » alors que l'iPhone n'affiche rien, TRI-18 repasse avant la 1.0).
+- **TRI-80 reclassé après la 1.0** : rien n'est perdu (la base en place est copiée avant l'échange), le comportement est délibéré depuis la revue I-06, et une garde toucherait le chemin de récupération qu'A9 n'a pas vérifié sur appareil. « On ne restreint pas ce qu'on ne sait pas tester. »
+- **Machine** : travailler dans le checkout racine, ne pas copier `node_modules` (mémoire déjà manquée deux fois) ; **aucune boucle de surveillance en arrière-plan** (`AGENTS.md`) ; une CI se lit par une seule requête.
 
 ### En vol
 
 | Élément | État |
 | --- | --- |
-| #111 PRD-02 (PRD aligné, point d'état, journal, fiches, guide de séance, backlog) | **fusionnée** (e2c2f45a) |
-| Y-05-OBS | une tâche longue isolée de 1 476 ms (Y-05, @perf) sur #110, non reproduite à la relance, cause non établie ; journal du 2026-10-29 et backlog ; si l'échec revient : défaut du publieur, Ali prévenu avant tout e2e local |
+| #121 TRI-24 | **fusionnée** (49e6e35c), 48 contrôles verts |
+| #123 TRI-13 | **fusionnée**, 48 contrôles verts sur une branche à jour de `main`. Swift **jamais exécuté** : ligne 38 du guide, pour la dernière IPA |
+| #125 CI-IOS-SWIFT-01 | brouillon : `check-ios-swift.yml` (macOS, sans IPA ni signature). Le build.rs de chaque plugin lance `swift build` : `cargo build --target aarch64-apple-ios -p <plugin>` compile donc le Swift. Premier essai : cible de déploiement manquante (faux rejet iOS 14 sur CtFilesPlugin) ; correctif poussé, **résultat non lu**. Branche posée sur TRI-13 : à rebaser sur `main` avant fusion |
+| #126 TRI-06 + TRI-04 | rouge 77eff203, vert poussé, 3 976 tests du module, bundle 338 748 (marge 19 652) ; **CI non lue** |
+| Compteur du lot des sept | environ 15 h sur 24 h |
+| Y-05-OBS | inchangé (tâche longue isolée de 1 476 ms) |
 
 ### Reste à faire, dans l'ordre
 
-1. Séance d'Ali sur l'IPA N+1 (36 lignes de `docs/essais-iphone.md`) ; recueillir ses résultats ; chaque écart devient une story de correction avec sa preuve rouge (puis, si du code change, une nouvelle IPA : une seule, à la fin).
-2. REL-01, REL-02, REL-03 : publication de la 1.0 par tag `ios-v*`, source SideStore, mise à jour N → N+1 (A3, A7, A10 de I-06) ; rapport final : livré, ouvert et pourquoi, liste de ce qu'Ali fait avec l'IPA publiée.
+1. Lire la CI de #126 et de #125 (une fois chacune) ; fusionner #126 au vert ; rebaser #125 sur `main` et la fusionner si le contrôle Swift est vert (sinon corriger l'erreur Swift réelle qu'il révèle).
+2. Paquet A du tri, par lots de cinq à dix, après les bloquants. Séance d'Ali sur l'IPA N+1 : chaque écart devient une story. Puis REL-01, REL-02, REL-03 (tag `ios-v*`, SideStore, N → N+1 : A3, A7, A10 de I-06) et rapport final.
 
 ### Règles en vigueur
 
-- Tests unitaires et DOM en local seulement ; e2e Playwright en CI ; prévenir Ali avant tout e2e local ; jamais `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP` (`AGENTS.md`). Un travail lourd arrêté par le système pour manque de mémoire n'est pas relancé sans demande.
-- Une PR doit être à jour de `main` pour fusionner : mettre la branche à jour par l'API (`gh api -X PUT repos/doncivo/circletasks/pulls/N/update-branch`) après chaque fusion voisine ; ordre de fusion : code d'abord, documentation en dernier.
-- Un seul build iPhone par lot terminé, jamais pour de la documentation. Test rouge avant le code pour tout défaut de l'app ; mesure du bundle après chaque fusion ; plafond 358 400 octets.
+- Tests unitaires et DOM en local seulement ; e2e Playwright en CI ; prévenir Ali avant tout e2e local ; jamais `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP`. Un travail arrêté par le système pour manque de mémoire n'est pas relancé sans demande.
+- **Aucune boucle de surveillance en arrière-plan** : une seule requête pour lire une CI, puis autre chose.
+- Une PR doit être à jour de `main` pour fusionner (`gh api -X PUT repos/doncivo/circletasks/pulls/N/update-branch`) ; ordre : code d'abord, documentation en dernier, ou regroupée dans une seule PR.
+- Un seul build iPhone par lot terminé, jamais pour de la documentation. Test rouge avant le code pour tout défaut de l'app ; mesure du bundle avant push ; plafond 358 400 octets.
 
 ## État au 2026-10-27, nuit (Claude Code, reprise après le redémarrage du PC)
 
